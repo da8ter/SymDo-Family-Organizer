@@ -983,7 +983,8 @@
             "already done": "schon erledigt",
             "Nothing is due there.": "Da steht nichts an.",
             "I do not know anyone called \"%1$s\" in the chore plan. Known are: %2$s.": "Im Ämtchenplan kenne ich niemanden namens „%1$s\". Bekannt sind: %2$s.",
-            "%1$d chores, %2$d of them still open.": "%1$d Ämtchen, davon %2$d noch offen."
+            "%1$d chores, %2$d of them still open.": "%1$d Ämtchen, davon %2$d noch offen.",
+            "homework not readable this time — kept as it was": "Hausaufgaben diesmal nicht lesbar — Bestand unverändert"
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

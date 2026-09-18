@@ -734,7 +734,13 @@ class SymDoScanner extends IPSModuleStrict
             }
             $teile[] = $name . ': ' . sprintf(
                 $this->Translate('%1$d course(s), %2$d card(s) read'),
-                (int)$ernte['kurse'], (int)$ernte['karten']);
+                (int)$ernte['kurse'], (int)$ernte['karten'])
+                /* Der Leser laesst die Hausaufgaben weg, wenn die Schule den
+                   Abruf schuldig blieb — das Gateway erfaehrt es nur ueber
+                   diesen Text, der Umschlag traegt dafuer kein Feld. */
+                . ((int)($ernte['aufgabenFehler'] ?? 0) > 0
+                    ? ', ' . $this->Translate('homework not readable this time — kept as it was')
+                    : '');
         }
         return ['ok' => $ok, 'konten' => count($konten),
                 'text' => implode(' | ', $teile),

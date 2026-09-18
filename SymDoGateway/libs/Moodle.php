@@ -612,6 +612,12 @@ trait Moodle
             $hausaufgaben = trim($hausaufgaben . ', ' . sprintf(
                 $this->Translate('%d reply/replies with a deadline'), $rueckmeldungen), ', ');
         }
+        /* Ein ausgebliebener Abruf steht in der Statuszeile — sonst saehe der
+           Nutzer nur „0 Hausaufgaben" und hielte das fuer den Stand der Schule. */
+        if ((int)($ernte['aufgabenFehler'] ?? 0) > 0) {
+            $hausaufgaben = trim($hausaufgaben . ', '
+                . $this->Translate('homework not readable this time — kept as it was'), ', ');
+        }
 
         $termine = '';
         $zeilen  = (array)($ernte['vorschlaege'] ?? []);

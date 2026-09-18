@@ -63,6 +63,8 @@ final class MoodleProbe
     public array $rufe = [];
     /** @var array<string,bool> welche Funktion die Schule schuldig bleibt */
     public array $schuldig = [];
+    /** Die Schule antwortet — und hat wirklich keine Aufgaben. */
+    public bool $keineAufgaben = false;
     /** @var list<array> der Hausaufgaben-Bestand */
     public array $hausaufgaben = [];
     /** @var list<array> jeder Import, der den Bestand abgleicht */
@@ -82,7 +84,8 @@ final class MoodleProbe
                                 ['name' => 'mod_choice_get_choice_options']]],
             'core_enrol_get_users_courses' => [['id' => 7, 'shortname' => 'Mathe', 'fullname' => 'Mathematik']],
             'mod_assign_get_assignments' => ['courses' => [['id' => 7, 'shortname' => 'Mathe',
-                'assignments' => [['id' => 123, 'name' => 'Seite 12', 'duedate' => strtotime('+1 day')]]]]],
+                'assignments' => $this->keineAufgaben ? []
+                    : [['id' => 123, 'name' => 'Seite 12', 'duedate' => strtotime('+1 day')]]]]],
             'mod_assign_get_submission_status' => ['lastattempt' => ['submission' => ['status' => 'new']]],
             'mod_choice_get_choices_by_courses' => ['choices' => []],
             default => [],
@@ -176,6 +179,57 @@ pruefe('… beide liegen in den Funktionen, die den Token dazulegen',
 pruefe('… und beide legen ihn dazu, bevor der Leser ihn sieht',
     [strpos($pruefen, 'MoodleMitToken(') < strpos($pruefen, '$this->MoodleRest('),
      str_contains($lesen, 'MoodleKontoErnten($this->MoodleMitToken($zugang)')], [true, true]);
+
+// ── F11: ein schuldig gebliebener Abruf ist keine leere Liste ─────────────
+/* `HomeworkImportieren` gleicht im Fenster ab: was die Schule nicht mehr
+   nennt, gilt als zurueckgezogen. Bis zum 18.09.2026 wurde aus einem
+   fehlgeschlagenen Aufgaben-Abruf ein leeres Feld — und der Abgleich loeschte
+   die Hausaufgaben des Kindes. Fehler und bestaetigte Leere muessen zwei
+   verschiedene Antworten bleiben. Der Scanner nutzt denselben Leser. */
+$morgen  = date('Y-m-d', strtotime('+1 day'));
+$bestand = [['id' => 'h1', 'srcId' => 123, 'source' => 'moodle', 'childId' => 'u1',
+             'due' => $morgen, 'subject' => 'Mathe', 'note' => 'Seite 12', 'done' => false]];
+$mitToken = $konto + ['token' => 'T'];
+
+foreach (['mod_assign_get_assignments', 'mod_choice_get_choices_by_courses'] as $fn) {
+    $r = new MoodleProbe();
+    $r->hausaufgaben = $bestand;
+    $r->schuldig[$fn] = true;
+    $ernte = $r->pErnten($mitToken);
+    pruefe(substr($fn, 4) . ' bleibt aus: die Ernte ist trotzdem gueltig', $ernte['ok'], true);
+    pruefe('… traegt aber KEINE Hausaufgabenliste, sondern den Fehler',
+        [$ernte['hausaufgaben'], $ernte['aufgabenFehler']], [[], 1]);
+    $text = $r->pEinpflegen($ernte);
+    pruefe('… der Bestand bleibt, wie er war — kein Abgleich',
+        [count($r->hausaufgaben), $r->importe], [1, []]);
+    pruefe('… und die Statuszeile sagt es',
+        str_contains($text, 'homework not readable this time'), true);
+}
+
+/* Der Kontrollfall: eine BESTAETIGT leere Liste raeumt auf — das ist gewollt,
+   die Schule hat die Aufgabe zurueckgezogen. */
+$k = new MoodleProbe();
+$k->hausaufgaben = $bestand;
+$k->keineAufgaben = true;
+$ernte = $k->pErnten($mitToken);
+$text = $k->pEinpflegen($ernte);
+pruefe('Eine bestaetigt leere Liste zieht die Aufgabe zurueck',
+    [count($k->hausaufgaben), count($k->importe), $ernte['aufgabenFehler']], [0, 1, 0]);
+pruefe('… ohne Fehlerhinweis', str_contains($text, 'not readable'), false);
+
+/* Und der Normalfall: die Aufgabe kommt an und bleibt. */
+$n = new MoodleProbe();
+$n->pEinpflegen($n->pErnten($mitToken));
+pruefe('Im Normalfall steht die Aufgabe im Bestand',
+    [count($n->hausaufgaben), $n->hausaufgaben[0]['srcId'] ?? null, $n->hausaufgaben[0]['note'] ?? null],
+    [1, 123, 'Seite 12']);
+
+/* Die Klasse: der Leser unterscheidet ueberall zwischen „nicht geantwortet"
+   (null) und „nichts da" ([]) — beide Listenabrufe geben ?array zurueck. */
+$leser = (string)file_get_contents(__DIR__ . '/../libs/MoodleLesen.php');
+pruefe('Beide Listenabrufe koennen „nicht geantwortet" sagen',
+    [str_contains($leser, 'array $zusatz = []): ?array'),
+     str_contains($leser, 'array $funktionen): ?array')], [true, true]);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

@@ -162,16 +162,21 @@ trait MoodleLesen
      *
      * @param array{site:string,userId:string,name:string,token:string} $zugang
      * @param list<string> $gesperrt Adressen, die der Nutzer in der App gelöscht hat
+     * `aufgabenFehler` zaehlt Konten, deren Aufgaben- oder Abstimmungsabruf die
+     * Schule schuldig geblieben ist. Fuer sie steht KEIN Eintrag in
+     * `hausaufgaben` — der Abgleich beim Einpflegen hielte eine leere Liste
+     * sonst fuer „alles erledigt" und zoege die Aufgaben im Fenster zurueck.
+     *
      * @return array{ok:bool,kurse:int,karten:int,seiten:list<array<string,mixed>>,
      *               hausaufgaben:list<array<string,mixed>>,vorschlaege:list<array<string,mixed>>,
-     *               gesperrt:int,rueckmeldungen:int}
+     *               gesperrt:int,rueckmeldungen:int,aufgabenFehler:int}
      */
     private function MoodleKontoErnten(array $zugang, array $gesperrt = [],
         bool $hausaufgabenAn = true, bool $termineAn = true): array
     {
         $leer = ['ok' => false, 'kurse' => 0, 'karten' => 0, 'seiten' => [],
                  'hausaufgaben' => [], 'vorschlaege' => [], 'gesperrt' => 0,
-                 'rueckmeldungen' => 0];
+                 'rueckmeldungen' => 0, 'aufgabenFehler' => 0];
 
         $info = $this->MoodleRest($zugang, 'core_webservice_get_site_info');
         if (!is_array($info)) {
@@ -218,20 +223,36 @@ trait MoodleLesen
            Schleife, und in EINEM Aufruf je Konto. */
         $hausaufgaben = [];
         $rueckmeldungen = [];
+        $aufgabenFehler = 0;
         if ($hausaufgabenAn) {
             $namen = array_map(static fn($f): string => (string)($f['name'] ?? ''),
                 (array)($info['functions'] ?? []));
             $rueckmeldungen = $this->MoodleAbstimmungen($zugang, $kursListe, $namen);
-            [$von, $bis] = $this->MoodleFenster();
-            /* EIN Eintrag je Konto, nicht je Kurs: `HomeworkImportieren` raeumt
-               im Fenster auf, und zwei Aufrufe mit derselben Quelle hielten die
-               Zeilen des jeweils anderen fuer verschwunden. */
-            $hausaufgaben[] = [
-                'userId' => (string)$zugang['userId'],
-                'von'    => $von,
-                'bis'    => $bis,
-                'zeilen' => $this->MoodleAufgabenZeilen($zugang, $kursListe, $rueckmeldungen),
-            ];
+            $zeilen = $rueckmeldungen === null
+                ? null
+                : $this->MoodleAufgabenZeilen($zugang, $kursListe, $rueckmeldungen);
+            if ($zeilen === null) {
+                /* Ein Abruf blieb aus. Das ist KEINE leere Liste: `HomeworkImportieren`
+                   gleicht im Fenster ab, und eine leere Liste hiesse dort „die
+                   Schule hat alle Aufgaben zurueckgezogen". Bis zum 18.09.2026
+                   wurde aus dem Fehler ein leeres Feld — ein einzelner
+                   fehlgeschlagener Abruf loeschte die Hausaufgaben des Kindes.
+                   Gefunden vom externen Codereview (F11). Also: kein Eintrag,
+                   der Bestand bleibt, der naechste Lauf versucht es wieder. */
+                $aufgabenFehler = 1;
+                $rueckmeldungen = [];
+            } else {
+                [$von, $bis] = $this->MoodleFenster();
+                /* EIN Eintrag je Konto, nicht je Kurs: `HomeworkImportieren` raeumt
+                   im Fenster auf, und zwei Aufrufe mit derselben Quelle hielten die
+                   Zeilen des jeweils anderen fuer verschwunden. */
+                $hausaufgaben[] = [
+                    'userId' => (string)$zugang['userId'],
+                    'von'    => $von,
+                    'bis'    => $bis,
+                    'zeilen' => $zeilen,
+                ];
+            }
         }
 
         $vorschlaege = [];
@@ -244,7 +265,8 @@ trait MoodleLesen
         return ['ok' => true, 'kurse' => count($kurse), 'karten' => $karten,
                 'seiten' => $seiten, 'hausaufgaben' => $hausaufgaben,
                 'vorschlaege' => $vorschlaege, 'gesperrt' => $uebersprungen,
-                'rueckmeldungen' => count($rueckmeldungen)];
+                'rueckmeldungen' => count($rueckmeldungen),
+                'aufgabenFehler' => $aufgabenFehler];
     }
 
     /**
@@ -499,10 +521,14 @@ trait MoodleLesen
      * (je Aufgabe ein eigener Abruf fuer den Abgabestand). Eingepflegt wird in
      * `MoodleAufgabenEinpflegen`, und zwar dort, wo die Hausaufgaben stehen.
      *
+     * Ausgebliebener Abruf und leere Liste sind ZWEI Antworten: `null` heisst
+     * „die Schule hat nicht geantwortet", `[]` heisst „es gibt keine Aufgaben".
+     * Nur die zweite darf den Bestand abgleichen.
+     *
      * @param array<int,array<string,mixed>> $kurse Kurskennung → Seite
-     * @return list<array<string,mixed>> Zeilen fuer HomeworkImportieren
+     * @return list<array<string,mixed>>|null Zeilen fuer HomeworkImportieren, null bei Abruffehler
      */
-    private function MoodleAufgabenZeilen(array $zugang, array $kurse, array $zusatz = []): array
+    private function MoodleAufgabenZeilen(array $zugang, array $kurse, array $zusatz = []): ?array
     {
         if ($kurse === []) {
             return [];
@@ -510,7 +536,7 @@ trait MoodleLesen
         $antwort = $this->MoodleRest($zugang, 'mod_assign_get_assignments',
             ['courseids' => array_values(array_map('intval', array_keys($kurse)))]);
         if (!is_array($antwort)) {
-            return [];
+            return null;
         }
         [$von, $bis] = $this->MoodleFenster();
         $roh = [];
@@ -585,11 +611,14 @@ trait MoodleLesen
      * Konto schon geantwortet hat. Geschlossene kosten keinen zweiten Aufruf;
      * die Frist wird VORHER geprueft.
      *
+     * Wie bei den Aufgaben: `null` ist ein ausgebliebener Abruf, `[]` sind
+     * keine Abstimmungen. Eine Schule ohne die Funktion hat keine — das ist `[]`.
+     *
      * @param array<int,array<string,mixed>> $kurse       Kurskennung → Seite
      * @param list<string>                   $funktionen  was der Server hergibt
-     * @return list<array<string,mixed>> Zeilen für HomeworkImportieren
+     * @return list<array<string,mixed>>|null Zeilen für HomeworkImportieren, null bei Abruffehler
      */
-    private function MoodleAbstimmungen(array $zugang, array $kurse, array $funktionen): array
+    private function MoodleAbstimmungen(array $zugang, array $kurse, array $funktionen): ?array
     {
         if ($kurse === [] || !MoodleCalc::KannAbstimmungen($funktionen)) {
             return [];
@@ -597,7 +626,7 @@ trait MoodleLesen
         $antwort = $this->MoodleRest($zugang, 'mod_choice_get_choices_by_courses',
             ['courseids' => array_values(array_map('intval', array_keys($kurse)))]);
         if (!is_array($antwort)) {
-            return [];
+            return null;
         }
         $jetzt = time();
         $raus = [];
