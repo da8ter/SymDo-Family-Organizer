@@ -491,6 +491,33 @@ trait TransitStore
                Hbf: 19:27 und 20:37 kamen ungefiltert gar nicht vor). */
             $anzahl  = max(1, (int)($z['count'] ?? 4));
             $antwort = Efa::Strecke($von, $nach, $modus, $wann, $anzahl);
+            /* Ist die Frage „da sein um 07:50" gestellt und sind ALLE Antworten
+               schon gefahren, ist die Frage die falsche: wer um 07:25 noch
+               daheim steht, schafft 07:50 nicht mehr und braucht die naechste
+               Verbindung ab JETZT — auch wenn sie zu spaet ankommt. Vorher
+               stand die Karte in genau diesem Fall auf einem Bus, der langst
+               weg war (gemeldet am 18.09.2026: 07:03 um 07:24).
+
+               Ein zweiter Abruf kostet hier nichts: er faellt nur an, wenn
+               nichts mehr uebrig ist, und dann hoechstens einmal je Takt. */
+            if ($modus === 'arr' && ($antwort['ok'] ?? false) === true) {
+                $uebrig = TransitCalc::Verbindungen((array)($antwort['data'] ?? []),
+                    $anzahl, $wann > 0 ? $wann : 0, false, false, $jetzt);
+                if ($uebrig === []) {
+                    $nachher = Efa::Strecke($von, $nach, 'dep', $jetzt, $anzahl);
+                    if (($nachher['ok'] ?? false) === true) {
+                        $antwort = $nachher;
+                        $modus = 'dep';
+                        $wann  = $jetzt;
+                        if (is_array($schule)) {
+                            $schule['mode']       = 'dep';
+                            $schule['fromNow']    = true;
+                            $schule['targetAt']   = $jetzt;
+                            $schule['targetTime'] = date('H:i', $jetzt);
+                        }
+                    }
+                }
+            }
             $direkt  = Efa::Strecke($von, $nach, $modus, $wann, $anzahl, true);
             /* Nur die erste Antwort entscheidet ueber Erfolg und Veralten: die
                zweite ist eine Zugabe. Faellt sie aus, siebt die Kachel eben aus
@@ -830,7 +857,7 @@ trait TransitStore
                 'journeys'   => TransitCalc::VmAnmalenVerbindungen(
                     TransitCalc::EndenBenennen(
                         TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach,
-                                                  false, $mitHalten),
+                                                  false, $mitHalten, $jetzt),
                         $vonName, $nachName),
                     $aussehen),
                 /* Die zweite Liste fuer den Schalter „Ohne Umsteigen". Fehlt
@@ -840,7 +867,7 @@ trait TransitStore
                     TransitCalc::EndenBenennen(
                         TransitCalc::Verbindungen(
                             is_array($e['rawDirect'] ?? null) ? $e['rawDirect'] : $roh,
-                            max(1, (int)($z['count'] ?? 4)), $nichtNach, true, $mitHalten),
+                            max(1, (int)($z['count'] ?? 4)), $nichtNach, true, $mitHalten, $jetzt),
                         $vonName, $nachName),
                     $aussehen),
             ];

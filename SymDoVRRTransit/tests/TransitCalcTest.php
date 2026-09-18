@@ -207,6 +207,23 @@ pruefe('… und ihre Umstiegszahl bleibt null',
 pruefe('Haken und Ankunftsvorgabe zusammen',
     TransitCalc::Verbindungen($direkt, 4, strtotime('2026-09-11 07:45:00'), true), []);
 
+/* Was schon gefahren IST, ist keine Alternative — und genau das lieferte die
+   EFA bei einer Ankunftsvorgabe: „da sein um 07:50" beantwortet sie um 07:25
+   noch mit 07:03, 07:11 und 07:20 (gemeldet am 18.09.2026). Eine Minute
+   Nachlauf, damit eine Verbindung, die gerade abfaehrt, nicht im selben
+   Atemzug verschwindet. */
+$ab = strtotime('2026-09-11 07:40:00');       // Abfahrt der Fixture (05:40 UTC)
+pruefe('gefahrene Verbindung faellt weg',
+    TransitCalc::Verbindungen($direkt, 4, 0, false, false, $ab + 120), []);
+pruefe('eine halbe Minute Nachlauf bleibt',
+    count(TransitCalc::Verbindungen($direkt, 4, 0, false, false, $ab + 30)), 1);
+pruefe('genau jetzt abfahrend bleibt',
+    count(TransitCalc::Verbindungen($direkt, 4, 0, false, false, $ab)), 1);
+pruefe('ohne Angabe siebt nichts',
+    count(TransitCalc::Verbindungen($direkt, 4, 0, false, false, 0)), 1);
+pruefe('kuenftige Verbindung bleibt',
+    count(TransitCalc::Verbindungen($direkt, 4, 0, false, false, $ab - 3600)), 1);
+
 // ── Uhrzeit aus der Formularzelle ──────────────────────────────────────────
 pruefe('Zeitwaehler-Objekt', TransitCalc::ZeitText(['hour' => 7, 'minute' => 50, 'second' => 0]), '07:50');
 pruefe('Zeitwaehler als JSON-Text', TransitCalc::ZeitText('{"hour":16,"minute":5,"second":0}'), '16:05');

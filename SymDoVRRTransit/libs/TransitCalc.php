@@ -367,7 +367,8 @@ final class TransitCalc
      * @return list<array<string,mixed>>
      */
     public static function Verbindungen(array $roh, int $hoechstens = 3, int $nichtNach = 0,
-                                       bool $nurDirekt = false, bool $mitHalten = false): array
+                                       bool $nurDirekt = false, bool $mitHalten = false,
+                                       int $nichtVor = 0): array
     {
         $raus = [];
         foreach ((array)($roh['journeys'] ?? []) as $v) {
@@ -402,6 +403,17 @@ final class TransitCalc
                07:40 und 07:53 auch eine Ankunft um 08:03. Für einen Schulweg
                ist das keine Alternative, sondern ein Zuspätkommen. */
             if ($nichtNach > 0 && $an > $nichtNach) {
+                continue;
+            }
+            /* Und was schon WEG ist, ist auch keine Alternative. Bei einer
+               Ankunftsvorgabe („da sein um 07:50") antwortet die EFA mit den
+               spaetesten Verbindungen, die es noch schaffen — steht die Frage
+               um 07:25 noch auf demselben Ziel, sind das 07:03, 07:11 und
+               07:20, und alle drei sind gefahren. Genau so gemeldet am
+               18.09.2026: die Karte zeigte um 07:24 den Bus von 07:03.
+               Eine Minute Nachlauf, damit eine Verbindung, die gerade
+               abfaehrt, nicht im selben Atemzug verschwindet. */
+            if ($nichtVor > 0 && $ab > 0 && $ab < ($nichtVor - 60)) {
                 continue;
             }
             $raus[] = [
