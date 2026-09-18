@@ -202,6 +202,29 @@ trait Moodle
     }
 
     /**
+     * Einen Zugang aus der Eigenschaft um seinen Token ergaenzen.
+     *
+     * Der Leser (`MoodleLesen`) kennt keinen Tokenspeicher — er laeuft auch in
+     * einer Scanner-Instanz und bekommt den Token MIT dem Zugang. Jeder Weg,
+     * der hier im Gateway einen Zugang aus `MoodleKonten()` an den Leser gibt,
+     * muss ihn vorher hier durchreichen. Bis zum 18.09.2026 taten das weder
+     * der synchrone Lauf noch die Zugangspruefung: beide prueften, DASS ein
+     * Token gespeichert ist, gaben dann aber den Zugang ohne ihn weiter — und
+     * der Leser meldete „kein Token", der Lauf „nichts lesbar", die Pruefung
+     * „der Token funktioniert nicht". Nur der Auftragsweg (MoodleAuftragGeben)
+     * legte ihn dazu. Gefunden vom externen Codereview (F10).
+     *
+     * Ein schon vorhandener Token bleibt: der Auftragsweg traegt ihn selbst.
+     */
+    private function MoodleMitToken(array $zugang): array
+    {
+        if (trim((string)($zugang['token'] ?? '')) === '') {
+            $zugang['token'] = $this->MoodleTokenVon($zugang);
+        }
+        return $zugang;
+    }
+
+    /**
      * Kennwort gegen Token tauschen — der einzige Ort, an dem sich dieses Modul
      * überhaupt anmeldet.
      *
@@ -306,6 +329,7 @@ trait Moodle
      */
     private function MoodleZugangPruefen(array $zugang): string
     {
+        $zugang = $this->MoodleMitToken($zugang);
         $info = $this->MoodleRest($zugang, 'core_webservice_get_site_info');
         if (!is_array($info)) {
             return $this->Translate('The token does not work — fetch a new one.');
@@ -519,7 +543,7 @@ trait Moodle
      */
     private function MoodleKontoLesen(array $zugang, bool $trocken): string
     {
-        $ernte = $this->MoodleKontoErnten($zugang, $this->MoodleGesperrte(),
+        $ernte = $this->MoodleKontoErnten($this->MoodleMitToken($zugang), $this->MoodleGesperrte(),
             !$trocken && (bool)$this->MoodleProp('MoodleHomework', true),
             !$trocken && (bool)$this->MoodleProp('MoodleEvents', true));
         if (($ernte['ok'] ?? false) !== true) {
