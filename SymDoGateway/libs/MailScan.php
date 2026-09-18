@@ -954,11 +954,14 @@ trait MailScan
      * Mitglieder, Kinder, Faecher) und deutet die Antwort spaeter in
      * Millisekunden.
      *
-     * NUR FUER QUELLEN MIT ABRUFBAREN ANHAENGEN. Die Nutzlast eines Auftrags
-     * wird geloescht, sobald der Anbieter geantwortet hat (64 MB Speicher) —
-     * beim Einpflegen ist das base64 also weg und wird ueber die ADRESSE neu
-     * geholt. Der IMAP-Weg kann das nicht: dort steckt der Anhang in der Mail
-     * und nirgends sonst. Er bleibt deshalb beim synchronen Weg.
+     * Die Nutzlast eines Auftrags wird geloescht, sobald der Anbieter
+     * geantwortet hat (64 MB Speicher) — beim Einpflegen ist das base64 also
+     * weg und wird NEU GEHOLT: ueber die Adresse, wo es eine gibt (Webhook,
+     * Klassenseiten), sonst aus dem Postfach ueber den Merker des Auftrags
+     * (IMAP-Kennung und UID). Bis zum 18.09.2026 reisten nur Anhaenge MIT
+     * Adresse in der Beschreibung mit; ein PDF aus einer IMAP-Mail fiel dabei
+     * still heraus — die Notiz kam ohne den Elternbrief an, den sie
+     * beschreibt. Gefunden vom externen Codereview (F13).
      *
      * @param array<string,mixed>                          $kopf
      * @param list<array{kind:string,name:string,base64:string,url?:string}> $anhaenge
@@ -972,14 +975,16 @@ trait MailScan
 
         /* Die Beschreibung der Anhaenge reist mit, nicht ihr Inhalt: der
            Auftragskopf ist eine kleine Datei, und ein Elternbrief hat zwei
-           Megabyte. */
+           Megabyte. Ohne Adresse bleibt der Anhang trotzdem in der Liste —
+           sonst wuesste der Fertigmelder nicht, dass er im Postfach nachsehen
+           muss. */
         $beschreibung = [];
         foreach ($anhaenge as $a) {
-            if (trim((string)($a['url'] ?? '')) === '') {
-                continue;
+            $eintrag = ['kind' => (string)$a['kind'], 'name' => (string)($a['name'] ?? '')];
+            if (trim((string)($a['url'] ?? '')) !== '') {
+                $eintrag['url'] = (string)$a['url'];
             }
-            $beschreibung[] = ['kind' => (string)$a['kind'], 'name' => (string)($a['name'] ?? ''),
-                               'url'  => (string)$a['url']];
+            $beschreibung[] = $eintrag;
         }
 
         $r = $this->AiJobEnqueue('extract',
@@ -1175,7 +1180,8 @@ trait MailScan
         @ini_set('memory_limit', '192M');
         $gespeichert = false;
         try {
-            $anhaenge = $this->MailAnhaengeNachladen((array)($h['anhaenge'] ?? []));
+            $anhaenge = $this->MailAnhaengeNachladen((array)($h['anhaenge'] ?? []),
+                is_array($h['merker'] ?? null) ? $h['merker'] : []);
             $gespeichert = $this->MailVorschlagEinpflegen((string)($h['vorschlag'] ?? ''), $mkopf,
                 (string)($h['text'] ?? ''), $anhaenge, (string)($h['userId'] ?? ''), $quelle,
                 ['aufgaben' => $aufgaben, 'zahlen' => $zahlen]);
@@ -1218,19 +1224,34 @@ trait MailScan
     }
 
     /**
-     * Die Anhaenge eines Auftrags ueber ihre Adresse neu holen.
+     * Die Anhaenge eines Auftrags neu holen — ueber ihre Adresse, oder aus dem
+     * Postfach.
      *
-     * @param list<array{kind:string,name:string,url:string}> $beschreibung
+     * Zwei Wege, weil es zwei Arten von Anhang gibt: der einer Klassenseite
+     * oder einer Webhook-Mail hat eine Adresse; der einer IMAP-Mail steckt in
+     * der Mail und nirgends sonst. Fuer ihn ist der Merker des Auftrags der
+     * Weg zurueck (IMAP-Kennung und UID) — die Mail liegt noch dort, denn
+     * geloescht wird erst nach dem Speichern (MailAuftragAbschliessen). Hat
+     * der Nutzer sie inzwischen selbst weggeraeumt, kommt die Notiz ohne
+     * Anhang an; mehr als eine Debug-Zeile bleibt dann nicht.
+     *
+     * Aus dem Postfach wird EINMAL geholt, nicht je Anhang: MailFetchAttachments
+     * liefert ohnehin alle brauchbaren Teile der Mail.
+     *
+     * @param list<array{kind:string,name:string,url?:string}> $beschreibung
+     * @param array<string,mixed>                              $merker der Merker des Auftrags
      * @return list<array{kind:string,name:string,base64:string}>
      */
-    private function MailAnhaengeNachladen(array $beschreibung): array
+    private function MailAnhaengeNachladen(array $beschreibung, array $merker = []): array
     {
         /* Das erhoehte Speicherlimit haelt der AUFRUFER: es muss auch noch
            stehen, wenn die Datei abgelegt wird. */
         $raus = [];
+        $ausPostfach = false;
         foreach ($beschreibung as $a) {
             $url = trim((string)($a['url'] ?? ''));
             if ($url === '') {
+                $ausPostfach = true;
                 continue;
             }
             $antwort = $this->AiFetchPublicPage($url);
@@ -1241,6 +1262,18 @@ trait MailScan
             }
             $raus[] = ['kind' => (string)($a['kind'] ?? ''), 'name' => (string)($a['name'] ?? ''),
                        'base64' => base64_encode((string)($antwort['body'] ?? ''))];
+        }
+        if ($ausPostfach && (string)($merker['quelle'] ?? '') === 'mail') {
+            $imapID = (int)($merker['topf'] ?? 0);
+            $uid    = trim((string)($merker['schluessel'] ?? ''));
+            $geholt = ($imapID > 0 && $uid !== '') ? $this->MailFetchAttachments($imapID, $uid) : [];
+            if ($geholt === []) {
+                $this->SendDebug('MailScan', 'Anhaenge aus dem Postfach nicht nachladbar (UID '
+                    . $uid . ')', 0);
+            }
+            foreach ($geholt as $g) {
+                $raus[] = $g;
+            }
         }
         return $raus;
     }

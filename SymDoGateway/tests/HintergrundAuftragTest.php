@@ -287,5 +287,37 @@ pruefe('… und das Protokoll nennt den Grund des Anbieters',
     (bool)array_filter($m4->protokoll, static fn(string $z): bool =>
         str_contains($z, 'Fehler ai_unreachable')), true);
 
+// ── F13: der Anhang einer IMAP-Mail kommt bei der Notiz an ────────────────
+/* Die Nutzlast des Auftrags ist beim Einpflegen laengst geloescht. Anhaenge
+   MIT Adresse holt der Fertigmelder neu; die einer IMAP-Mail haben keine —
+   sie fielen bis zum 18.09.2026 still aus der Beschreibung, und die Notiz kam
+   ohne den Elternbrief an, den sie beschreibt. Der Weg zurueck ist das
+   Postfach selbst: die Mail liegt noch dort, weil geloescht erst nach dem
+   Speichern wird (F14). */
+$a1 = new HintergrundProbe();
+register_shutdown_function(static fn() => $a1->pAufraeumen());
+$a1->pMail();
+$kopfA = $a1->pKopf($a1->pKennung());
+pruefe('Der Anhang steht in der Beschreibung des Auftrags — ohne Adresse',
+    $kopfA['origin']['anhaenge'] ?? null, [['kind' => 'pdf', 'name' => 'brief.pdf']]);
+$a1->pAntwort($a1->pKennung(), ['ok' => true, 'text' => $notiz, 'debug' => []]);
+pruefe('Die Notiz traegt den Anhang aus dem Postfach', $a1->abgelegt, ['brief.pdf']);
+pruefe('… nachgeladen VOR dem Speichern, geloescht DANACH',
+    $a1->ereignisse,
+    ['anhaenge:42', 'anhaenge:42', 'gespeichert:ja', 'geloescht:42']);
+pruefe('… und der Vorschlag verweist auf die Ablage',
+    [(int)($a1->vorschlaege[0]['items'][0]['mediaId'] ?? 0), $a1->vorschlaege[0]['items'][0]['atts'][0]['name'] ?? null],
+    [123, 'brief.pdf']);
+
+/* Fuer eine Aufgabe ohne Notiz braucht niemand die Datei — kein zweiter Griff
+   ins Postfach. */
+$a2 = new HintergrundProbe();
+register_shutdown_function(static fn() => $a2->pAufraeumen());
+$a2->pMail();
+$a2->pAntwort($a2->pKennung(), ['ok' => true,
+    'text' => json_encode([['kind' => 'task', 'title' => '5 Euro mitgeben', 'due' => '2026-09-19']]), 'debug' => []]);
+pruefe('Ohne Notiz wird der Anhang nicht nachgeladen', $a2->anhangAbrufe, 1);
+pruefe('… die Aufgabe kommt trotzdem an', count($a2->vorschlaege), 1);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);
