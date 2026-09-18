@@ -152,7 +152,8 @@
             "Seilbahn": "Seilbahn",
             "Sonstige": "Sonstige",
             "Fußweg": "Fußweg",
-            "Show platform": "Steig anzeigen"
+            "Show platform": "Steig anzeigen",
+            "Preview — schematic; follows the settings before you apply them.": "Vorschau — schematisch; folgt den Einstellungen schon vor dem Übernehmen."
         }
     }
 }

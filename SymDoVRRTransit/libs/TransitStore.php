@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/Efa.php';
 require_once __DIR__ . '/TransitCalc.php';
+require_once __DIR__ . '/TransitSchema.php';
 
 /**
  * Bestand und Takt der VRR-Auskunft.
@@ -110,6 +111,27 @@ trait TransitStore
     {
         $roh = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
         return is_array($roh) ? $roh : [];
+    }
+
+    /**
+     * Das Bild der Vorschau im Formular.
+     *
+     * Was das Formular nicht mitgibt, kommt aus der Konfiguration — so
+     * liefert auch ein Aufruf ohne Nutzlast (Formularaufbau, Reset) ein Bild.
+     * Die Pruefung der Werte macht der Renderer; hier wird nur zusammengefuehrt.
+     *
+     * @param array<string,mixed> $roh view|style|platform|modes aus dem Formular
+     */
+    private function TransitSchemaBild(array $roh): string
+    {
+        $cfg = $this->TransitKonfiguration();
+        $roh += [
+            'view'     => $cfg['DefaultView'] ?? 'departures',
+            'style'    => $cfg['RouteStyle'] ?? 'bars',
+            'platform' => $cfg['ShowPlatform'] ?? true,
+            'modes'    => $this->TransitZeilen('Modes'),
+        ];
+        return TransitSchema::DataUri(TransitSchema::Einstellungen($roh));
     }
 
     /** @return list<array<string,mixed>> */

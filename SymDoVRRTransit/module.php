@@ -118,6 +118,22 @@ class SymDoVRRTransit extends IPSModuleStrict
                    entscheidet weiter „Uebernehmen", ob es gilt — wie bei jeder
                    anderen Aenderung an der Tabelle auch. */
                 $this->UpdateFormField('Modes', 'values', $this->TransitVmVorgabeJson());
+                /* Die Vorschau gleich mit: UpdateFormField loest kein onChange
+                   aus. Der Knopf reicht die uebrigen Auswahlwerte mit, eine
+                   leere Tabelle heisst Vorgabefarben. */
+                $roh = json_decode((string)$Value, true);
+                $roh = is_array($roh) ? $roh : [];
+                $roh['modes'] = [];
+                $this->UpdateFormField('Schema', 'image', $this->TransitSchemaBild($roh));
+                return;
+
+            case 'SchemaZeigen':
+                /* Ein Darstellungsfeld wurde umgestellt — das Bild folgt, ohne
+                   dass etwas gespeichert wird. Erreicht nur offene Formulare;
+                   von aussen gerufen ist es wirkungslos, aber ungefaehrlich.
+                   Unbrauchbare Nutzlast faellt auf die Konfiguration zurueck. */
+                $roh = json_decode((string)$Value, true);
+                $this->UpdateFormField('Schema', 'image', $this->TransitSchemaBild(is_array($roh) ? $roh : []));
                 return;
 
             case 'StopSearch':
@@ -221,6 +237,12 @@ class SymDoVRRTransit extends IPSModuleStrict
             'values' => [],
         ];
 
+        /* Der Weckruf der Vorschau — ein String, viermal verwendet. Jedes
+           benannte Feld steht im onChange-Skript als PHP-Variable bereit. */
+        $schema = 'IPS_RequestAction($id, "SchemaZeigen", json_encode(['
+            . '"view" => $DefaultView, "style" => $RouteStyle, '
+            . '"platform" => $ShowPlatform, "modes" => iterator_to_array($Modes)]));';
+
         $form = [
             'elements' => [
                 ['type' => 'Label', 'caption' =>
@@ -292,21 +314,30 @@ class SymDoVRRTransit extends IPSModuleStrict
                 ]],
 
                 ['type' => 'ExpansionPanel', 'caption' => $this->Translate('Appearance'), 'expanded' => false, 'items' => [
+                    /* Die Vorschau: ein SVG als Data-URI, das jede Aenderung
+                       an den vier Feldern darunter sofort zeigt — vor dem
+                       Uebernehmen. Jedes Feld meldet sich ueber onChange mit
+                       ALLEN vier Werten; die Tabelle kommt als IPSList und
+                       muss fuer json_encode aufgeloest werden. */
+                    ['type' => 'Label', 'caption' =>
+                        $this->Translate('Preview — schematic; follows the settings before you apply them.')],
+                    ['type' => 'Image', 'name' => 'Schema', 'image' => $this->TransitSchemaBild([]),
+                     'width' => '320px', 'center' => true],
                     ['type' => 'Select', 'name' => 'DefaultView', 'caption' => $this->Translate('View when opening'),
                      'options' => [
                          ['caption' => $this->Translate('Departures'), 'value' => 'departures'],
                          ['caption' => $this->Translate('Routes'), 'value' => 'routes'],
-                     ]],
+                     ], 'onChange' => $schema],
                     ['type' => 'Select', 'name' => 'RouteStyle', 'caption' => $this->Translate('Route display'),
                      'options' => [
                          ['caption' => $this->Translate('Compact (bar)'), 'value' => 'bars'],
                          ['caption' => $this->Translate('Detailed timeline'), 'value' => 'timeline'],
                          ['caption' => $this->Translate('Vertical, with stops'), 'value' => 'vertical'],
-                     ]],
+                     ], 'onChange' => $schema],
                     ['type' => 'CheckBox', 'name' => 'ShowPlatform',
-                     'caption' => $this->Translate('Show platform')],
+                     'caption' => $this->Translate('Show platform'), 'onChange' => $schema],
                     ['type' => 'List', 'name' => 'Modes', 'caption' => $this->Translate('Colours and icons'),
-                     'rowCount' => 10, 'add' => false, 'delete' => false,
+                     'rowCount' => 10, 'add' => false, 'delete' => false, 'onChange' => $schema,
                      'columns' => [
                          /* Der Schluessel verbindet die Zeile mit den EFA-Klassen.
                             Unsichtbar, aber `save`: eine Spalte ohne `edit` wird
@@ -321,7 +352,8 @@ class SymDoVRRTransit extends IPSModuleStrict
                           'edit' => ['type' => 'SelectColor']],
                      ]],
                     ['type' => 'Button', 'caption' => $this->Translate('Restore default colours'),
-                     'onClick' => 'IPS_RequestAction($id, "ModesReset", "");'],
+                     'onClick' => 'IPS_RequestAction($id, "ModesReset", json_encode(["view" => $DefaultView, '
+                         . '"style" => $RouteStyle, "platform" => $ShowPlatform]));'],
                     ['type' => 'Label', 'caption' =>
                         $this->Translate('The VRR does not supply any colours — this is our own ')
                         . $this->Translate('assignment, the one common in German public transport.')],

@@ -83,6 +83,11 @@ eine Farbe, beides frei wählbar — der Fußweg steht als eigene Zeile mit dabe
 Ausgangswerte zurück. Der VRR selbst liefert keine Farben mit — das ist unsere
 Zuordnung, die im deutschen Nahverkehr übliche.
 
+**Vorschau im Formular.** Oben unter *Darstellung* zeigt eine schematische
+Zeichnung die Kachel, wie sie mit den gewählten Einstellungen aussähe — Ansicht,
+Streckendarstellung, Steig-Spalte und Farben folgen sofort, noch vor dem
+Übernehmen. Graue Balken stehen für Text, farbig sind nur die Verkehrsmittel.
+
 Die Wahl gilt für die Instanz, nicht je Betrachter — anders als der Schalter
 *Alle / Ohne Umsteigen*, den sich jedes Gerät für sich merkt. Welche Verbindung
 man sich gerade ansieht und welche Haltestellenliste offen steht, bleibt
