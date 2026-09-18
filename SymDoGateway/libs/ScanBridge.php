@@ -537,11 +537,10 @@ trait ScanBridge
                     if ($eltern > 0) {
                         @IPS_SetParent($id, $eltern);
                     }
-                    /* AUSGEBLENDET. Der Nutzer hat sie nicht angelegt und muss
-                       sie nicht bedienen — eingerichtet wird alles am Gateway.
-                       Nur BEIM ANLEGEN, nicht bei jedem Uebernehmen: wer sie
-                       zum Nachsehen sichtbar macht, soll sie sichtbar behalten. */
-                    @IPS_SetHidden($id, true);
+                    /* NICHT mehr ausgeblendet (18.09.2026): seit der Scanner
+                       eine Splitter-Instanz ist, steht er ohnehin nicht mehr
+                       zwischen den Geraeten. Verstecken hiesse jetzt nur noch,
+                       dem Nutzer den Blick auf seine eigene Anlage zu nehmen. */
                     $this->ScanMelden(sprintf('Scanner „%s" angelegt (#%d).',
                         $this->ScannerName((string)$rolle), $id), KL_NOTIFY);
                 }

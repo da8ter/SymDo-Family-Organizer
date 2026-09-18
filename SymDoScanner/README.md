@@ -43,12 +43,10 @@ verbindet sie und trägt ein, welche Quellen sie bedienen. Im Objektbaum stehen
 sie **neben** dem Gateway, nicht darunter: Symcon räumt Kinder mit ihrer
 Instanz weg, und ein gelöschtes Gateway nähme die Scanner sonst mit.
 
-Sie sind **ausgeblendet** — eingerichtet wird alles am Gateway, und eine
-Instanz, die man nicht angelegt hat und nicht bedienen muss, soll nicht die
-Frage aufwerfen, ob man sie löschen darf. Sichtbar macht sie die Konsole über
-*Ansicht → Versteckte Objekte anzeigen* oder ein Rechtsklick auf das Objekt;
-wer eine sichtbar macht, behält sie sichtbar — ausgeblendet wird nur beim
-Anlegen und beim Übernehmen.
+Sie sind **Splitter-Instanzen**, keine Geräte: der Scanner steuert nichts und
+zeigt nichts an, er nimmt dem Gateway die langen Abrufe ab. In der
+Geräteliste der Konsole steht er deshalb nicht — versteckt wird er auch
+nicht mehr (bis zum 18.09.2026 war er es).
 
 Wer eine Scanner-Instanz von Hand löscht, verliert nichts — das Gateway macht
 die Arbeit dann wieder selbst, nur eben in seiner eigenen Spur. Beim nächsten
