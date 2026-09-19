@@ -551,7 +551,8 @@
             "The AI is taking unusually long. Please try again.": "Die KI braucht ungewöhnlich lange. Bitte noch einmal versuchen.",
             "Direct": "Ohne Umsteigen",
             "no journey without changes": "keine umsteigefreie Verbindung",
-            "done %s": "erledigt %s"
+            "done %s": "erledigt %s",
+            "More": "Mehr"
         }
     }
 }

@@ -380,13 +380,27 @@ html .tabbar {
      sonst bliebe sie auf breiten Fenstern bei voller Inhaltsbreite stehen — dort
      begrenzt max-width, nicht left/right. Die Eingabezeile rechnet mit denselben
      Werten (siehe html .inputbar). */
-  left: calc(var(--sym-ms) + var(--tab-narrow));
-  right: calc(var(--sb-pad) * 2 + var(--sbw) + var(--tab-narrow));
+  /* Die Leiste ist so breit wie ihr INHALT (Wunsch vom 19.09.2026): mindestens
+     die halbe Fensterbreite, höchstens so breit wie die übrigen Inhalte — der
+     Inhaltskasten (Fenster minus Kachelränder und Scrollstreifen, hier left/right),
+     gedeckelt mit --content-max wie die Karten. left/right spannen den Kasten auf,
+     die Breite ist NICHT auto (sonst füllte sie ihn), und die auto-Ränder setzen
+     sie mittig hinein. Die tatsächliche Breite setzt tabLeisteAnpassen() als
+     Inlinestil aus dem breitesten Knopf mal Anzahl — die Knöpfe sind gleich breit
+     (flex: 1), und der Browser kennt Schrift, Sprache und Symbolbreite. Reicht
+     selbst die volle Inhaltsbreite nicht, lässt es erst die Beschriftungen weg und
+     schiebt dann Knöpfe von rechts her hinter „Mehr". Eingabezeile und
+     Vorschlagsfenster behalten ihren schmaleren Kasten (--bar-max). */
+  left: var(--sym-ms);
+  right: calc(var(--sb-pad) * 2 + var(--sbw));
   bottom: calc(var(--tab-gap) + var(--sym-mb));
-  width: auto;
-  /* --bar-max, NICHT --content-max: die Leiste bleibt auf breiten Schirmen schmal
-     (siehe :root). Sonst stünde sie dort in voller Inhaltsbreite. */
-  max-width: var(--bar-max);
+  width: fit-content;
+  min-width: 50vw;
+  /* Der Kasten steht hier NOCH EINMAL als Deckel: eine gesetzte Breite hebt bei
+     einem fixierten Element das right auf (ueberbestimmt) — ohne diesen Deckel
+     liefe die Leiste auf dem Handy rechts aus dem Bild, und das Skript saehe
+     nie, dass sie nicht passt. */
+  max-width: min(var(--content-max), calc(100vw - var(--sym-ms) - var(--sb-pad) * 2 - var(--sbw)));
   margin-left: auto;
   margin-right: auto;
   border: 1px solid var(--border);
@@ -408,6 +422,11 @@ html .tabbar {
    Leistenhöhe stehen. --tab-clear steuert auch Eingabezeile und Meldungen mit. */
 html.no-tabs { --tab-clear: 0px; }
 html.no-tabs .tabbar { display: none; }
+/* Stufe 2: nur Symbole — die Abzeichen (.tab-badge) bleiben. Stufe 3: ein Knopf
+   ist ins Mehr-Menü gewandert. Beide setzt tabLeisteAnpassen(). */
+.tabbar.nur-symbole button > span:not(.tab-badge) { display: none; }
+.tabbar.nur-symbole button { gap: 0; }
+.tabbar button.ueberlauf { display: none; }
 html .screen {
   padding-bottom: var(--tab-clear);
   /* Waagerechtes Scrollen unterbinden. Der konkrete Auslöser (width: 100% plus
@@ -4532,6 +4551,9 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     <button id="tab-notes"><i class="fa-light fa-note-sticky"></i><span></span></button>
     <button id="tab-edumaps"><i class="fa-light fa-school"></i><span></span></button>
     <button id="tab-homework"><i class="fa-light fa-book-open-cover"></i><span></span></button>
+    <!-- Stufe 3 der Platzanpassung: nimmt die Knöpfe auf, die nicht mehr in die
+         Leiste passen (tabLeisteAnpassen). Sonst verborgen. -->
+    <button id="tab-mehr" style="display:none;"><i class="fa-light fa-ellipsis"></i><span></span></button>
   </nav>
 </div>
 
@@ -5871,9 +5893,12 @@ function applyTabVisibility() {
   // der Inhalt bekommt die volle Höhe (siehe html.no-tabs im Stil).
   // Gezaehlt werden die KNOEPFE und nicht die Bereiche: „Schule" ist einer fuer
   // drei, sonst blieb die Leiste bei einem einzigen Knopf stehen.
+  // „Mehr" zaehlt nicht: er ist kein Bereich, sondern nur der Platzhalter fuer
+  // Knoepfe, die nicht in die Leiste passen (tabLeisteAnpassen).
   const knoepfe = Array.from(document.querySelectorAll('.tabbar button'))
-    .filter(b => b.style.display !== 'none').length;
+    .filter(b => b.id !== 'tab-mehr' && b.style.display !== 'none').length;
   document.documentElement.classList.toggle('no-tabs', knoepfe <= 1);
+  tabLeisteAnpassen();
   // Den Rückfall NICHT selbst wählen, sondern setTab(activeTab) rufen: dort wird er
   // gewählt UND als Rückfall erkannt, also nicht als Wunsch gemerkt. Mit setTab(vis[0])
   // wäre der Rückfall hier der Wunsch und würde die Erinnerung überschreiben.
@@ -5884,6 +5909,96 @@ function applyTabVisibility() {
   const gemerkt = ls.get('symdo.tab');
   if (gemerkt && gemerkt !== activeTab && vis.includes(gemerkt)) setTab(gemerkt);
 }
+
+/* ── Die Leiste passt sich dem Platz an (19.09.2026) ─────────────────────────
+   Drei Stufen, jede erst, wenn die vorige nicht reicht:
+   1. Symbol und Beschriftung — die Leiste ist so breit wie ihr Inhalt, mindestens
+      die halbe, hoechstens die Inhaltsbreite (siehe html .tabbar).
+   2. Nur Symbole (Klasse nur-symbole an der Leiste).
+   3. Von rechts her wandern Knoepfe hinter „Mehr" (Klasse ueberlauf am Knopf);
+      dahinter liegt ein kleines Menue, und der aktive Bereich leuchtet am
+      Mehr-Knopf, wenn sein eigener Knopf verborgen ist.
+   Der BEDARF ist der breiteste Knopf mal Anzahl (die Knoepfe sind gleich breit,
+   flex: 1 — ein langes „Klassenseiten" braucht also fuer alle Platz) plus
+   Polster und Rand der Leiste; gemessen am Text (scrollWidth, auch wenn er gerade
+   gekuerzt ist) und am Symbol. Die Leiste bekommt diesen Bedarf als Breite;
+   Mindest- und Hoechstmass (siehe html .tabbar) deckeln ihn, und ob er passte,
+   sagt die Breite, die dabei herauskam. */
+function tabLeisteAnpassen() {
+  const nav = document.querySelector('.tabbar');
+  const mehr = document.getElementById('tab-mehr');
+  if (!nav || !mehr || document.documentElement.classList.contains('no-tabs')) return;
+  const knoepfe = Array.from(nav.querySelectorAll('button')).filter(b => b !== mehr);
+  // Zurueck auf Stufe 1, dann von dort aus messen.
+  nav.classList.remove('nur-symbole');
+  knoepfe.forEach(b => b.classList.remove('ueberlauf'));
+  mehr.style.display = 'none';
+  const passt = () => {
+    const sicht = knoepfe.filter(b => b.style.display !== 'none' && !b.classList.contains('ueberlauf'));
+    if (mehr.style.display !== 'none') sicht.push(mehr);
+    let breitester = 0;
+    for (const b of sicht) {
+      const text = b.querySelector('span:not(.tab-badge)');
+      const sym = b.querySelector('i, svg');
+      breitester = Math.max(breitester,
+        text && text.offsetParent !== null ? text.scrollWidth : 0,
+        sym ? sym.getBoundingClientRect().width : 0);
+    }
+    const cs = getComputedStyle(nav);
+    const rahmen = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+      + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+    // 8px Luft je Knopf, damit ein Wort nicht am Nachbarn klebt.
+    const bedarf = Math.ceil(sicht.length * (breitester + 8) + rahmen);
+    nav.style.width = bedarf + 'px';
+    return nav.offsetWidth >= bedarf - 0.5;
+  };
+  if (passt()) { tabMehrMarkieren(); return; }
+  nav.classList.add('nur-symbole');
+  if (passt()) { tabMehrMarkieren(); return; }
+  mehr.style.display = '';
+  const sichtbar = knoepfe.filter(b => b.style.display !== 'none');
+  // Von rechts her — aber mindestens ein Knopf bleibt neben „Mehr" stehen.
+  while (sichtbar.length > 1 && !passt()) sichtbar.pop().classList.add('ueberlauf');
+  tabMehrMarkieren();
+}
+function tabMehrMarkieren() {
+  const mehr = document.getElementById('tab-mehr');
+  if (mehr) mehr.classList.toggle('active', !!document.querySelector('.tabbar button.active.ueberlauf'));
+}
+/** Das Menue hinter „Mehr": die verborgenen Knoepfe mit Symbol und Namen. Der
+    Eintrag klickt den Knopf selbst — so gilt dieselbe Logik wie in der Leiste
+    (setTab, oder fuer „Schule" der zuletzt besuchte Unterbereich). */
+function tabMehrMenue(anker) {
+  const eintraege = [];
+  document.querySelectorAll('.tabbar button.ueberlauf').forEach(b => {
+    // /icons.js hat das <i> womoeglich schon durch ein <svg data-icon> ersetzt.
+    const sym = b.querySelector('i, svg');
+    let icon = '';
+    if (sym) {
+      icon = sym.dataset && sym.dataset.icon ? 'fa-' + sym.dataset.icon
+        : (Array.from(sym.classList).find(c => c.startsWith('fa-') && c !== 'fa-light') || '');
+    }
+    const text = b.querySelector('span:not(.tab-badge)');
+    eintraege.push({ label: text ? text.textContent : b.id, icon, checked: b.classList.contains('active'),
+      onClick: () => b.click() });
+  });
+  if (eintraege.length) openMenu(anker, eintraege);
+}
+let tabLeisteRaf = 0;
+function tabLeisteSpaeter() {
+  cancelAnimationFrame(tabLeisteRaf);
+  tabLeisteRaf = requestAnimationFrame(tabLeisteAnpassen);
+}
+window.addEventListener('resize', tabLeisteSpaeter);
+// /icons.js tauscht die <i> erst nachtraeglich gegen <svg> — die Breite aendert
+// sich dabei. Beobachtet werden nur Kinder und Texte, nicht die Klassen, die
+// tabLeisteAnpassen selbst setzt: sonst riefe es sich immer wieder auf.
+(() => {
+  const nav = document.querySelector('.tabbar');
+  if (nav && typeof MutationObserver === 'function') {
+    new MutationObserver(tabLeisteSpaeter).observe(nav, { childList: true, subtree: true, characterData: true });
+  }
+})();
 // KI-Buttons sichtbar, wenn aktiviert — Quelle: Standalone window.__SYMDO__, Kachel: State.
 function computeAiEnabled() {
   if (window.__SYMDO__) return window.__SYMDO__.aiEnabled !== false;
@@ -6847,6 +6962,7 @@ function setTab(tab) {
   }
   // Wo man in der Schule war, damit der Knopf beim naechsten Mal dorthin fuehrt.
   if (SCHOOL_TABS.includes(tab)) ls.set('symdo.schuleTab', tab);
+  tabMehrMarkieren();
   renderAll();
 }
 
@@ -7068,7 +7184,19 @@ function openMenu(anchor, entries) {
   // Breite auf den Viewport begrenzen, sonst schieben lange Einträge
   // (z. B. „<langer Favoritenname> hinzufügen“) das Popover aus dem Bild
   pop.style.maxWidth = Math.min(280, window.innerWidth - 16) + 'px';
-  pop.style.top = Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 10) + 'px';
+  // An der Tab-Leiste (unten im Fenster) klappt das Menue nach OBEN auf; sonst
+  // laege es ueber der Leiste selbst. Verankert wird die UNTERKANTE: die Hoehe
+  // steht jetzt noch nicht fest (/icons.js tauscht die Symbole gleich aus), und
+  // ein top aus der Hoehe von eben saesse nachher auf der Leiste.
+  const leiste = anchor.closest ? anchor.closest('.tabbar') : null;
+  if (leiste) {
+    // Ueber der LEISTE, nicht ueber dem Knopf: der Knopf sitzt im Polster der
+    // Leiste, ein Abstand von ihm laege noch auf ihrem Rand.
+    pop.style.top = 'auto';
+    pop.style.bottom = (window.innerHeight - leiste.getBoundingClientRect().top + 6) + 'px';
+  } else {
+    pop.style.top = Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 10) + 'px';
+  }
   pop.style.left = Math.max(8, Math.min(rect.right - pop.offsetWidth, window.innerWidth - pop.offsetWidth - 8)) + 'px';
   menuAnchor = anchor;
   menuCloser = (e) => {
@@ -18138,6 +18266,7 @@ function initCaptions() {
   document.querySelector('#tab-plan span').textContent = translate('Timetable');
   document.querySelector('#tab-transit span').textContent = translate('Transit');
   document.querySelector('#tab-ki span').textContent = translate('AI');
+  document.querySelector('#tab-mehr span').textContent = translate('More');
   document.getElementById('kiTitle').textContent = translate('Detected by AI');
   document.getElementById('kiEmptyText').textContent = translate('Nothing detected at the moment.');
   document.getElementById('shoppingInput').placeholder = translate('Add item …');
@@ -18798,6 +18927,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // „Schule" ist kein Bereich, sondern ein Weg zu dreien: er fuehrt dorthin,
   // wo man zuletzt war.
   document.getElementById('tab-school').addEventListener('click', () => setTab(schuleZuletzt()));
+  document.getElementById('tab-mehr').addEventListener('click', (e) => tabMehrMenue(e.currentTarget));
   document.querySelectorAll('[data-close]').forEach(btn =>
     btn.addEventListener('click', () => closeOverlay(btn.dataset.close)));
 

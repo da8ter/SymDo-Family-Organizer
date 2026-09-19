@@ -88,6 +88,12 @@ Drei Dinge, die man dabei wissen sollte:
 Sind alle Bereiche abgeschaltet, bleibt die Übersicht stehen; bei nur einem
 Bereich verschwindet die Tab-Leiste.
 
+Die Tab-Leiste ist so breit, wie ihre Knöpfe brauchen: mindestens die halbe
+Fensterbreite, höchstens so breit wie die übrigen Inhalte. Reicht das nicht,
+lässt sie zuerst die Beschriftungen weg und zeigt nur Symbole; reicht auch das
+nicht, wandern Knöpfe von rechts her hinter **Mehr** (…) in ein kleines Menü.
+Liegt der aktive Bereich dort, leuchtet der Mehr-Knopf.
+
 ## 5. Was ohne Gateway geht
 
 | Bereich | Ohne Gateway | Mit Gateway |
