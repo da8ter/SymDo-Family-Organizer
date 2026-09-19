@@ -547,6 +547,13 @@ archivierte Karte endgültig wegwerfen. Anlegen und Schreiben gibt es nicht — 
 hier von Hand entstünde, wäre beim nächsten Durchlauf entweder weg oder
 archiviert.
 
+**„Neu" an den Karten (seit 19.09.2026):** Eine Karte, die neu ist oder deren
+Inhalt sich seit dem letzten Ansehen geändert hat, trägt in Web-App und Kachel
+die Pille **Neu**; Ordner und der Tab-Knopf (Klassenseiten, gebündelt Schule)
+zeigen die Zahl. Gesehen heißt: die Seite war offen. Gemerkt wird das je Gerät im
+Browser (`symdo.eduGesehen`), nicht hier im Gateway — der Bestand liefert nur die
+Stempel (`updatedAt` bei Inhaltsänderung, `srcAt` vom Nachzug).
+
 ## 17. LOGINEO NRW LMS (Moodle)
 
 > Im Formular unter **Schule → LOGINEO NRW LMS (Moodle)**, in drei Gruppen:

@@ -380,13 +380,27 @@ html .tabbar {
      sonst bliebe sie auf breiten Fenstern bei voller Inhaltsbreite stehen — dort
      begrenzt max-width, nicht left/right. Die Eingabezeile rechnet mit denselben
      Werten (siehe html .inputbar). */
-  left: calc(var(--sym-ms) + var(--tab-narrow));
-  right: calc(var(--sb-pad) * 2 + var(--sbw) + var(--tab-narrow));
+  /* Die Leiste ist so breit wie ihr INHALT (Wunsch vom 19.09.2026): mindestens
+     die halbe Fensterbreite, höchstens so breit wie die übrigen Inhalte — der
+     Inhaltskasten (Fenster minus Kachelränder und Scrollstreifen, hier left/right),
+     gedeckelt mit --content-max wie die Karten. left/right spannen den Kasten auf,
+     die Breite ist NICHT auto (sonst füllte sie ihn), und die auto-Ränder setzen
+     sie mittig hinein. Die tatsächliche Breite setzt tabLeisteAnpassen() als
+     Inlinestil aus dem breitesten Knopf mal Anzahl — die Knöpfe sind gleich breit
+     (flex: 1), und der Browser kennt Schrift, Sprache und Symbolbreite. Reicht
+     selbst die volle Inhaltsbreite nicht, lässt es erst die Beschriftungen weg und
+     schiebt dann Knöpfe von rechts her hinter „Mehr". Eingabezeile und
+     Vorschlagsfenster behalten ihren schmaleren Kasten (--bar-max). */
+  left: var(--sym-ms);
+  right: calc(var(--sb-pad) * 2 + var(--sbw));
   bottom: calc(var(--tab-gap) + var(--sym-mb));
-  width: auto;
-  /* --bar-max, NICHT --content-max: die Leiste bleibt auf breiten Schirmen schmal
-     (siehe :root). Sonst stünde sie dort in voller Inhaltsbreite. */
-  max-width: var(--bar-max);
+  width: fit-content;
+  min-width: 50vw;
+  /* Der Kasten steht hier NOCH EINMAL als Deckel: eine gesetzte Breite hebt bei
+     einem fixierten Element das right auf (ueberbestimmt) — ohne diesen Deckel
+     liefe die Leiste auf dem Handy rechts aus dem Bild, und das Skript saehe
+     nie, dass sie nicht passt. */
+  max-width: min(var(--content-max), calc(100vw - var(--sym-ms) - var(--sb-pad) * 2 - var(--sbw)));
   margin-left: auto;
   margin-right: auto;
   border: 1px solid var(--border);
@@ -408,6 +422,11 @@ html .tabbar {
    Leistenhöhe stehen. --tab-clear steuert auch Eingabezeile und Meldungen mit. */
 html.no-tabs { --tab-clear: 0px; }
 html.no-tabs .tabbar { display: none; }
+/* Stufe 2: nur Symbole — die Abzeichen (.tab-badge) bleiben. Stufe 3: ein Knopf
+   ist ins Mehr-Menü gewandert. Beide setzt tabLeisteAnpassen(). */
+.tabbar.nur-symbole button > span:not(.tab-badge) { display: none; }
+.tabbar.nur-symbole button { gap: 0; }
+.tabbar button.ueberlauf { display: none; }
 html .screen {
   padding-bottom: var(--tab-clear);
   /* Waagerechtes Scrollen unterbinden. Der konkrete Auslöser (width: 100% plus
@@ -950,6 +969,17 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 .edu-titel { font-size: 15px; font-weight: 700; flex: 1; min-width: 0; }
 .edu-datum { font-size: 11px; color: var(--muted); flex: 0 0 auto; }
+/* „Neu" (19.09.2026): die Karte ist neu oder seit dem letzten Ansehen
+   geaendert — gemerkt je Geraet (symdo.eduGesehen), siehe eduIstNeu(). Auf
+   einem farbigen Kopf (.bunt) weiss, sonst ginge die Pille im Farbband unter. */
+.edu-neu { flex: 0 0 auto; font-size: 10px; font-weight: 700; line-height: 16px; padding: 0 6px;
+  border-radius: 999px; background: var(--accent); color: #fff; }
+.edu-kopf.bunt .edu-neu { background: #fff; color: inherit; opacity: .9; }
+/* Zaehler neuer Karten an Ordnern und Abschnitten: der Kasten des Tab-Abzeichens,
+   aber im Textfluss statt absolut. */
+.edu-neu-zahl { display: inline-block; vertical-align: middle; margin-left: 6px; min-width: 16px; height: 16px;
+  padding: 0 4px; border-radius: 8px; background: #d92d20; color: #fff; font-size: 10px; font-weight: 700;
+  line-height: 16px; text-align: center; }
 /* Im farbigen Kopf erbt das Datum die Schriftfarbe — „grau auf blau" waere
    nicht zu lesen. */
 .edu-kopf.bunt .edu-datum { color: inherit; opacity: .75; }
@@ -4522,7 +4552,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     <!-- „Schule" buendelt die drei Kindsachen. Ein eigener Bereich ist es NICHT
          (kein #screen-school): gebuendelt wird die Leiste, nicht der Inhalt —
          siehe SCHOOL_TABS. -->
-    <button id="tab-school"><i class="fa-light fa-graduation-cap"></i><span></span></button>
+    <button id="tab-school"><i class="fa-light fa-graduation-cap"></i><span></span><span id="tabSchoolBadge" class="tab-badge" style="display:none;"></span></button>
     <button id="tab-plan"><i class="fa-light fa-table-columns"></i><span></span></button>
     <button id="tab-transit"><i class="fa-light fa-bus"></i><span></span></button>
     <button id="tab-ki"><i class="fa-light fa-sparkles"></i><span></span><span id="tabKiBadge" class="tab-badge" style="display:none;"></span></button>
@@ -4530,8 +4560,11 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span></button>
     <button id="tab-calendar"><i class="fa-light fa-calendar-days"></i><span></span></button>
     <button id="tab-notes"><i class="fa-light fa-note-sticky"></i><span></span></button>
-    <button id="tab-edumaps"><i class="fa-light fa-school"></i><span></span></button>
+    <button id="tab-edumaps"><i class="fa-light fa-school"></i><span></span><span id="tabEdumapsBadge" class="tab-badge" style="display:none;"></span></button>
     <button id="tab-homework"><i class="fa-light fa-book-open-cover"></i><span></span></button>
+    <!-- Stufe 3 der Platzanpassung: nimmt die Knöpfe auf, die nicht mehr in die
+         Leiste passen (tabLeisteAnpassen). Sonst verborgen. -->
+    <button id="tab-mehr" style="display:none;"><i class="fa-light fa-ellipsis"></i><span></span></button>
   </nav>
 </div>
 
@@ -5194,6 +5227,8 @@ const store = {
   // Sichtbare Bereiche. Standard überall an: fehlt das Feld (ältere Kachel), darf
   // nichts verschwinden.
   tabs: { dashboard: true, shopping: true, todos: true },
+  // Reihenfolge der Knoepfe; null = Vorgabe (siehe tabReihenfolge).
+  tabOrder: null,
   hiddenIDs: [],
   instances: [],
   states: {},        // "<id>" → {kind, revision, state}
@@ -5677,8 +5712,27 @@ function normalizeTabs(raw) {
        sein will. */
     homework:  t.homework   === true,
     // KI: gleiche Regel, gleicher Grund — die Vorschlaege liegen im Gateway.
-    ki:        t.ki         === true
+    ki:        t.ki         === true,
+    /* Die drei ohne alten Schalter (seit die Liste `Sections` Reihenfolge UND
+       Haken traegt, 19.09.2026): Vorgabe SICHTBAR wie bei dashboard — die
+       Kachel-Literale der Uebernahme-Skripte nennen sie nicht, und ohne
+       Angabe soll sich nichts aendern. „school" ist der gebuendelte Knopf. */
+    school:    t.school     !== false,
+    plan:      t.plan       !== false,
+    transit:   t.transit    !== false
   };
+}
+/* Die Reihenfolge der Knoepfe — aus dem Formular der Kachel (Ziehen in der
+   Liste `Sections`), Quelle wie bei tabs: Standalone window.__SYMDO__, Kachel
+   der State. Immer vollstaendig: Unbekanntes faellt weg, Fehlendes kommt in
+   der Vorgabereihenfolge hinten dran (Spiegel von Bereiche::Zeilen in PHP) —
+   eine aeltere oder verstuemmelte Liste verliert so keinen Knopf. */
+const TAB_REIHENFOLGE = ['dashboard', 'school', 'plan', 'transit', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps', 'homework'];
+function tabReihenfolge() {
+  const roh = window.__SYMDO__ ? window.__SYMDO__.tabOrder : store.tabOrder;
+  const liste = Array.isArray(roh) ? roh.filter(k => TAB_REIHENFOLGE.includes(k)) : [];
+  for (const k of TAB_REIHENFOLGE) if (!liste.includes(k)) liste.push(k);
+  return liste;
 }
 /** @return {string[]} sichtbare Tabs in der Reihenfolge der Leiste. */
 function visibleTabs() {
@@ -5699,13 +5753,19 @@ function visibleTabs() {
      dort nie lief — der Riegel war also zufaellig richtig. Seit die
      Hausaufgaben-Kachel den Plan HOLT (sie braucht Faecher und Symbole), waere
      ihr sonst beim Antippen eines Kindes ein zweiter Bereich gewachsen. */
-  if (kindTab && t.dashboard && planKinder().length > 0) out.push('plan');
+  /* Schule aus (Haken der Zeile „Schule", nur gebuendelt von Bedeutung): dann
+     fehlt nicht nur der Knopf, sondern auch die drei Bereiche dahinter — sonst
+     stuende ein gemerkter Bereich ohne Knopf da, und zurueck kaeme man nicht.
+     Ungebuendelt (Uebersicht aus) gilt die Zeile nicht: dort haben die drei
+     ihre eigenen Zeilen. */
+  const schuleWeg = t.dashboard && !t.school;
+  if (kindTab && t.dashboard && t.plan && !schuleWeg && planKinder().length > 0) out.push('plan');
   /* Nahverkehr: erscheint, sobald eine Haltestelle oder Strecke eingerichtet
      ist — kein eigener Haken im Formular. Dieselbe Begruendung wie beim
      Stundenplan: ein Tab, der beim Antippen „nichts eingerichtet" zeigt, ist
      schlimmer als keiner. Anders als der Plan haengt er NICHT am Kindmodus:
      eine Haltestelle kann der ganzen Familie gehoeren. */
-  if (t.dashboard) {
+  if (t.dashboard && t.transit) {
     const nv = transitEintraege();
     if (nv.stops.length > 0 || nv.routes.length > 0) { out.push('transit'); }
   }
@@ -5733,9 +5793,13 @@ function visibleTabs() {
   // Notizen ganz hinten und nur mit Gateway — dort liegen sie.
   if (t.notes && notizenMoeglich()) out.push('notes');
   // Die Klassenseiten dahinter, aus demselben Grund.
-  if (t.edumaps && edumapsMoeglich() && kindSache) out.push('edumaps');
+  if (t.edumaps && edumapsMoeglich() && kindSache && !schuleWeg) out.push('edumaps');
   // Die Hausaufgaben ebenso — sie liegen im Gateway.
-  if (t.homework && homeworkMoeglich() && kindSache) out.push('homework');
+  if (t.homework && homeworkMoeglich() && kindSache && !schuleWeg) out.push('homework');
+  /* Zuletzt die Reihenfolge des Nutzers. Sie gilt damit auch fuer den Rueckfall
+     vis[0] in setTab: der erste sichtbare Bereich SEINER Leiste. */
+  const rang = tabReihenfolge();
+  out.sort((a, b) => rang.indexOf(a) - rang.indexOf(b));
   // Alles abgeschaltet: definierter Rückfall, damit die Oberfläche nie leer ist.
   return out.length ? out : ['dashboard'];
 }
@@ -5807,13 +5871,30 @@ function applyTabVisibility() {
   }
   const schulKnopf = document.getElementById('tab-school');
   if (schulKnopf) schulKnopf.style.display = schule.length > 0 ? '' : 'none';
+  /* Die Knoepfe in die Reihenfolge des Nutzers bringen — VOR tabLeisteAnpassen,
+     denn die raeumt bei Platzmangel vom ENDE der Leiste hinter „Mehr": was der
+     Nutzer nach hinten zieht, weicht zuerst. appendChild verschiebt vorhandene
+     Knoten, die Klick-Listener bleiben; „Mehr" steht immer zuletzt. Nur
+     anfassen, wenn sich etwas aendert — jeder Umbau weckt den Beobachter der
+     Leiste ein weiteres Mal. */
+  const leiste = document.querySelector('.tabbar');
+  if (leiste) {
+    const ziel = tabReihenfolge().map(k => document.getElementById('tab-' + k)).filter(Boolean);
+    const mehrKnopf = document.getElementById('tab-mehr');
+    if (mehrKnopf) ziel.push(mehrKnopf);
+    const ist = Array.from(leiste.querySelectorAll('button'));
+    if (ziel.some((b, i) => b !== ist[i])) ziel.forEach(b => leiste.appendChild(b));
+  }
   // Ein einziger Bereich: die Leiste wäre ein Knopf ohne Wahl. Dann fällt sie weg und
   // der Inhalt bekommt die volle Höhe (siehe html.no-tabs im Stil).
   // Gezaehlt werden die KNOEPFE und nicht die Bereiche: „Schule" ist einer fuer
   // drei, sonst blieb die Leiste bei einem einzigen Knopf stehen.
+  // „Mehr" zaehlt nicht: er ist kein Bereich, sondern nur der Platzhalter fuer
+  // Knoepfe, die nicht in die Leiste passen (tabLeisteAnpassen).
   const knoepfe = Array.from(document.querySelectorAll('.tabbar button'))
-    .filter(b => b.style.display !== 'none').length;
+    .filter(b => b.id !== 'tab-mehr' && b.style.display !== 'none').length;
   document.documentElement.classList.toggle('no-tabs', knoepfe <= 1);
+  tabLeisteAnpassen();
   // Den Rückfall NICHT selbst wählen, sondern setTab(activeTab) rufen: dort wird er
   // gewählt UND als Rückfall erkannt, also nicht als Wunsch gemerkt. Mit setTab(vis[0])
   // wäre der Rückfall hier der Wunsch und würde die Erinnerung überschreiben.
@@ -5823,7 +5904,101 @@ function applyTabVisibility() {
   // Erinnerung erhalten, würde aber nie eingelöst.
   const gemerkt = ls.get('symdo.tab');
   if (gemerkt && gemerkt !== activeTab && vis.includes(gemerkt)) setTab(gemerkt);
+  // Das Klassenseiten-Abzeichen haengt an Sichtbarkeit, Buendelung und Kind.
+  setEduBadges();
 }
+
+/* ── Die Leiste passt sich dem Platz an (19.09.2026) ─────────────────────────
+   Drei Stufen, jede erst, wenn die vorige nicht reicht:
+   1. Symbol und Beschriftung — die Leiste ist so breit wie ihr Inhalt, mindestens
+      die halbe, hoechstens die Inhaltsbreite (siehe html .tabbar).
+   2. Nur Symbole (Klasse nur-symbole an der Leiste).
+   3. Von rechts her wandern Knoepfe hinter „Mehr" (Klasse ueberlauf am Knopf);
+      dahinter liegt ein kleines Menue, und der aktive Bereich leuchtet am
+      Mehr-Knopf, wenn sein eigener Knopf verborgen ist.
+   Der BEDARF ist der breiteste Knopf mal Anzahl (die Knoepfe sind gleich breit,
+   flex: 1 — ein langes „Klassenseiten" braucht also fuer alle Platz) plus
+   Polster und Rand der Leiste; gemessen am Text (scrollWidth, auch wenn er gerade
+   gekuerzt ist) und am Symbol. Die Leiste bekommt diesen Bedarf als Breite;
+   Mindest- und Hoechstmass (siehe html .tabbar) deckeln ihn, und ob er passte,
+   sagt die Breite, die dabei herauskam. */
+function tabLeisteAnpassen() {
+  const nav = document.querySelector('.tabbar');
+  const mehr = document.getElementById('tab-mehr');
+  if (!nav || !mehr || document.documentElement.classList.contains('no-tabs')) return;
+  const knoepfe = Array.from(nav.querySelectorAll('button')).filter(b => b !== mehr);
+  // Zurueck auf Stufe 1, dann von dort aus messen.
+  nav.classList.remove('nur-symbole');
+  knoepfe.forEach(b => b.classList.remove('ueberlauf'));
+  mehr.style.display = 'none';
+  const passt = () => {
+    const sicht = knoepfe.filter(b => b.style.display !== 'none' && !b.classList.contains('ueberlauf'));
+    if (mehr.style.display !== 'none') sicht.push(mehr);
+    let breitester = 0;
+    for (const b of sicht) {
+      const text = b.querySelector('span:not(.tab-badge)');
+      const sym = b.querySelector('i, svg');
+      breitester = Math.max(breitester,
+        text && text.offsetParent !== null ? text.scrollWidth : 0,
+        sym ? sym.getBoundingClientRect().width : 0);
+    }
+    const cs = getComputedStyle(nav);
+    const rahmen = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+      + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+    // Luft je Knopf: 8px zwischen Woertern; nur Symbole brauchen mehr, sonst
+    // stehen die Zeichen wie eine Kette nebeneinander (Wunsch 19.09.2026).
+    const luft = nav.classList.contains('nur-symbole') ? 23 : 8;
+    const bedarf = Math.ceil(sicht.length * (breitester + luft) + rahmen);
+    nav.style.width = bedarf + 'px';
+    return nav.offsetWidth >= bedarf - 0.5;
+  };
+  if (passt()) { tabMehrMarkieren(); return; }
+  nav.classList.add('nur-symbole');
+  if (passt()) { tabMehrMarkieren(); return; }
+  mehr.style.display = '';
+  const sichtbar = knoepfe.filter(b => b.style.display !== 'none');
+  // Von rechts her — aber mindestens ein Knopf bleibt neben „Mehr" stehen.
+  while (sichtbar.length > 1 && !passt()) sichtbar.pop().classList.add('ueberlauf');
+  tabMehrMarkieren();
+}
+function tabMehrMarkieren() {
+  const mehr = document.getElementById('tab-mehr');
+  if (mehr) mehr.classList.toggle('active', !!document.querySelector('.tabbar button.active.ueberlauf'));
+}
+/** Das Menue hinter „Mehr": die verborgenen Knoepfe mit Symbol und Namen. Der
+    Eintrag klickt den Knopf selbst — so gilt dieselbe Logik wie in der Leiste
+    (setTab, oder fuer „Schule" der zuletzt besuchte Unterbereich). */
+function tabMehrMenue(anker) {
+  const eintraege = [];
+  document.querySelectorAll('.tabbar button.ueberlauf').forEach(b => {
+    // /icons.js hat das <i> womoeglich schon durch ein <svg data-icon> ersetzt.
+    const sym = b.querySelector('i, svg');
+    let icon = '';
+    if (sym) {
+      icon = sym.dataset && sym.dataset.icon ? 'fa-' + sym.dataset.icon
+        : (Array.from(sym.classList).find(c => c.startsWith('fa-') && c !== 'fa-light') || '');
+    }
+    const text = b.querySelector('span:not(.tab-badge)');
+    eintraege.push({ label: text ? text.textContent : b.id, icon, checked: b.classList.contains('active'),
+      onClick: () => b.click() });
+  });
+  if (eintraege.length) openMenu(anker, eintraege);
+}
+let tabLeisteRaf = 0;
+function tabLeisteSpaeter() {
+  cancelAnimationFrame(tabLeisteRaf);
+  tabLeisteRaf = requestAnimationFrame(tabLeisteAnpassen);
+}
+window.addEventListener('resize', tabLeisteSpaeter);
+// /icons.js tauscht die <i> erst nachtraeglich gegen <svg> — die Breite aendert
+// sich dabei. Beobachtet werden nur Kinder und Texte, nicht die Klassen, die
+// tabLeisteAnpassen selbst setzt: sonst riefe es sich immer wieder auf.
+(() => {
+  const nav = document.querySelector('.tabbar');
+  if (nav && typeof MutationObserver === 'function') {
+    new MutationObserver(tabLeisteSpaeter).observe(nav, { childList: true, subtree: true, characterData: true });
+  }
+})();
 // KI-Buttons sichtbar, wenn aktiviert — Quelle: Standalone window.__SYMDO__, Kachel: State.
 function computeAiEnabled() {
   if (window.__SYMDO__) return window.__SYMDO__.aiEnabled !== false;
@@ -6605,6 +6780,7 @@ function handleMessage(data) {
     store.voiceHandsFree = !!data.voiceHandsFree;
     store.voiceWakeWord = data.voiceWakeWord || 'Hey SymDo';
     store.tabs = normalizeTabs(data.tabs);
+    store.tabOrder = Array.isArray(data.tabOrder) ? data.tabOrder : null;
     store.hiddenIDs = data.hiddenIDs || [];
     store.instances = data.instances || [];
     store.states = data.states || {};
@@ -6690,6 +6866,8 @@ function handleMessage(data) {
     store.hiddenIDs = data.hiddenIDs || [];
     store.gatewayAvailable = !!data.gatewayAvailable;
     store.tabs = normalizeTabs(data.tabs);
+    // Reihenfolge nur, wenn sie mitkommt — derselbe Riegel wie bei users unten.
+    if (Array.isArray(data.tabOrder)) { store.tabOrder = data.tabOrder; }
     /* Mitglieder NUR wenn welche mitkommen. Sie fehlten hier ganz: ein neu
        angelegtes Familienmitglied erreichte eine offene Oberflaeche nie. Der
        Riegel ist noetig, weil ein Meta-Push ohne users sonst die vorhandenen
@@ -6787,6 +6965,7 @@ function setTab(tab) {
   }
   // Wo man in der Schule war, damit der Knopf beim naechsten Mal dorthin fuehrt.
   if (SCHOOL_TABS.includes(tab)) ls.set('symdo.schuleTab', tab);
+  tabMehrMarkieren();
   renderAll();
 }
 
@@ -7008,7 +7187,19 @@ function openMenu(anchor, entries) {
   // Breite auf den Viewport begrenzen, sonst schieben lange Einträge
   // (z. B. „<langer Favoritenname> hinzufügen“) das Popover aus dem Bild
   pop.style.maxWidth = Math.min(280, window.innerWidth - 16) + 'px';
-  pop.style.top = Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 10) + 'px';
+  // An der Tab-Leiste (unten im Fenster) klappt das Menue nach OBEN auf; sonst
+  // laege es ueber der Leiste selbst. Verankert wird die UNTERKANTE: die Hoehe
+  // steht jetzt noch nicht fest (/icons.js tauscht die Symbole gleich aus), und
+  // ein top aus der Hoehe von eben saesse nachher auf der Leiste.
+  const leiste = anchor.closest ? anchor.closest('.tabbar') : null;
+  if (leiste) {
+    // Ueber der LEISTE, nicht ueber dem Knopf: der Knopf sitzt im Polster der
+    // Leiste, ein Abstand von ihm laege noch auf ihrem Rand.
+    pop.style.top = 'auto';
+    pop.style.bottom = (window.innerHeight - leiste.getBoundingClientRect().top + 6) + 'px';
+  } else {
+    pop.style.top = Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 10) + 'px';
+  }
   pop.style.left = Math.max(8, Math.min(rect.right - pop.offsetWidth, window.innerWidth - pop.offsetWidth - 8)) + 'px';
   menuAnchor = anchor;
   menuCloser = (e) => {
@@ -11273,18 +11464,33 @@ function setMailBadges() {
   mailProposals.forEach(p => (Array.isArray(p.items) ? p.items : []).forEach(it => {
     zahl[mailArt(it)]++;
   }));
-  const setzen = (id, n) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = String(n);
-    el.style.display = n > 0 ? '' : 'none';
-  };
   // EIN Abzeichen fuer alles, was im KI-Bereich auf eine Entscheidung wartet.
   // Vorher zaehlte jede Sorte an ihrem eigenen Tab — das verteilte eine Nachricht
   // auf drei Stellen, von denen keine die ganze Zahl nannte.
   const offen = zahl.task + zahl.event + zahl.note + zahl.homework;
-  setzen('tabKiBadge', offen);
+  tabBadgeSetzen('tabKiBadge', offen);
   appBadgeSetzen(offen);
+}
+/** Ein Zaehler-Abzeichen an einem Tab-Knopf: Zahl setzen, bei 0 verbergen. */
+function tabBadgeSetzen(id, n) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = String(n);
+  el.style.display = n > 0 ? '' : 'none';
+}
+/**
+ * Das Abzeichen der Klassenseiten: wie viele Karten der gezeigten Person neu
+ * oder geaendert sind (eduNeuZaehlen). Gebuendelt steht die Zahl am Knopf
+ * „Schule", sonst am eigenen Knopf — nie an beiden. Ist der Bereich gar nicht
+ * sichtbar, steht sie nirgends. NICHT aufs App-Symbol: das zaehlt allein die
+ * KI-Vorschlaege (siehe appBadgeSetzen), zwei Schreiber ueberschrieben sich.
+ */
+function setEduBadges() {
+  const sichtbar = edumapsGeladen && visibleTabs().includes('edumaps');
+  const n = sichtbar ? eduNeuZaehlen().gesamt : 0;
+  const buendel = schuleGebuendelt();
+  tabBadgeSetzen('tabSchoolBadge', buendel ? n : 0);
+  tabBadgeSetzen('tabEdumapsBadge', buendel ? 0 : n);
 }
 
 /**
@@ -15639,7 +15845,7 @@ function edumapsKartenHtml(ordner) {
         '" data-key="ea:' + escapeHtml(g.name) + '" data-bereich="' + escapeHtml(g.name) + '"' + stil + '>' +
         '<i class="fa-light fa-chevron-' + (auf ? 'down' : 'right') + ' edu-pfeil"></i>' +
         '<span class="edu-bname">' + escapeHtml(g.name) + '</span>' +
-        '<span class="edu-zahl">' + g.karten.length + '</span></h3>';
+        '<span class="edu-zahl">' + g.karten.length + eduNeuZahlHtml(g.karten.filter(eduNeuAnzeigen).length) + '</span></h3>';
     }
     html += '<div class="edu-gruppe" data-key="eg:' + escapeHtml(g.name) + '"' +
       (auf || !g.name ? '' : ' hidden') + '>';
@@ -15713,6 +15919,7 @@ function edumapsKarteHtml(n, imArchiv = false, ersatzFarbe = '') {
        die Karte angefasst hat. `updatedAt` ist der Stand des Bestands — damit
        stand hier bei jeder Karte der Tag des Spiegelns, bei allen also
        derselbe. Karten aus der Zeit vor `srcAt` fallen darauf zurueck. */
+    (eduNeuAnzeigen(n) ? '<span class="edu-neu">' + translate('New') + '</span>' : '') +
     '<span class="edu-datum">' + escapeHtml(notesDatum(n.srcAt || n.updatedAt)) + '</span></div>' +
     /* Die formatierte Fassung, wenn die Quelle eine liefert — dann bleiben
        Nummerierung und Fettdruck der Klassenseite erhalten. Sie ist SERVERSEITIG
@@ -15843,6 +16050,102 @@ function eduBereichUmschalten(name) {
   eduBereichOffen(name);   // sorgt fuer das Laden
   eduOffeneBereiche[name] = !eduOffeneBereiche[name];
   try { ls.set('symdo.eduOffen', JSON.stringify(eduOffeneBereiche)); } catch (e) {}
+}
+
+/* ── „Neu" an den Klassenseiten (19.09.2026) ─────────────────────────────
+   Eine Karte ist neu, wenn dieses GERAET sie noch nie oder in einem aelteren
+   Stand gesehen hat. Gemerkt wird je Karte der Stempel, den sie beim letzten
+   Oeffnen ihrer Seite hatte (symdo.eduGesehen, Kennung => Stempel). Der
+   Stempel ist max(updatedAt, srcAt): updatedAt hebt der Bestand nur bei
+   echter Inhaltsaenderung an, srcAt aendert der Nachzug, wenn die Schule das
+   Datum anfasst. Gesehen heisst: die Seite war offen — nicht mehr, nicht
+   weniger; ein Blick in jeden Abschnitt laesst sich nicht messen.
+
+   Fehlt der Schluessel ganz, gilt alles Vorhandene als gesehen (Grundlinie):
+   sonst leuchtete auf jedem neuen Geraet jede Karte. Ohne localStorage (privater
+   Modus) laeuft die Grundlinie bei jedem Laden neu — keine Abzeichen, keine
+   Fehler.
+
+   Zwei Praedikate: eduIstNeu zaehlt (Ordner, Tab) und faellt beim Oeffnen
+   sofort; eduNeuAnzeigen zeichnet die Pille und bleibt den Besuch der Seite
+   lang, weil das Oeffnen die Karten ja gerade als gesehen verbucht — sonst
+   verschwaende die Pille, bevor man sie gesehen hat (eduNeuSitzung).
+
+   Alles hier liest edumaps.notes/folders DIREKT: die Notiz-Helfer
+   (notesImOrdner, notesPfad …) gehen ueber notesB() und liefern ausserhalb des
+   Bereichs den Notizen-Bestand. */
+let eduGesehen = null;
+const eduNeuSitzung = new Set();
+function eduStempel(n) { return Math.max(n.updatedAt || 0, n.srcAt || 0); }
+/** null = noch keine Grundlinie auf diesem Geraet; sonst Kennung => Stempel. */
+function eduGesehenLaden() {
+  if (eduGesehen !== null) return eduGesehen;
+  let roh = null;
+  try { roh = ls.get('symdo.eduGesehen'); } catch (e) { roh = null; }
+  if (roh === null || roh === undefined) return null;
+  try { eduGesehen = JSON.parse(roh) || {}; } catch (e) { eduGesehen = {}; }
+  if (typeof eduGesehen !== 'object' || Array.isArray(eduGesehen)) eduGesehen = {};
+  return eduGesehen;
+}
+function eduGesehenSpeichern() {
+  if (!eduGesehen) return;
+  // Ausduennen: was der Bestand nicht mehr kennt, muss niemand mehr merken.
+  const da = new Set((edumaps.notes || []).map(n => n.id));
+  for (const id of Object.keys(eduGesehen)) if (!da.has(id)) delete eduGesehen[id];
+  try { ls.set('symdo.eduGesehen', JSON.stringify(eduGesehen)); } catch (e) {}
+}
+/** Grundlinie: erstes Laden mit Karten auf diesem Geraet → alles gesehen. */
+function eduGesehenAbgleichen() {
+  if (eduGesehenLaden() !== null || !(edumaps.notes || []).length) return;
+  eduGesehen = {};
+  for (const n of edumaps.notes) eduGesehen[n.id] = eduStempel(n);
+  eduGesehenSpeichern();
+}
+function eduIstNeu(n) {
+  if (!n || n.archived) return false;
+  const g = eduGesehenLaden();
+  if (g === null) return false;
+  return g[n.id] === undefined || g[n.id] < eduStempel(n);
+}
+function eduNeuAnzeigen(n) { return !!n && (eduIstNeu(n) || eduNeuSitzung.has(n.id)); }
+/** Gehoert der Wurzel-Ordner der gezeigten Person? (Spiegel von eduDemKindZuzuordnen, ohne notesB.) */
+function eduKindPasst(wurzel) {
+  const kind = kindGewaehlt();
+  if (!kind || !wurzel) return true;
+  const wem = String(wurzel.memberId || '');
+  return wem === '' || wem === kind;
+}
+/** { gesamt, jeOrdner: Kennung => Zahl } — Seite UND ihr Kind-Ordner zaehlen; gesamt nur die gezeigte Person. */
+function eduNeuZaehlen() {
+  const ordner = new Map((edumaps.folders || []).map(f => [f.id, f]));
+  const jeOrdner = {};
+  let gesamt = 0;
+  for (const n of edumaps.notes || []) {
+    if (!eduIstNeu(n)) continue;
+    const seite = ordner.get(n.folderId);
+    if (!seite) continue;
+    const wurzel = seite.parentId && ordner.get(seite.parentId) ? ordner.get(seite.parentId) : seite;
+    jeOrdner[seite.id] = (jeOrdner[seite.id] || 0) + 1;
+    if (wurzel !== seite) jeOrdner[wurzel.id] = (jeOrdner[wurzel.id] || 0) + 1;
+    if (eduKindPasst(wurzel)) gesamt++;
+  }
+  return { gesamt, jeOrdner };
+}
+/** Die rote Zahl-Pille, oder nichts. */
+function eduNeuZahlHtml(n) { return n > 0 ? ' <span class="edu-neu-zahl">' + n + '</span>' : ''; }
+/** Die offene Seite gilt als gesehen: neue Karten in die Sitzung, alle Stempel merken. */
+function eduSeiteGesehen(ordner) {
+  if (!ordner) return;
+  let g = eduGesehenLaden();
+  if (g === null) { eduGesehenAbgleichen(); g = eduGesehenLaden(); if (g === null) return; }
+  let geaendert = false;
+  for (const n of edumaps.notes || []) {
+    if (n.folderId !== ordner.id) continue;
+    if (eduIstNeu(n)) eduNeuSitzung.add(n.id);
+    const st = eduStempel(n);
+    if (g[n.id] !== st) { g[n.id] = st; geaendert = true; }
+  }
+  if (geaendert) { eduGesehenSpeichern(); setEduBadges(); }
 }
 
 /**
@@ -16006,6 +16309,11 @@ function ladeEdumaps(danach) {
     edumapsGeladen = true;
     eduTextOrdner = wunsch;
     if (eduOrdnerId && !edumaps.folders.some(f => f.id === eduOrdnerId)) eduOrdnerId = null;
+    // Hier und nicht im Zeichnen: der Abruf laeuft auch auf der Uebersicht, das
+    // Abzeichen am Tab soll dort schon stimmen — und die Grundlinie darf nicht
+    // erst beim ersten Besuch des Bereichs entstehen.
+    eduGesehenAbgleichen();
+    setEduBadges();
     if (activeTab === 'edumaps') renderEdumaps();
     fertig();
   }).catch(() => { fertig(); });
@@ -16027,6 +16335,8 @@ function edumapsAktion(nutzlast, danach) {
 }
 
 function eduOrdnerOeffnen(fid) {
+  // Eine ANDERE Seite: die Pillen der vorigen haben ihren Besuch hinter sich.
+  if (fid !== eduOrdnerId) eduNeuSitzung.clear();
   eduOrdnerId = fid;
   /* Der Volltext der eben geoeffneten Seite fehlt noch: die Uebersicht kam mit
      Vorschauen. Nachladen, sonst stehen die Karten gekappt da. */
@@ -16101,8 +16411,10 @@ function renderEdumapsMaster(el) {
       translate('No class pages yet') + '</div>';
   }
   const users = usersById();
+  const neuJe = eduNeuZaehlen().jeOrdner;
   for (const f of oben) {
-    const anzahl = f.count === 1 ? translate('1 card') : translate('%1 cards').replace('%1', String(f.count));
+    const anzahl = (f.count === 1 ? translate('1 card') : translate('%1 cards').replace('%1', String(f.count)))
+      + eduNeuZahlHtml(neuJe[f.id]);
     const u = f.memberId ? users[f.memberId] : null;
     const auf = eduOrdnerId === f.id ? ' is-open' : '';
     html += '<div class="fav-card note-folder' + (u ? ' note-folder-user' : '') + auf +
@@ -16151,13 +16463,16 @@ function renderEdumapsDetail(el, ordner) {
     '<button class="icon-btn" id="btnEduBack" aria-label="' + translate('Back') + '">' +
     '<i class="fa-light fa-chevron-left"></i></button>' +
     '<h2>' + pfad + escapeHtml(ordner.name) + '</h2></div>';
+  // Offene Seite = gesehen (vor dem Zeichnen, damit die Pillen der Sitzung stehen).
+  eduSeiteGesehen(ordner);
+  const neuJe = eduNeuZaehlen().jeOrdner;
   for (const f of notesUnterordner(ordner.id)) {
     const anzahl = f.count === 1 ? translate('1 card') : translate('%1 cards').replace('%1', String(f.count));
     html += '<div class="fav-card note-folder note-sub" data-key="es:' + escapeHtml(f.id) + '">' +
       '<div class="fav-row" data-folder="' + escapeHtml(f.id) + '">' +
       '<span class="fav-badge"><i class="fa-light fa-school"></i></span>' +
       '<span class="fav-main"><span class="fav-name">' + escapeHtml(f.name) + '</span>' +
-      '<span class="fav-count">' + anzahl + '</span></span>' +
+      '<span class="fav-count">' + anzahl + eduNeuZahlHtml(neuJe[f.id]) + '</span></span>' +
       '<i class="fa-light fa-chevron-right fav-chevron"></i>' +
       '</div></div>';
   }
@@ -18078,6 +18393,7 @@ function initCaptions() {
   document.querySelector('#tab-plan span').textContent = translate('Timetable');
   document.querySelector('#tab-transit span').textContent = translate('Transit');
   document.querySelector('#tab-ki span').textContent = translate('AI');
+  document.querySelector('#tab-mehr span').textContent = translate('More');
   document.getElementById('kiTitle').textContent = translate('Detected by AI');
   document.getElementById('kiEmptyText').textContent = translate('Nothing detected at the moment.');
   document.getElementById('shoppingInput').placeholder = translate('Add item …');
@@ -18738,6 +19054,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // „Schule" ist kein Bereich, sondern ein Weg zu dreien: er fuehrt dorthin,
   // wo man zuletzt war.
   document.getElementById('tab-school').addEventListener('click', () => setTab(schuleZuletzt()));
+  document.getElementById('tab-mehr').addEventListener('click', (e) => tabMehrMenue(e.currentTarget));
   document.querySelectorAll('[data-close]').forEach(btn =>
     btn.addEventListener('click', () => closeOverlay(btn.dataset.close)));
 

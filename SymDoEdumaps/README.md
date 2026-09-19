@@ -34,6 +34,13 @@ Karten, die es auf der Seite nicht mehr gibt, wandern in einen eingeklappten
 Abschnitt **Archiv** am Ende. Dort ist auch die einzige Stelle, an der sich eine
 Karte endgültig wegwerfen lässt.
 
+Eine Karte, die neu ist oder deren Inhalt sich seit dem letzten Ansehen geändert
+hat, trägt die Pille **Neu**; an den Ordnern (Kind, Seite) und am Tab-Knopf
+Klassenseiten — gebündelt am Knopf Schule — steht die Zahl solcher Karten. Als
+gesehen gilt eine Karte, sobald ihre Seite geöffnet war; die Pillen bleiben für
+diesen Besuch stehen. Gemerkt wird das **je Gerät** im Browser, nicht im
+Gateway: ein Gerät, das die Seiten zum ersten Mal zeigt, startet ohne Abzeichen.
+
 ## 2. Voraussetzungen
 
 | | |

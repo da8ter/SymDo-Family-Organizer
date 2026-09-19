@@ -969,6 +969,17 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 .edu-titel { font-size: 15px; font-weight: 700; flex: 1; min-width: 0; }
 .edu-datum { font-size: 11px; color: var(--muted); flex: 0 0 auto; }
+/* „Neu" (19.09.2026): die Karte ist neu oder seit dem letzten Ansehen
+   geaendert — gemerkt je Geraet (symdo.eduGesehen), siehe eduIstNeu(). Auf
+   einem farbigen Kopf (.bunt) weiss, sonst ginge die Pille im Farbband unter. */
+.edu-neu { flex: 0 0 auto; font-size: 10px; font-weight: 700; line-height: 16px; padding: 0 6px;
+  border-radius: 999px; background: var(--accent); color: #fff; }
+.edu-kopf.bunt .edu-neu { background: #fff; color: inherit; opacity: .9; }
+/* Zaehler neuer Karten an Ordnern und Abschnitten: der Kasten des Tab-Abzeichens,
+   aber im Textfluss statt absolut. */
+.edu-neu-zahl { display: inline-block; vertical-align: middle; margin-left: 6px; min-width: 16px; height: 16px;
+  padding: 0 4px; border-radius: 8px; background: #d92d20; color: #fff; font-size: 10px; font-weight: 700;
+  line-height: 16px; text-align: center; }
 /* Im farbigen Kopf erbt das Datum die Schriftfarbe — „grau auf blau" waere
    nicht zu lesen. */
 .edu-kopf.bunt .edu-datum { color: inherit; opacity: .75; }
@@ -4541,7 +4552,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     <!-- „Schule" buendelt die drei Kindsachen. Ein eigener Bereich ist es NICHT
          (kein #screen-school): gebuendelt wird die Leiste, nicht der Inhalt —
          siehe SCHOOL_TABS. -->
-    <button id="tab-school"><i class="fa-light fa-graduation-cap"></i><span></span></button>
+    <button id="tab-school"><i class="fa-light fa-graduation-cap"></i><span></span><span id="tabSchoolBadge" class="tab-badge" style="display:none;"></span></button>
     <button id="tab-plan"><i class="fa-light fa-table-columns"></i><span></span></button>
     <button id="tab-transit"><i class="fa-light fa-bus"></i><span></span></button>
     <button id="tab-ki"><i class="fa-light fa-sparkles"></i><span></span><span id="tabKiBadge" class="tab-badge" style="display:none;"></span></button>
@@ -4549,7 +4560,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span></button>
     <button id="tab-calendar"><i class="fa-light fa-calendar-days"></i><span></span></button>
     <button id="tab-notes"><i class="fa-light fa-note-sticky"></i><span></span></button>
-    <button id="tab-edumaps"><i class="fa-light fa-school"></i><span></span></button>
+    <button id="tab-edumaps"><i class="fa-light fa-school"></i><span></span><span id="tabEdumapsBadge" class="tab-badge" style="display:none;"></span></button>
     <button id="tab-homework"><i class="fa-light fa-book-open-cover"></i><span></span></button>
     <!-- Stufe 3 der Platzanpassung: nimmt die Knöpfe auf, die nicht mehr in die
          Leiste passen (tabLeisteAnpassen). Sonst verborgen. -->
@@ -5953,6 +5964,8 @@ function applyTabVisibility() {
   // Erinnerung erhalten, würde aber nie eingelöst.
   const gemerkt = ls.get('symdo.tab');
   if (gemerkt && gemerkt !== activeTab && vis.includes(gemerkt)) setTab(gemerkt);
+  // Das Klassenseiten-Abzeichen haengt an Sichtbarkeit, Buendelung und Kind.
+  setEduBadges();
 }
 
 /* ── Die Leiste passt sich dem Platz an (19.09.2026) ─────────────────────────
@@ -11511,18 +11524,33 @@ function setMailBadges() {
   mailProposals.forEach(p => (Array.isArray(p.items) ? p.items : []).forEach(it => {
     zahl[mailArt(it)]++;
   }));
-  const setzen = (id, n) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = String(n);
-    el.style.display = n > 0 ? '' : 'none';
-  };
   // EIN Abzeichen fuer alles, was im KI-Bereich auf eine Entscheidung wartet.
   // Vorher zaehlte jede Sorte an ihrem eigenen Tab — das verteilte eine Nachricht
   // auf drei Stellen, von denen keine die ganze Zahl nannte.
   const offen = zahl.task + zahl.event + zahl.note + zahl.homework;
-  setzen('tabKiBadge', offen);
+  tabBadgeSetzen('tabKiBadge', offen);
   appBadgeSetzen(offen);
+}
+/** Ein Zaehler-Abzeichen an einem Tab-Knopf: Zahl setzen, bei 0 verbergen. */
+function tabBadgeSetzen(id, n) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = String(n);
+  el.style.display = n > 0 ? '' : 'none';
+}
+/**
+ * Das Abzeichen der Klassenseiten: wie viele Karten der gezeigten Person neu
+ * oder geaendert sind (eduNeuZaehlen). Gebuendelt steht die Zahl am Knopf
+ * „Schule", sonst am eigenen Knopf — nie an beiden. Ist der Bereich gar nicht
+ * sichtbar, steht sie nirgends. NICHT aufs App-Symbol: das zaehlt allein die
+ * KI-Vorschlaege (siehe appBadgeSetzen), zwei Schreiber ueberschrieben sich.
+ */
+function setEduBadges() {
+  const sichtbar = edumapsGeladen && visibleTabs().includes('edumaps');
+  const n = sichtbar ? eduNeuZaehlen().gesamt : 0;
+  const buendel = schuleGebuendelt();
+  tabBadgeSetzen('tabSchoolBadge', buendel ? n : 0);
+  tabBadgeSetzen('tabEdumapsBadge', buendel ? 0 : n);
 }
 
 /**
@@ -15877,7 +15905,7 @@ function edumapsKartenHtml(ordner) {
         '" data-key="ea:' + escapeHtml(g.name) + '" data-bereich="' + escapeHtml(g.name) + '"' + stil + '>' +
         '<i class="fa-light fa-chevron-' + (auf ? 'down' : 'right') + ' edu-pfeil"></i>' +
         '<span class="edu-bname">' + escapeHtml(g.name) + '</span>' +
-        '<span class="edu-zahl">' + g.karten.length + '</span></h3>';
+        '<span class="edu-zahl">' + g.karten.length + eduNeuZahlHtml(g.karten.filter(eduNeuAnzeigen).length) + '</span></h3>';
     }
     html += '<div class="edu-gruppe" data-key="eg:' + escapeHtml(g.name) + '"' +
       (auf || !g.name ? '' : ' hidden') + '>';
@@ -15951,6 +15979,7 @@ function edumapsKarteHtml(n, imArchiv = false, ersatzFarbe = '') {
        die Karte angefasst hat. `updatedAt` ist der Stand des Bestands — damit
        stand hier bei jeder Karte der Tag des Spiegelns, bei allen also
        derselbe. Karten aus der Zeit vor `srcAt` fallen darauf zurueck. */
+    (eduNeuAnzeigen(n) ? '<span class="edu-neu">' + translate('New') + '</span>' : '') +
     '<span class="edu-datum">' + escapeHtml(notesDatum(n.srcAt || n.updatedAt)) + '</span></div>' +
     /* Die formatierte Fassung, wenn die Quelle eine liefert — dann bleiben
        Nummerierung und Fettdruck der Klassenseite erhalten. Sie ist SERVERSEITIG
@@ -16081,6 +16110,102 @@ function eduBereichUmschalten(name) {
   eduBereichOffen(name);   // sorgt fuer das Laden
   eduOffeneBereiche[name] = !eduOffeneBereiche[name];
   try { ls.set('symdo.eduOffen', JSON.stringify(eduOffeneBereiche)); } catch (e) {}
+}
+
+/* ── „Neu" an den Klassenseiten (19.09.2026) ─────────────────────────────
+   Eine Karte ist neu, wenn dieses GERAET sie noch nie oder in einem aelteren
+   Stand gesehen hat. Gemerkt wird je Karte der Stempel, den sie beim letzten
+   Oeffnen ihrer Seite hatte (symdo.eduGesehen, Kennung => Stempel). Der
+   Stempel ist max(updatedAt, srcAt): updatedAt hebt der Bestand nur bei
+   echter Inhaltsaenderung an, srcAt aendert der Nachzug, wenn die Schule das
+   Datum anfasst. Gesehen heisst: die Seite war offen — nicht mehr, nicht
+   weniger; ein Blick in jeden Abschnitt laesst sich nicht messen.
+
+   Fehlt der Schluessel ganz, gilt alles Vorhandene als gesehen (Grundlinie):
+   sonst leuchtete auf jedem neuen Geraet jede Karte. Ohne localStorage (privater
+   Modus) laeuft die Grundlinie bei jedem Laden neu — keine Abzeichen, keine
+   Fehler.
+
+   Zwei Praedikate: eduIstNeu zaehlt (Ordner, Tab) und faellt beim Oeffnen
+   sofort; eduNeuAnzeigen zeichnet die Pille und bleibt den Besuch der Seite
+   lang, weil das Oeffnen die Karten ja gerade als gesehen verbucht — sonst
+   verschwaende die Pille, bevor man sie gesehen hat (eduNeuSitzung).
+
+   Alles hier liest edumaps.notes/folders DIREKT: die Notiz-Helfer
+   (notesImOrdner, notesPfad …) gehen ueber notesB() und liefern ausserhalb des
+   Bereichs den Notizen-Bestand. */
+let eduGesehen = null;
+const eduNeuSitzung = new Set();
+function eduStempel(n) { return Math.max(n.updatedAt || 0, n.srcAt || 0); }
+/** null = noch keine Grundlinie auf diesem Geraet; sonst Kennung => Stempel. */
+function eduGesehenLaden() {
+  if (eduGesehen !== null) return eduGesehen;
+  let roh = null;
+  try { roh = ls.get('symdo.eduGesehen'); } catch (e) { roh = null; }
+  if (roh === null || roh === undefined) return null;
+  try { eduGesehen = JSON.parse(roh) || {}; } catch (e) { eduGesehen = {}; }
+  if (typeof eduGesehen !== 'object' || Array.isArray(eduGesehen)) eduGesehen = {};
+  return eduGesehen;
+}
+function eduGesehenSpeichern() {
+  if (!eduGesehen) return;
+  // Ausduennen: was der Bestand nicht mehr kennt, muss niemand mehr merken.
+  const da = new Set((edumaps.notes || []).map(n => n.id));
+  for (const id of Object.keys(eduGesehen)) if (!da.has(id)) delete eduGesehen[id];
+  try { ls.set('symdo.eduGesehen', JSON.stringify(eduGesehen)); } catch (e) {}
+}
+/** Grundlinie: erstes Laden mit Karten auf diesem Geraet → alles gesehen. */
+function eduGesehenAbgleichen() {
+  if (eduGesehenLaden() !== null || !(edumaps.notes || []).length) return;
+  eduGesehen = {};
+  for (const n of edumaps.notes) eduGesehen[n.id] = eduStempel(n);
+  eduGesehenSpeichern();
+}
+function eduIstNeu(n) {
+  if (!n || n.archived) return false;
+  const g = eduGesehenLaden();
+  if (g === null) return false;
+  return g[n.id] === undefined || g[n.id] < eduStempel(n);
+}
+function eduNeuAnzeigen(n) { return !!n && (eduIstNeu(n) || eduNeuSitzung.has(n.id)); }
+/** Gehoert der Wurzel-Ordner der gezeigten Person? (Spiegel von eduDemKindZuzuordnen, ohne notesB.) */
+function eduKindPasst(wurzel) {
+  const kind = kindGewaehlt();
+  if (!kind || !wurzel) return true;
+  const wem = String(wurzel.memberId || '');
+  return wem === '' || wem === kind;
+}
+/** { gesamt, jeOrdner: Kennung => Zahl } — Seite UND ihr Kind-Ordner zaehlen; gesamt nur die gezeigte Person. */
+function eduNeuZaehlen() {
+  const ordner = new Map((edumaps.folders || []).map(f => [f.id, f]));
+  const jeOrdner = {};
+  let gesamt = 0;
+  for (const n of edumaps.notes || []) {
+    if (!eduIstNeu(n)) continue;
+    const seite = ordner.get(n.folderId);
+    if (!seite) continue;
+    const wurzel = seite.parentId && ordner.get(seite.parentId) ? ordner.get(seite.parentId) : seite;
+    jeOrdner[seite.id] = (jeOrdner[seite.id] || 0) + 1;
+    if (wurzel !== seite) jeOrdner[wurzel.id] = (jeOrdner[wurzel.id] || 0) + 1;
+    if (eduKindPasst(wurzel)) gesamt++;
+  }
+  return { gesamt, jeOrdner };
+}
+/** Die rote Zahl-Pille, oder nichts. */
+function eduNeuZahlHtml(n) { return n > 0 ? ' <span class="edu-neu-zahl">' + n + '</span>' : ''; }
+/** Die offene Seite gilt als gesehen: neue Karten in die Sitzung, alle Stempel merken. */
+function eduSeiteGesehen(ordner) {
+  if (!ordner) return;
+  let g = eduGesehenLaden();
+  if (g === null) { eduGesehenAbgleichen(); g = eduGesehenLaden(); if (g === null) return; }
+  let geaendert = false;
+  for (const n of edumaps.notes || []) {
+    if (n.folderId !== ordner.id) continue;
+    if (eduIstNeu(n)) eduNeuSitzung.add(n.id);
+    const st = eduStempel(n);
+    if (g[n.id] !== st) { g[n.id] = st; geaendert = true; }
+  }
+  if (geaendert) { eduGesehenSpeichern(); setEduBadges(); }
 }
 
 /**
@@ -16244,6 +16369,11 @@ function ladeEdumaps(danach) {
     edumapsGeladen = true;
     eduTextOrdner = wunsch;
     if (eduOrdnerId && !edumaps.folders.some(f => f.id === eduOrdnerId)) eduOrdnerId = null;
+    // Hier und nicht im Zeichnen: der Abruf laeuft auch auf der Uebersicht, das
+    // Abzeichen am Tab soll dort schon stimmen — und die Grundlinie darf nicht
+    // erst beim ersten Besuch des Bereichs entstehen.
+    eduGesehenAbgleichen();
+    setEduBadges();
     if (activeTab === 'edumaps') renderEdumaps();
     fertig();
   }).catch(() => { fertig(); });
@@ -16265,6 +16395,8 @@ function edumapsAktion(nutzlast, danach) {
 }
 
 function eduOrdnerOeffnen(fid) {
+  // Eine ANDERE Seite: die Pillen der vorigen haben ihren Besuch hinter sich.
+  if (fid !== eduOrdnerId) eduNeuSitzung.clear();
   eduOrdnerId = fid;
   /* Der Volltext der eben geoeffneten Seite fehlt noch: die Uebersicht kam mit
      Vorschauen. Nachladen, sonst stehen die Karten gekappt da. */
@@ -16339,8 +16471,10 @@ function renderEdumapsMaster(el) {
       translate('No class pages yet') + '</div>';
   }
   const users = usersById();
+  const neuJe = eduNeuZaehlen().jeOrdner;
   for (const f of oben) {
-    const anzahl = f.count === 1 ? translate('1 card') : translate('%1 cards').replace('%1', String(f.count));
+    const anzahl = (f.count === 1 ? translate('1 card') : translate('%1 cards').replace('%1', String(f.count)))
+      + eduNeuZahlHtml(neuJe[f.id]);
     const u = f.memberId ? users[f.memberId] : null;
     const auf = eduOrdnerId === f.id ? ' is-open' : '';
     html += '<div class="fav-card note-folder' + (u ? ' note-folder-user' : '') + auf +
@@ -16389,13 +16523,16 @@ function renderEdumapsDetail(el, ordner) {
     '<button class="icon-btn" id="btnEduBack" aria-label="' + translate('Back') + '">' +
     '<i class="fa-light fa-chevron-left"></i></button>' +
     '<h2>' + pfad + escapeHtml(ordner.name) + '</h2></div>';
+  // Offene Seite = gesehen (vor dem Zeichnen, damit die Pillen der Sitzung stehen).
+  eduSeiteGesehen(ordner);
+  const neuJe = eduNeuZaehlen().jeOrdner;
   for (const f of notesUnterordner(ordner.id)) {
     const anzahl = f.count === 1 ? translate('1 card') : translate('%1 cards').replace('%1', String(f.count));
     html += '<div class="fav-card note-folder note-sub" data-key="es:' + escapeHtml(f.id) + '">' +
       '<div class="fav-row" data-folder="' + escapeHtml(f.id) + '">' +
       '<span class="fav-badge"><i class="fa-light fa-school"></i></span>' +
       '<span class="fav-main"><span class="fav-name">' + escapeHtml(f.name) + '</span>' +
-      '<span class="fav-count">' + anzahl + '</span></span>' +
+      '<span class="fav-count">' + anzahl + eduNeuZahlHtml(neuJe[f.id]) + '</span></span>' +
       '<i class="fa-light fa-chevron-right fav-chevron"></i>' +
       '</div></div>';
   }
