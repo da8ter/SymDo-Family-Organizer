@@ -5889,7 +5889,7 @@ function tabLeisteAnpassen() {
       + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
     // Luft je Knopf: 8px zwischen Woertern; nur Symbole brauchen mehr, sonst
     // stehen die Zeichen wie eine Kette nebeneinander (Wunsch 19.09.2026).
-    const luft = nav.classList.contains('nur-symbole') ? 28 : 8;
+    const luft = nav.classList.contains('nur-symbole') ? 23 : 8;
     const bedarf = Math.ceil(sicht.length * (breitester + luft) + rahmen);
     nav.style.width = bedarf + 'px';
     return nav.offsetWidth >= bedarf - 0.5;
