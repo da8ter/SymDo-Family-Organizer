@@ -2001,6 +2001,11 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   text-transform: uppercase;
 }
 .mail-row-kind i { font-size: 12px; }
+/* Die Art-Wahl in der Zeile: der Pillenkranz des Dokumentenscans (.ai-kind), nur
+   kleiner, mit Symbol vor dem Wort. text-transform der Kopfzeile gilt hier nicht. */
+.mail-kind { text-transform: none; letter-spacing: 0; font-weight: 600; }
+.mail-kind button { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 9px; }
+.mail-kind button i { font-size: 11px; }
 .mail-who { flex: 1 1 auto; min-width: 0; }
 .mail-subject {
   font-size: 13px; font-weight: 700;
@@ -11718,10 +11723,10 @@ function renderMailAi() {
           // Art ueber dem Titel, mit Wort dahinter: das Symbol allein war zu
           // knapp — ein Kalender neben einer Haken-Liste sagt nichts, wenn man
           // die Zuordnung nicht kennt.
-          `<div class="mail-row-kind">` +
-            `<i class="fa-light ${artZeichen[0]}"></i>` +
-            `<span>${escapeHtml(artZeichen[1])}</span>` +
-          `</div>` +
+          (erledigt
+            ? `<div class="mail-row-kind"><i class="fa-light ${artZeichen[0]}"></i><span>${escapeHtml(artZeichen[1])}</span></div>`
+            // Offen: die Art laesst sich umstellen — wie beim Dokumentenscan.
+            : `<div class="mail-row-kind">${mailArtWahlHtml(sorte)}</div>`) +
           `<div class="mail-row-title">${escapeHtml(String(it.title || ''))}</div>` +
           // Bei einer Notiz steht die Zusammenfassung in `text`, nicht in `info` —
           // ohne diesen Vorzug zeigte die Zeile nur den Titel, und genau die
@@ -11815,6 +11820,10 @@ function mailAiBind(area) {
     if (!zeile) return;
     const id = zeile.getAttribute('data-id') || '';
     const i = zeile.getAttribute('data-i') || '';
+    if (art === 'kind') {
+      mailArtSetzen(id, i, knopf.getAttribute('data-k') || '');
+      return;
+    }
     if (art === 'drop') {
       mailDrop(id, i);
       return;
@@ -11822,6 +11831,40 @@ function mailAiBind(area) {
     if (art !== 'add') return;
     mailAccept(id, i);
   });
+}
+
+/**
+ * Die Wahl der Art an einer offenen Zeile (19.09.2026, Wunsch: wie beim
+ * Dokumentenscan). Angeboten wird, was die Oberflaeche anlegen kann — plus die
+ * heutige Art, damit die Zeile immer sagt, was sie ist. Der Klick setzt die Art
+ * hier UND beim Server: sonst staende nach dem Neuladen wieder die alte.
+ */
+const MAIL_ART_ZEICHEN = {
+  task:     ['fa-list-check',  'Task'],
+  event:    ['fa-calendar',    'Appointment'],
+  homework: ['fa-book',        'Homework'],
+  note:     ['fa-note-sticky', 'Note']
+};
+function mailArtWahlHtml(sorte) {
+  const kann = {
+    task: true,
+    event: calWritable().length > 0,
+    homework: homeworkMoeglich() && (store.users || []).some(u => String(u.persona || '') === 'child'),
+    note: notizenMoeglich()
+  };
+  return '<span class="ai-kind mail-kind">' + MAIL_SORTEN.filter(k => kann[k] || k === sorte).map(k =>
+    `<button type="button" data-mail="kind" data-k="${k}"${k === sorte ? ' class="on"' : ''} title="${escapeHtml(translate(MAIL_ART_ZEICHEN[k][1]))}">` +
+    `<i class="fa-light ${MAIL_ART_ZEICHEN[k][0]}"></i><span>${escapeHtml(translate(MAIL_ART_ZEICHEN[k][1]))}</span></button>`).join('') + '</span>';
+}
+function mailArtSetzen(id, i, kind) {
+  if (!MAIL_SORTEN.includes(kind)) return;
+  mailProposals = mailProposals.map(p => {
+    if (String(p.id) !== String(id)) return p;
+    return Object.assign({}, p, { items: (p.items || []).map(it =>
+      String(it.i) === String(i) && it.taken !== true ? Object.assign({}, it, { kind: kind }) : it) });
+  });
+  aiPost('/mail/proposals', { action: 'kind', id: id, i: Number(i), kind: kind });
+  renderMailAlle();
 }
 
 /** Vorschlag verwerfen — derselbe Weg fuer den ✕-Knopf und das Wischen nach links. */

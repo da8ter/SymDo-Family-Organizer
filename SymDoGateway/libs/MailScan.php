@@ -2470,6 +2470,10 @@ trait MailScan
             case 'taken':
                 // dropped: verworfen statt uebernommen — verschwindet statt Haken.
                 return ['ok' => $id !== '' && $this->MailMarkTaken($id, (int)($body['i'] ?? -1), ($body['dropped'] ?? false) === true)];
+            case 'kind':
+                // Die Art umstellen (Aufgabe/Termin/Hausaufgabe/Notiz), wie beim
+                // Dokumentenscan — der Nutzer weiss es besser als das Modell.
+                return ['ok' => $id !== '' && $this->MailSetKind($id, (int)($body['i'] ?? -1), (string)($body['kind'] ?? ''))];
         }
         return ['ok' => false, 'error' => ['code' => 'invalid_payload', 'message' => $this->Translate('Unknown action.')]];
     }
@@ -2487,6 +2491,29 @@ trait MailScan
                 return false;
             }
             return $this->MailWriteProposals($neu);
+        }, false);
+    }
+
+    /** Die Art eines Eintrags umstellen (19.09.2026). Nur die vier bekannten Arten, nur offene Eintraege. */
+    private function MailSetKind(string $id, int $index, string $kind): bool
+    {
+        if (!in_array($kind, ['task', 'event', 'homework', 'note'], true)) {
+            return false;
+        }
+        return $this->MailWithProposalLock(function () use ($id, $index, $kind): bool {
+            $alle = $this->MailProposals();
+            $treffer = false;
+            foreach ($alle as &$p) {
+                if ((string)($p['id'] ?? '') !== $id) {
+                    continue;
+                }
+                if (isset($p['items'][$index]) && is_array($p['items'][$index]) && ($p['items'][$index]['taken'] ?? false) !== true) {
+                    $p['items'][$index]['kind'] = $kind;
+                    $treffer = true;
+                }
+            }
+            unset($p);
+            return $treffer && $this->MailWriteProposals($alle);
         }, false);
     }
 

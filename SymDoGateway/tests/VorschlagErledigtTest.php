@@ -98,6 +98,18 @@ pruefe('Unbekannte Nummer oder Kennung: false, nichts geaendert',
      count($m->pRoh()[0]['items'])],
     [false, false, 2]);
 
+// ── Art umstellen (wie beim Dokumentenscan) ────────────────────────────────
+$m->pSetzen([['id' => 'edu:3', 'at' => $jetzt, 'created' => $jetzt, 'items' => [
+    ['title' => 'A', 'kind' => 'task'], ['title' => 'B', 'kind' => 'task', 'taken' => true, 'takenAt' => $jetzt]]]]);
+pruefe('kind: eine offene Zeile wird zum Termin — gespeichert, in der Liste sichtbar',
+    [$m->pAktion(['action' => 'kind', 'id' => 'edu:3', 'i' => 0, 'kind' => 'event'])['ok'], $m->pRoh()[0]['items'][0]['kind'],
+     $m->pAktion(['action' => 'list'])['proposals'][0]['items'][0]['kind']],
+    [true, 'event', 'event']);
+pruefe('kind: unbekannte Art und uebernommene Zeile werden abgewiesen',
+    [$m->pAktion(['action' => 'kind', 'id' => 'edu:3', 'i' => 0, 'kind' => 'shopping'])['ok'],
+     $m->pAktion(['action' => 'kind', 'id' => 'edu:3', 'i' => 1, 'kind' => 'event'])['ok'], $m->pRoh()[0]['items'][1]['kind']],
+    [false, false, 'task']);
+
 // ── Riegel an der Web-App ──────────────────────────────────────────────────
 $wurzel = __DIR__ . '/../..';
 $lesen = static fn(string $p): string => (string)@file_get_contents($wurzel . '/' . $p);
@@ -118,6 +130,11 @@ pruefe('Zeile: Haken statt Knoepfe, keine Wischgeste, kein Uebernehmen an erledi
      str_contains($html, "if (!eintrag || eintrag.taken === true) return;")],
     [true, true, true]);
 $kopien = ['ShoppingList', 'ToDoList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'];
+pruefe('Zeile: Art-Wahl an offenen Zeilen, Klick setzt sie hier und beim Server',
+    [str_contains($html, 'function mailArtWahlHtml'), str_contains($html, 'data-mail="kind"'),
+     str_contains($html, "aiPost('/mail/proposals', { action: 'kind', id: id, i: Number(i), kind: kind })"),
+     str_contains($html, ": `<div class=\"mail-row-kind\">\${mailArtWahlHtml(sorte)}</div>`)")],
+    [true, true, true, true]);
 pruefe('Alle fuenf Kachel-Kopien tragen den Haken',
     array_map(static fn($k) => str_contains($lesen("$k/module.html"), 'function mailErledigt'), $kopien), array_fill(0, 5, true));
 pruefe('„Taken over" heisst ueberall „Uebernommen"',

@@ -35,6 +35,7 @@ den Zeilen erscheinen.
 - **Einstellungen für App *und* Kachel** — sichtbare Bereiche, Bedienelemente und Info-Abzeichen gelten für beide Oberflächen gemeinsam
 - **Standard-Mitglied** — die Vorbelegung, wenn niemand ausdrücklich gewählt wird: schnell angelegte Aufgaben, aus dem KI-Eingang übernommene Einträge und E-Mail-Vorschläge ohne eigenen Empfänger
 - **Haken im KI-Eingang** — ein übernommener Vorschlag verschwindet nicht, er bleibt sieben Tage mit grünem Haken stehen (durchgestrichen, ohne Knöpfe); verworfene verschwinden. Das Abzeichen am Tab zählt nur die offenen. Die iOS-App sieht weiterhin nur die offenen
+- **Art umstellen im KI-Eingang** — jede offene Zeile trägt die Wahl Aufgabe / Termin / Hausaufgabe / Notiz (wie beim Dokumentenscan); angeboten wird, was die Oberfläche anlegen kann. Die Wahl wird gespeichert und bestimmt, welcher Dialog sich beim Übernehmen öffnet
 - **Stundenplan der Kinder** — welche Stundenplan-Instanzen auf der Übersicht erscheinen
 - **Farben der Visualisierung** — die Kachel meldet die Farben des Skins zurück; App und Web-App übernehmen sie, damit alles gleich aussieht
 - **Briefing abspielen** — `SDWA_PlayBriefing()` gibt das Briefing in einer offenen Kachel als Sprachausgabe wieder
