@@ -5887,8 +5887,10 @@ function tabLeisteAnpassen() {
     const cs = getComputedStyle(nav);
     const rahmen = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
       + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
-    // 8px Luft je Knopf, damit ein Wort nicht am Nachbarn klebt.
-    const bedarf = Math.ceil(sicht.length * (breitester + 8) + rahmen);
+    // Luft je Knopf: 8px zwischen Woertern; nur Symbole brauchen mehr, sonst
+    // stehen die Zeichen wie eine Kette nebeneinander (Wunsch 19.09.2026).
+    const luft = nav.classList.contains('nur-symbole') ? 28 : 8;
+    const bedarf = Math.ceil(sicht.length * (breitester + luft) + rahmen);
     nav.style.width = bedarf + 'px';
     return nav.offsetWidth >= bedarf - 0.5;
   };
