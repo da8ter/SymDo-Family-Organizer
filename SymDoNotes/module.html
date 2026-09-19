@@ -2076,6 +2076,10 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   overflow: hidden;
 }
 .mail-row .row-btn { font-size: 17px; padding: 4px 5px; }
+/* Uebernommen (19.09.2026): gedaempft, mit Haken statt Knoepfen. */
+.mail-row.erledigt { opacity: .6; }
+.mail-row.erledigt .mail-row-title { text-decoration: line-through; }
+.mail-done { display: inline-flex; align-items: center; justify-content: center; font-size: 17px; padding: 4px 5px; color: var(--green); }
 /* Kalender: Agenda nach Tagen. Bewusst keine Wochen-Gitter — auf einem Telefon ist
    eine Liste lesbar, ein Raster nicht. Die Farbe kommt je Termin aus OpenCalendar. */
 /* FLACHE Liste: Tagesueberschriften und Terminzeilen sind Geschwister, keine
@@ -11326,7 +11330,9 @@ function loadMailProposals() {
     return;
   }
   mailLoading = true;
-  aiPost('/mail/proposals', {}).then(r => {
+  // withTaken: uebernommene Eintraege kommen mit und stehen mit Haken da (die
+  // App ohne das Feld bekommt wie bisher nur die offenen).
+  aiPost('/mail/proposals', { withTaken: true }).then(r => {
     mailLoading = false;
     const j = r && r.json;
     // Kein Gateway, alte Version, KI-Route unbekannt: still nichts anzeigen.
@@ -11462,6 +11468,7 @@ function setMailBadges() {
   // und das Abzeichen zeigt „NaN" auf allen Tabs und am App-Symbol.
   const zahl = { task: 0, event: 0, note: 0, homework: 0 };
   mailProposals.forEach(p => (Array.isArray(p.items) ? p.items : []).forEach(it => {
+    if (it.taken === true) return;   // uebernommen: steht mit Haken da, wartet auf nichts
     zahl[mailArt(it)]++;
   }));
   // EIN Abzeichen fuer alles, was im KI-Bereich auf eine Entscheidung wartet.
@@ -11550,9 +11557,11 @@ function renderMailAi() {
   const gefiltert = mailProposals.map(p => {
     const roh = Array.isArray(p.items) ? p.items : [];
     const sortiert = [];
-    for (const sorte of MAIL_SORTEN) {
-      for (const it of roh) {
-        if (mailArt(it) === sorte) sortiert.push(it);
+    for (const erledigt of [false, true]) {          // offene zuerst, Haken darunter
+      for (const sorte of MAIL_SORTEN) {
+        for (const it of roh) {
+          if ((it.taken === true) === erledigt && mailArt(it) === sorte) sortiert.push(it);
+        }
       }
     }
     return Object.assign({}, p, { items: sortiert });
@@ -11640,10 +11649,11 @@ function renderMailAi() {
       // data-id am BEHAELTER ist der Schluessel fuer renderRows: „<Mail>:<Nummer>"
       // ist je Vorschlag eindeutig. Die Erkennungsfelder bleiben zusaetzlich an der
       // Zeile, weil der Klick-Verteiler sie ueber closest('.mail-row') sucht.
-      return `<div class="mail-item" data-id="${escapeHtml(String(p.id) + ':' + String(it.i))}">` +
+      const erledigt = it.taken === true;
+      return `<div class="mail-item${erledigt ? ' erledigt' : ''}" data-id="${escapeHtml(String(p.id) + ':' + String(it.i))}">` +
         `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
         `<div class="swipe-under-edit"><i class="fa-light fa-plus"></i></div>` +
-        `<div class="mail-row" data-id="${escapeHtml(String(p.id))}" data-i="${escapeHtml(String(it.i))}">` +
+        `<div class="mail-row${erledigt ? ' erledigt' : ''}" data-id="${escapeHtml(String(p.id))}" data-i="${escapeHtml(String(it.i))}">` +
         `<div class="mail-row-body">` +
           // Art ueber dem Titel, mit Wort dahinter: das Symbol allein war zu
           // knapp — ein Kalender neben einer Haken-Liste sagt nichts, wenn man
@@ -11665,8 +11675,11 @@ function renderMailAi() {
           chips +
           renderAvatarStack(p.userId ? [String(p.userId)] : []) +
         `</span>` +
-        `<button class="row-btn" data-mail="drop" aria-label="${translate('Discard')}" title="${translate('Discard')}"><i class="fa-light fa-xmark"></i></button>` +
-        `<button class="row-btn accent" data-mail="add" aria-label="${translate('Add')}" title="${translate('Add')}"><i class="fa-light fa-plus"></i></button>` +
+        (erledigt
+          // Uebernommen: ein Haken statt der Knoepfe. Nichts mehr zu tun.
+          ? `<span class="mail-done" title="${translate('Taken over')}" aria-label="${translate('Taken over')}"><i class="fa-light fa-check"></i></span>`
+          : `<button class="row-btn" data-mail="drop" aria-label="${translate('Discard')}" title="${translate('Discard')}"><i class="fa-light fa-xmark"></i></button>` +
+            `<button class="row-btn accent" data-mail="add" aria-label="${translate('Add')}" title="${translate('Add')}"><i class="fa-light fa-plus"></i></button>`) +
         `</span>` +
         `</div>` +
       `</div>`;
@@ -11706,6 +11719,20 @@ function mailForget(id, index) {
   }).filter(p => (p.items || []).length > 0);
   renderMailAlle();
 }
+/**
+ * Uebernommen (19.09.2026): der Eintrag bleibt stehen und bekommt den Haken —
+ * beim Server (taken ohne dropped) und sofort hier. Verwerfen bleibt bei
+ * mailDrop: das verschwindet.
+ */
+function mailErledigt(id, index) {
+  aiPost('/mail/proposals', { action: 'taken', id: id, i: Number(index) });
+  mailProposals = mailProposals.map(p => {
+    if (String(p.id) !== String(id)) return p;
+    return Object.assign({}, p, { items: (p.items || []).map(it =>
+      String(it.i) === String(index) ? Object.assign({}, it, { taken: true, takenAt: Math.floor(Date.now() / 1000) }) : it) });
+  });
+  renderMailAlle();
+}
 
 function initMailAi() {
   mailAiBind(document.getElementById('kiFinds'));
@@ -11739,7 +11766,7 @@ function mailAiBind(area) {
 
 /** Vorschlag verwerfen — derselbe Weg fuer den ✕-Knopf und das Wischen nach links. */
 function mailDrop(id, i) {
-  aiPost('/mail/proposals', { action: 'taken', id: id, i: Number(i) });
+  aiPost('/mail/proposals', { action: 'taken', id: id, i: Number(i), dropped: true });
   mailForget(id, i);
 }
 
@@ -11753,7 +11780,7 @@ function mailDrop(id, i) {
 function mailAccept(id, i) {
   const vorschlag = mailProposals.find(p => String(p.id) === String(id));
   const eintrag = vorschlag && (vorschlag.items || []).find(it => String(it.i) === String(i));
-  if (!eintrag) return;
+  if (!eintrag || eintrag.taken === true) return;
   entwurfOeffnen(eintrag, String(vorschlag.userId || ''), { id: id, i: i });
 }
 
@@ -11870,6 +11897,7 @@ function bindMailRows(knoten) {
     if (!behaelter.classList || !behaelter.classList.contains('mail-item')) return;  // Kopf
     const zeile = behaelter.querySelector('.mail-row');
     if (!zeile) return;
+    if (zeile.classList.contains('erledigt')) return;   // uebernommen: nichts mehr zu wischen
     const id = zeile.getAttribute('data-id') || '';
     const i  = zeile.getAttribute('data-i') || '';
     bindCardSwipe(
@@ -12841,8 +12869,9 @@ function hwSpeichern() {
   hausaufgabenAktion(nutzlast, () => {
     const p = hwCtx && hwCtx.proposal;
     closeOverlay('hwOverlay');
-    // Aus einem KI-Vorschlag übernommen? Dann ist er jetzt erledigt.
-    if (p && typeof mailForget === 'function') { mailForget(p.id, p.i); }
+    // Aus einem KI-Vorschlag übernommen? Dann ist er jetzt erledigt — auch beim
+    // Server; bisher wurde er nur hier vergessen und stand nach dem Neuladen wieder da.
+    if (p) mailErledigt(p.id, p.i);
     hwCtx = null;
   });
 }
@@ -14169,10 +14198,10 @@ function calSpeichernSenden(bestand, kalenderID, ereignis, knopf) {
     }
     if (!bestand) {
       ls.set('symdo.calWrite', String(kalenderID));
-      if (calCtx && calCtx.proposal) {
-        aiPost('/mail/proposals', { action: 'taken', id: calCtx.proposal.id, i: Number(calCtx.proposal.i) });
-        mailForget(calCtx.proposal.id, calCtx.proposal.i);
-      }
+      /* ctx, nicht calCtx: das ist beim Eintreffen der Antwort laengst null
+         (der Dialog schliesst sofort). Mit calCtx blieb der Vorschlag offen —
+         so entstand am 19.09.2026 derselbe Termin dreimal. */
+      if (ctx && ctx.proposal) mailErledigt(ctx.proposal.id, ctx.proposal.i);
     }
     // Bei einer Reihe zaehlt die Rueckmeldung: 15 Termine sind ein anderes Ergebnis
     // als einer. Blieb es bei einem Teil, sagt der Hinweis das ausdruecklich — sonst
@@ -17041,7 +17070,7 @@ function noteSpeichern() {
     // Vorschlag und Notiz gleichzeitig verloren. (Das ToDo-Muster meldet synchron
     // ab, weil sdCall optimistisch ist — hier gilt das nicht.)
     if (noteCtx && noteCtx.proposal) {
-      mailDrop(noteCtx.proposal.id, noteCtx.proposal.i);
+      mailErledigt(noteCtx.proposal.id, noteCtx.proposal.i);
       noteCtx.proposal = null;
     }
   };
@@ -17615,10 +17644,7 @@ function saveTodoEditor() {
   }
   // Kam die Aufgabe aus einem Mail-Vorschlag, ist der jetzt erledigt — erst JETZT,
   // nach dem Speichern. Beim Abbrechen bleibt er stehen.
-  if (todoCtx.proposal) {
-    aiPost('/mail/proposals', { action: 'taken', id: todoCtx.proposal.id, i: Number(todoCtx.proposal.i) });
-    mailForget(todoCtx.proposal.id, todoCtx.proposal.i);
-  }
+  if (todoCtx.proposal) mailErledigt(todoCtx.proposal.id, todoCtx.proposal.i);
   closeOverlay('todoOverlay');
   todoCtx = null;
 }

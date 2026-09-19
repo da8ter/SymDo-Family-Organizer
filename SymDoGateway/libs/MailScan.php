@@ -45,6 +45,10 @@ trait MailScan
     private const MAIL_TEXT_MAX      = 12000;
     private const MAIL_PROPOSALS_MAX = 50;
     private const MAIL_RETENTION_DAYS = 21;
+    /* Wie lange ein UEBERNOMMENER Eintrag noch mit Haken in der Liste steht
+       (Wunsch 19.09.2026): lange genug, um zu sehen, was schon erledigt ist —
+       kurz genug, dass der KI-Eingang nicht zum Archiv wird. */
+    private const MAIL_TAKEN_VISIBLE_DAYS = 7;
     private const MAIL_SEEN_MAX      = 500;
     /** Nach so vielen fehlgeschlagenen Analysen gilt eine Mail als erledigt —
      *  sonst blockiert eine dauerhaft scheiternde Mail alle neueren und kostet
@@ -2411,13 +2415,29 @@ trait MailScan
     }
 
     /** Vorschlaege fuer die API: erledigte Eintraege und leere Mails fallen raus. */
-    private function MailProposalsPublic(): array
+    /**
+     * Die Liste fuer die Oberflaeche.
+     *
+     * Ohne $mitErledigten nur die offenen Eintraege — so fragt die iOS-App, und
+     * so war es immer. Die Web-App fragt MIT: uebernommene Eintraege bleiben
+     * dann sieben Tage mit Haken stehen (taken + takenAt), verworfene (dropped)
+     * nie. Ein Eintrag ohne takenAt stammt aus der Zeit vor dem Haken; er gilt
+     * als verworfen, denn damals hiess „taken" beides.
+     */
+    private function MailProposalsPublic(bool $mitErledigten = false): array
     {
         $raus = [];
+        $grenze = time() - self::MAIL_TAKEN_VISIBLE_DAYS * 86400;
         foreach ($this->MailProposals() as $p) {
             $offen = [];
             foreach ((array)($p['items'] ?? []) as $i => $it) {
-                if (is_array($it) && ($it['taken'] ?? false) !== true) {
+                if (!is_array($it)) {
+                    continue;
+                }
+                $erledigt = ($it['taken'] ?? false) === true;
+                $zeigen = !$erledigt || ($mitErledigten && ($it['dropped'] ?? false) !== true
+                    && (int)($it['takenAt'] ?? 0) >= $grenze);
+                if ($zeigen) {
                     $offen[] = ['i' => $i] + $it;
                 }
             }
@@ -2444,11 +2464,12 @@ trait MailScan
         $id     = trim((string)($body['id'] ?? ''));
         switch ($aktion) {
             case 'list':
-                return ['ok' => true, 'proposals' => $this->MailProposalsPublic()];
+                return ['ok' => true, 'proposals' => $this->MailProposalsPublic(($body['withTaken'] ?? false) === true)];
             case 'dismiss':
                 return ['ok' => $id !== '' && $this->MailDismiss($id)];
             case 'taken':
-                return ['ok' => $id !== '' && $this->MailMarkTaken($id, (int)($body['i'] ?? -1))];
+                // dropped: verworfen statt uebernommen — verschwindet statt Haken.
+                return ['ok' => $id !== '' && $this->MailMarkTaken($id, (int)($body['i'] ?? -1), ($body['dropped'] ?? false) === true)];
         }
         return ['ok' => false, 'error' => ['code' => 'invalid_payload', 'message' => $this->Translate('Unknown action.')]];
     }
@@ -2469,9 +2490,9 @@ trait MailScan
         }, false);
     }
 
-    private function MailMarkTaken(string $id, int $index): bool
+    private function MailMarkTaken(string $id, int $index, bool $verworfen = false): bool
     {
-        return $this->MailWithProposalLock(function () use ($id, $index): bool {
+        return $this->MailWithProposalLock(function () use ($id, $index, $verworfen): bool {
             $alle = $this->MailProposals();
             $treffer = false;
             foreach ($alle as &$p) {
@@ -2479,7 +2500,9 @@ trait MailScan
                     continue;
                 }
                 if (isset($p['items'][$index]) && is_array($p['items'][$index])) {
-                    $p['items'][$index]['taken'] = true;
+                    $p['items'][$index]['taken']   = true;
+                    $p['items'][$index]['takenAt'] = time();
+                    $p['items'][$index]['dropped'] = $verworfen;
                     $treffer = true;
                 }
             }
