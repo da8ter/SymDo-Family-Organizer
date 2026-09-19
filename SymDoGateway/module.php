@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/libs/OAuthHelper.php';
 require_once __DIR__ . '/libs/AppCore.php';
 require_once __DIR__ . '/../libs/Belegung.php';
+require_once __DIR__ . '/../libs/Bereiche.php';
 require_once __DIR__ . '/../libs/ScanKanal.php';
 require_once __DIR__ . '/libs/ScanBridge.php';
 require_once __DIR__ . '/libs/AiJobs.php';

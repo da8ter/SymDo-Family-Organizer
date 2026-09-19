@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../libs/Bereiche.php';
+
 /**
  * SymDoWebApp — die SymDo-App als HTML-Kachel für die Tile-Visualisierung.
  *
@@ -70,7 +72,15 @@ class SymDoWebApp extends IPSModuleStrict
         $this->RegisterPropertyString('DefaultUserID', '');
         // Formular-Liste: pro entdeckter Listen-Instanz eine Zeile mit Ausblenden-Flag
         $this->RegisterPropertyString('Lists', '[]');
-        // Sichtbare Bereiche. Standard überall true — abschalten ist die Ausnahme.
+        /* Reihenfolge UND Sichtbarkeit der Bereiche in EINER Liste (seit dem
+           19.09.2026): eine Zeile je Bereich, per Ziehen sortierbar, mit Haken.
+           Was die Liste nicht kennt, ergaenzt Bereiche::Zeilen() aus den acht
+           alten Schaltern darunter. */
+        $this->RegisterPropertyString('Sections', '[]');
+        // ALTBESTAND — die acht Schalter bleiben registriert, weil sie die
+        // Vorgabe fuer noch nicht gespeicherte Zeilen der Liste liefern. Wer
+        // sie entfernte, verloere die Einstellung jeder Bestandsanlage. Im
+        // Formular erscheinen sie nur noch, bis der Kernel `Sections` kennt.
         // Die Favoriten haben KEINEN eigenen Schalter mehr: sie gehören zur
         // Einkaufsliste und gehen als Blatt über das Herz in ihrer Kopfzeile auf.
         $this->RegisterPropertyBoolean('ShowDashboard', true);
@@ -430,14 +440,35 @@ class SymDoWebApp extends IPSModuleStrict
         // Ablage. Eine neu angelegte Instanz taucht damit von selbst auf, eine
         // geloeschte verschwindet.
         $plaene = $this->TimetableRows();
+        /* Die aktive Konfiguration EINMAL lesen: an ihr haengt, welche neuen
+           Eigenschaften der Kernel schon kennt (Sections, TimetableChoice,
+           EnableSwipeGestures). Auf eine Eigenschaft, die es vor dem naechsten
+           Kernel-Start nicht gibt, laesst „Uebernehmen" das GANZE Formular
+           scheitern — bis dahin steht ein Hinweis statt des Elements. */
+        $cfgAlle = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
 
         $this->SetFormValues($form['elements'], 'DefaultUserID', 'options', $options);
         $this->SetFormValues($form['elements'], 'Lists', 'values', $values);
+        /* Reihenfolge und Sichtbarkeit der Bereiche: die Zeilen kommen aus der
+           gespeicherten Liste, ergaenzt um alles, was ihr noch fehlt (Vorgabe aus
+           den alten Schaltern). Der Name ist nur Anzeige (Spalte ohne save), die
+           Kennung traegt die Zuordnung. Kennt der Kernel die Liste noch nicht,
+           bleiben die alten acht Haken bedienbar. */
+        if (is_array($cfgAlle) && array_key_exists('Sections', $cfgAlle)) {
+            $zeilen = [];
+            foreach (Bereiche::Zeilen($cfgAlle) as $z) {
+                $zeilen[] = ['key' => $z['key'], 'name' => $this->Translate(Bereiche::NAMEN[$z['key']]), 'show' => $z['show']];
+            }
+            $this->SetFormValues($form['elements'], 'Sections', 'values', $zeilen);
+            $this->SetFormValues($form['elements'], 'Sections', 'visible', true);
+        } else {
+            $this->SetFormValues($form['elements'], 'SectionsRestartHint', 'visible', true);
+            foreach (Bereiche::ALT as $alt) {
+                $this->SetFormValues($form['elements'], $alt, 'visible', true);
+            }
+        }
         if ($plaene !== []) {
-            /* Auf eine Eigenschaft, die es vor dem naechsten Kernel-Start nicht
-               gibt, laesst „Uebernehmen" das GANZE Formular scheitern. Bis dahin
-               steht dort ein Hinweis statt einer Liste, die nichts tut. */
-            $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+            $cfg = $cfgAlle;
             if (is_array($cfg) && array_key_exists('TimetableChoice', $cfg)) {
                 $this->SetFormValues($form['elements'], 'TimetableChoice', 'values', $plaene);
                 $this->SetFormValues($form['elements'], 'TimetableChoice', 'rowCount', max(2, count($plaene)));
@@ -450,7 +481,6 @@ class SymDoWebApp extends IPSModuleStrict
         /* Derselbe Fall wie bei TimetableChoice: der Schalter ist neu, seine
            Eigenschaft entsteht erst beim naechsten Kernel-Start, und bis dahin
            liesse „Uebernehmen" das ganze Formular scheitern. */
-        $cfgAlle = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
         if (is_array($cfgAlle) && array_key_exists('EnableSwipeGestures', $cfgAlle)) {
             $this->SetFormValues($form['elements'], 'EnableSwipeGestures', 'visible', true);
         } else {
@@ -866,7 +896,8 @@ class SymDoWebApp extends IPSModuleStrict
             'voiceEnabled'    => $this->VoiceInHaus('VoiceEnabled'),
             'voiceHandsFree'  => $this->VoiceInHaus('VoiceHandsFreeAllowed'),
             'voiceWakeWord'   => $this->VoiceInHausText('VoiceWakeWord', 'Hey SymDo'),
-            'tabs'            => $this->GetVisibleTabs(),
+            'tabs'            => $this->BereichePayload()['tabs'],
+            'tabOrder'        => $this->BereichePayload()['tabOrder'],
             'hiddenIDs'       => $hiddenIDs,
             'instances'       => $instances,
             'states'          => (object)$states,
@@ -1001,33 +1032,22 @@ class SymDoWebApp extends IPSModuleStrict
     // ---------------------------------------------------------------------
 
     /**
-     * Sichtbare Bereiche als Payload-Block.
+     * Bereiche als Payload-Block: `tabs` (Bereich => an?) und `tabOrder`.
      *
-     * Gelesen wird über IPS_GetConfiguration statt IPS_GetProperty, weil die drei
-     * Eigenschaften in Create() entstehen und erst beim nächsten Kernel-Start
-     * existieren. IPS_GetProperty liefert bis dahin `false` PLUS eine PHP-Warnung
-     * (gemessen) — und eine Warnung fängt kein try/catch. Der Standard hier ist
-     * true, sonst wären alle Bereiche verschwunden, bevor sich der Schalter
-     * überhaupt bedienen lässt.
+     * Die Regel steht in Bereiche (List/libs) — dieselbe, die das Gateway fuer
+     * window.__SYMDO__ nimmt. Gelesen wird über IPS_GetConfiguration statt
+     * IPS_GetProperty, weil die Eigenschaften in Create() entstehen und erst beim
+     * nächsten Kernel-Start existieren. IPS_GetProperty liefert bis dahin `false`
+     * PLUS eine PHP-Warnung (gemessen) — und eine Warnung fängt kein try/catch.
+     * Ein fehlender Schluessel heisst hier „an", sonst wären alle Bereiche
+     * verschwunden, bevor sich der Schalter überhaupt bedienen lässt.
      *
-     * @return array{dashboard:bool,shopping:bool,todos:bool,calendar:bool,notes:bool,edumaps:bool,homework:bool,ki:bool}
+     * @return array{tabs: array<string,bool>, tabOrder: list<string>}
      */
-    private function GetVisibleTabs(): array
+    private function BereichePayload(): array
     {
         $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
-        $read = static function (string $name) use ($cfg): bool {
-            return (is_array($cfg) && array_key_exists($name, $cfg)) ? (bool)$cfg[$name] : true;
-        };
-        return [
-            'dashboard' => $read('ShowDashboard'),
-            'shopping'  => $read('ShowShopping'),
-            'todos'     => $read('ShowTodos'),
-            'calendar'  => $read('ShowCalendar'),
-            'notes'     => $read('ShowNotes'),
-            'edumaps'   => $read('ShowEdumaps'),
-            'homework'  => $read('ShowHomework'),
-            'ki'        => $read('ShowKi'),
-        ];
+        return Bereiche::AusKonfiguration(is_array($cfg) ? $cfg : null);
     }
 
     /**
@@ -1038,7 +1058,7 @@ class SymDoWebApp extends IPSModuleStrict
      * dort gilt ein einheitliches Erscheinungsbild. Die Werte überschreiben in
      * StripState() das, was die Listen im Zustand mitschicken.
      *
-     * Gelesen wird wie bei GetVisibleTabs() über IPS_GetConfiguration: die
+     * Gelesen wird wie bei BereichePayload() über IPS_GetConfiguration: die
      * Eigenschaften entstehen in Create() und existieren erst beim nächsten
      * Kernel-Start. IPS_GetProperty liefert bis dahin `false` PLUS eine PHP-Warnung,
      * die kein try/catch fängt — und ein „an"-Schalter wäre für Bestandsnutzer
@@ -1405,7 +1425,8 @@ class SymDoWebApp extends IPSModuleStrict
             'gatewayAvailable' => $this->GetAppGatewayID() > 0,
             // Muss mit: ein Meta-Push ist der einzige Push nach einer reinen
             // Sichtbarkeits-Änderung, sonst zöge die offene Kachel nicht nach.
-            'tabs'            => $this->GetVisibleTabs(),
+            'tabs'            => $this->BereichePayload()['tabs'],
+            'tabOrder'        => $this->BereichePayload()['tabOrder'],
             // Und die Mitglieder: ein neu angelegtes Familienmitglied erreichte
             // eine offene Kachel bisher nie, es kam nur im vollen Zustand mit.
             'users'           => json_decode($this->GetUsers(), true),

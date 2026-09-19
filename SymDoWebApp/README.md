@@ -61,12 +61,7 @@ erscheinen Kalender, Notizen, KI-Eingang und Briefing von selbst.
 |---|---|---|
 | Standard-Mitglied | `DefaultUserID` | Vorbelegung für schnell angelegte Aufgaben, KI-Übernahmen und E-Mail-Vorschläge ohne eigenen Empfänger |
 | Listen | `Lists` | Je gefundener Liste eine Zeile mit Schalter „ausblenden" |
-| Übersicht | `ShowDashboard` | Der Bereich mit Kennzahlen, Briefing und Stundenplan |
-| Einkaufen | `ShowShopping` | Einkaufsliste samt Favoriten und Kaufhistorie |
-| ToDos | `ShowTodos` | Aufgabenlisten |
-| Kalender | `ShowCalendar` | Termine aus OpenCalendar — als Agenda oder als Familientafel (eine Zeile je Mitglied, sieben Tage), umschaltbar in der Kopfzeile |
-| Notizen | `ShowNotes` | Ordner und Notizen aus dem Gateway |
-| KI-Eingang | `ShowKi` | Was die KI aus Mails und Dateien gelesen hat |
+| Bereiche | `Sections` | Eine Zeile je Bereich der Tab-Leiste — Übersicht, Schule, Stundenplan, Nahverkehr, KI-Eingang, Einkaufen, ToDos, Kalender, Notizen, Klassenseiten, Hausaufgaben — mit Haken „anzeigen“; die **Reihenfolge der Zeilen ist die Reihenfolge der Leiste** (Ziehen). „Schule“ ist der gebündelte Knopf für die drei Kindsachen und gilt nur mit eingeschalteter Übersicht. Die alten Schalter `ShowDashboard` … `ShowKi` bleiben als Übernahmequelle lesbar: was die Liste noch nicht kennt, nimmt deren Wert |
 | Stundenplan | `TimetableChoice` | Welche Stundenplan-Instanzen die Übersicht zeigt — je Instanz eine Zeile. Ohne Stundenplan-Modul fällt die Liste weg |
 | Aufgaben-Übersicht | `ShowOverview` | Die Sammelansicht aller Aufgabenlisten („Alle Listen" im Umschalter, sortierbar) |
 | Wischgesten | `EnableSwipeGestures` | Wischen zum Erledigen und Löschen an oder aus |
@@ -88,10 +83,12 @@ Drei Dinge, die man dabei wissen sollte:
 Sind alle Bereiche abgeschaltet, bleibt die Übersicht stehen; bei nur einem
 Bereich verschwindet die Tab-Leiste.
 
-Die Tab-Leiste ist so breit, wie ihre Knöpfe brauchen: mindestens die halbe
-Fensterbreite, höchstens so breit wie die übrigen Inhalte. Reicht das nicht,
-lässt sie zuerst die Beschriftungen weg und zeigt nur Symbole; reicht auch das
-nicht, wandern Knöpfe von rechts her hinter **Mehr** (…) in ein kleines Menü.
+Die Reihenfolge der Knöpfe ist die Reihenfolge der Zeilen in der Liste
+*Bereiche* — per Ziehen im Formular. Die Tab-Leiste ist so breit, wie ihre
+Knöpfe brauchen: mindestens die halbe Fensterbreite, höchstens so breit wie die
+übrigen Inhalte. Reicht das nicht, lässt sie zuerst die Beschriftungen weg und
+zeigt nur Symbole; reicht auch das nicht, wandern Knöpfe vom **Ende der Liste**
+her hinter **Mehr** (…) in ein kleines Menü — was hinten steht, weicht zuerst.
 Liegt der aktive Bereich dort, leuchtet der Mehr-Knopf.
 
 ## 5. Was ohne Gateway geht

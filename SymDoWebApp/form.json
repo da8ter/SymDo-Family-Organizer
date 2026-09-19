@@ -74,42 +74,89 @@
                 {
                     "type": "CheckBox",
                     "name": "ShowDashboard",
-                    "caption": "Show overview"
+                    "caption": "Show overview",
+                    "visible": false
                 },
                 {
                     "type": "CheckBox",
                     "name": "ShowShopping",
-                    "caption": "Show shopping lists (favorites are reached from their header)"
+                    "caption": "Show shopping lists (favorites are reached from their header)",
+                    "visible": false
                 },
                 {
                     "type": "CheckBox",
                     "name": "ShowTodos",
-                    "caption": "Show to-dos"
+                    "caption": "Show to-dos",
+                    "visible": false
                 },
                 {
                     "type": "CheckBox",
                     "name": "ShowCalendar",
-                    "caption": "Show calendar (requires the OpenCalendar module)"
+                    "caption": "Show calendar (requires the OpenCalendar module)",
+                    "visible": false
                 },
                 {
                     "type": "CheckBox",
                     "name": "ShowNotes",
-                    "caption": "Show notes (requires the SymDo Gateway)"
+                    "caption": "Show notes (requires the SymDo Gateway)",
+                    "visible": false
                 },
                 {
                     "type": "CheckBox",
                     "name": "ShowEdumaps",
-                    "caption": "Show class pages (requires the SymDo Gateway)"
+                    "caption": "Show class pages (requires the SymDo Gateway)",
+                    "visible": false
                 },
                 {
                     "type": "CheckBox",
                     "name": "ShowHomework",
-                    "caption": "Show homework (requires the SymDo Gateway; only while a child is selected)"
+                    "caption": "Show homework (requires the SymDo Gateway; only while a child is selected)",
+                    "visible": false
                 },
                 {
                     "type": "CheckBox",
                     "name": "ShowKi",
-                    "caption": "Show AI inbox (requires the SymDo Gateway)"
+                    "caption": "Show AI inbox (requires the SymDo Gateway)",
+                    "visible": false
+                },
+                {
+                    "type": "Label",
+                    "name": "SectionsRestartHint",
+                    "visible": false,
+                    "caption": "The sections list (order and visibility) appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again. Until then the switches above still apply."
+                },
+                {
+                    "type": "List",
+                    "name": "Sections",
+                    "caption": "Sections: order and visibility",
+                    "rowCount": 11,
+                    "add": false,
+                    "delete": false,
+                    "changeOrder": true,
+                    "visible": false,
+                    "columns": [
+                        {
+                            "caption": "Area",
+                            "name": "name",
+                            "width": "auto"
+                        },
+                        {
+                            "caption": "Show",
+                            "name": "show",
+                            "width": "90px",
+                            "edit": {
+                                "type": "CheckBox"
+                            }
+                        },
+                        {
+                            "caption": "Key",
+                            "name": "key",
+                            "width": "0px",
+                            "visible": false,
+                            "save": true
+                        }
+                    ],
+                    "values": []
                 },
                 {
                     "type": "Label",
@@ -161,7 +208,7 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "Controls the tabs of this tile and of the SymDo web app. The favorites have no switch of their own any more — they belong to the shopping lists and open as a sheet from the heart in their header. The calendar tab additionally requires at least one configured OpenCalendar calendar, the notes tab and the AI inbox a SymDo Gateway. If all sections are switched off the overview is shown, so the interface is never empty. Only one section left: the tab bar disappears and the content gets the full height. The web app applies a change after a reload, the tile immediately."
+                    "caption": "The order here is the order of the tab bar of this tile and of the SymDo web app — drag the rows. When space runs short, the bar drops the labels first and then moves the LAST buttons behind “More”, so what you put at the end gives way first. “School” is the bundled button for homework, timetable and class pages; it only exists while the overview is shown — without the overview the three have their own buttons and rows. The timetable only appears while a child is selected, transit only with a configured stop or route, the calendar only with an OpenCalendar calendar, notes, AI inbox, class pages and homework only with a SymDo Gateway. The favorites have no row of their own — they belong to the shopping lists and open as a sheet from the heart in their header. If all sections are switched off the overview is shown, so the interface is never empty. Only one section left: the tab bar disappears and the content gets the full height. The web app applies a change after a reload, the tile immediately."
                 }
             ]
         },

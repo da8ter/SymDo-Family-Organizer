@@ -1258,7 +1258,10 @@ trait AppCore
         // weil sie deren Oberfläche betreffen — diese Seite hier IST diese Oberfläche.
         // Gelesen mit sicherem Standard: ohne Kachel-Instanz gilt „alles sichtbar",
         // das Gateway hängt also nicht von ihr ab (siehe Kommentar bei WsResubscribe).
-        $symdo['tabs'] = $this->GetWebAppTabs();
+        $bereiche = $this->GetWebAppTabs();
+        $symdo['tabs'] = $bereiche['tabs'];
+        // Und ihre Reihenfolge (Ziehen im Formular der Kachel, seit 19.09.2026).
+        $symdo['tabOrder'] = $bereiche['tabOrder'];
         // Sprachdialog: die Web-App zeigt ihre Blasen-Kachel NUR, wenn er im
         // Backend eingeschaltet und beiden Einwilligungen zugestimmt wurde.
         $symdo['voiceEnabled'] = $this->VoiceUsable();
@@ -1736,35 +1739,24 @@ trait AppCore
      * Ohne Kachel-Instanz: alles sichtbar. Bei mehreren entscheidet die erste — es
      * gibt nur eine Standalone-Web-App, eine Zuordnung je Kachel gäbe es also nicht.
      *
-     * @return array{dashboard:bool,shopping:bool,todos:bool,calendar:bool,notes:bool,edumaps:bool,ki:bool}
+     * Die Regel (Liste `Sections` plus Altbestand der acht Schalter) steht in
+     * Bereiche (List/libs) — dieselbe, die die Kachel fuer ihren Zustand nimmt.
+     *
+     * @return array{tabs: array<string,bool>, tabOrder: list<string>}
      */
     private function GetWebAppTabs(): array
     {
-        $all = ['dashboard' => true, 'shopping' => true, 'todos' => true, 'calendar' => true,
-                'notes' => true, 'edumaps' => true, 'homework' => true, 'ki' => true];
         $ids = IPS_GetInstanceListByModuleID(self::SDWA_MODULE_GUID);
-        if (!$ids) {
-            return $all;
-        }
-        $cfg = json_decode((string)@IPS_GetConfiguration($ids[0]), true);
-        if (!is_array($cfg)) {
-            return $all;
-        }
-        foreach (['dashboard' => 'ShowDashboard', 'shopping' => 'ShowShopping', 'todos' => 'ShowTodos',
-                  'calendar' => 'ShowCalendar', 'notes' => 'ShowNotes', 'edumaps' => 'ShowEdumaps',
-                  'homework' => 'ShowHomework', 'ki' => 'ShowKi'] as $key => $prop) {
-            if (array_key_exists($prop, $cfg)) {
-                $all[$key] = (bool)$cfg[$prop];
-            }
-        }
+        $cfg = $ids ? json_decode((string)@IPS_GetConfiguration($ids[0]), true) : null;
+        $all = Bereiche::AusKonfiguration(is_array($cfg) ? $cfg : null);
         /* Die Klassenseiten haengen ZUSAETZLICH daran, dass es sie gibt: ohne
            eingetragene Seite und ohne Spiegel waere es ein Bereich, der beim
            Antippen leer ist. Und ein fehlender Schluessel gilt hier als „an" —
            bei einer Bestandsinstallation waere der Bereich sonst bis zum
            naechsten Kernelstart sichtbar, obwohl nie eine Seite eingerichtet
            wurde. */
-        if ($all['edumaps'] && !$this->EdumapsVorhanden()) {
-            $all['edumaps'] = false;
+        if ($all['tabs']['edumaps'] && !$this->EdumapsVorhanden()) {
+            $all['tabs']['edumaps'] = false;
         }
         /* Die Hausaufgaben brauchen kein Gegenstueck in der Konfiguration: sie
            haengen an einem Mitglied mit der Rolle „Kind", und die Oberflaeche

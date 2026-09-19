@@ -516,7 +516,8 @@ trait ApiRouter
                bisher nur in window.__SYMDO__, also nur im Seitenaufbau — wer
                einen Bereich abschaltete, erreichte eine offene Web-App nie. Die
                Kachel bekam das ueber ihren Meta-Push, die Web-App gar nicht. */
-            'tabs'         => $this->GetWebAppTabs(),
+            'tabs'         => $this->GetWebAppTabs()['tabs'],
+            'tabOrder'     => $this->GetWebAppTabs()['tabOrder'],
             'instances'    => $instances,
             'theme'        => $theme,
         ]);

@@ -5271,6 +5271,8 @@ const store = {
   // Sichtbare Bereiche. Standard überall an: fehlt das Feld (ältere Kachel), darf
   // nichts verschwinden.
   tabs: { dashboard: true, shopping: true, todos: true },
+  // Reihenfolge der Knoepfe; null = Vorgabe (siehe tabReihenfolge).
+  tabOrder: null,
   hiddenIDs: [],
   instances: [],
   states: {},        // "<id>" → {kind, revision, state}
@@ -5759,8 +5761,27 @@ function normalizeTabs(raw) {
        sein will. */
     homework:  t.homework   === true,
     // KI: gleiche Regel, gleicher Grund — die Vorschlaege liegen im Gateway.
-    ki:        t.ki         === true
+    ki:        t.ki         === true,
+    /* Die drei ohne alten Schalter (seit die Liste `Sections` Reihenfolge UND
+       Haken traegt, 19.09.2026): Vorgabe SICHTBAR wie bei dashboard — die
+       Kachel-Literale der Uebernahme-Skripte nennen sie nicht, und ohne
+       Angabe soll sich nichts aendern. „school" ist der gebuendelte Knopf. */
+    school:    t.school     !== false,
+    plan:      t.plan       !== false,
+    transit:   t.transit    !== false
   };
+}
+/* Die Reihenfolge der Knoepfe — aus dem Formular der Kachel (Ziehen in der
+   Liste `Sections`), Quelle wie bei tabs: Standalone window.__SYMDO__, Kachel
+   der State. Immer vollstaendig: Unbekanntes faellt weg, Fehlendes kommt in
+   der Vorgabereihenfolge hinten dran (Spiegel von Bereiche::Zeilen in PHP) —
+   eine aeltere oder verstuemmelte Liste verliert so keinen Knopf. */
+const TAB_REIHENFOLGE = ['dashboard', 'school', 'plan', 'transit', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps', 'homework'];
+function tabReihenfolge() {
+  const roh = window.__SYMDO__ ? window.__SYMDO__.tabOrder : store.tabOrder;
+  const liste = Array.isArray(roh) ? roh.filter(k => TAB_REIHENFOLGE.includes(k)) : [];
+  for (const k of TAB_REIHENFOLGE) if (!liste.includes(k)) liste.push(k);
+  return liste;
 }
 /** @return {string[]} sichtbare Tabs in der Reihenfolge der Leiste. */
 function visibleTabs() {
@@ -5781,13 +5802,19 @@ function visibleTabs() {
      dort nie lief — der Riegel war also zufaellig richtig. Seit die
      Hausaufgaben-Kachel den Plan HOLT (sie braucht Faecher und Symbole), waere
      ihr sonst beim Antippen eines Kindes ein zweiter Bereich gewachsen. */
-  if (kindTab && t.dashboard && planKinder().length > 0) out.push('plan');
+  /* Schule aus (Haken der Zeile „Schule", nur gebuendelt von Bedeutung): dann
+     fehlt nicht nur der Knopf, sondern auch die drei Bereiche dahinter — sonst
+     stuende ein gemerkter Bereich ohne Knopf da, und zurueck kaeme man nicht.
+     Ungebuendelt (Uebersicht aus) gilt die Zeile nicht: dort haben die drei
+     ihre eigenen Zeilen. */
+  const schuleWeg = t.dashboard && !t.school;
+  if (kindTab && t.dashboard && t.plan && !schuleWeg && planKinder().length > 0) out.push('plan');
   /* Nahverkehr: erscheint, sobald eine Haltestelle oder Strecke eingerichtet
      ist — kein eigener Haken im Formular. Dieselbe Begruendung wie beim
      Stundenplan: ein Tab, der beim Antippen „nichts eingerichtet" zeigt, ist
      schlimmer als keiner. Anders als der Plan haengt er NICHT am Kindmodus:
      eine Haltestelle kann der ganzen Familie gehoeren. */
-  if (t.dashboard) {
+  if (t.dashboard && t.transit) {
     const nv = transitEintraege();
     if (nv.stops.length > 0 || nv.routes.length > 0) { out.push('transit'); }
   }
@@ -5815,9 +5842,13 @@ function visibleTabs() {
   // Notizen ganz hinten und nur mit Gateway — dort liegen sie.
   if (t.notes && notizenMoeglich()) out.push('notes');
   // Die Klassenseiten dahinter, aus demselben Grund.
-  if (t.edumaps && edumapsMoeglich() && kindSache) out.push('edumaps');
+  if (t.edumaps && edumapsMoeglich() && kindSache && !schuleWeg) out.push('edumaps');
   // Die Hausaufgaben ebenso — sie liegen im Gateway.
-  if (t.homework && homeworkMoeglich() && kindSache) out.push('homework');
+  if (t.homework && homeworkMoeglich() && kindSache && !schuleWeg) out.push('homework');
+  /* Zuletzt die Reihenfolge des Nutzers. Sie gilt damit auch fuer den Rueckfall
+     vis[0] in setTab: der erste sichtbare Bereich SEINER Leiste. */
+  const rang = tabReihenfolge();
+  out.sort((a, b) => rang.indexOf(a) - rang.indexOf(b));
   // Alles abgeschaltet: definierter Rückfall, damit die Oberfläche nie leer ist.
   return out.length ? out : ['dashboard'];
 }
@@ -5889,6 +5920,20 @@ function applyTabVisibility() {
   }
   const schulKnopf = document.getElementById('tab-school');
   if (schulKnopf) schulKnopf.style.display = schule.length > 0 ? '' : 'none';
+  /* Die Knoepfe in die Reihenfolge des Nutzers bringen — VOR tabLeisteAnpassen,
+     denn die raeumt bei Platzmangel vom ENDE der Leiste hinter „Mehr": was der
+     Nutzer nach hinten zieht, weicht zuerst. appendChild verschiebt vorhandene
+     Knoten, die Klick-Listener bleiben; „Mehr" steht immer zuletzt. Nur
+     anfassen, wenn sich etwas aendert — jeder Umbau weckt den Beobachter der
+     Leiste ein weiteres Mal. */
+  const leiste = document.querySelector('.tabbar');
+  if (leiste) {
+    const ziel = tabReihenfolge().map(k => document.getElementById('tab-' + k)).filter(Boolean);
+    const mehrKnopf = document.getElementById('tab-mehr');
+    if (mehrKnopf) ziel.push(mehrKnopf);
+    const ist = Array.from(leiste.querySelectorAll('button'));
+    if (ziel.some((b, i) => b !== ist[i])) ziel.forEach(b => leiste.appendChild(b));
+  }
   // Ein einziger Bereich: die Leiste wäre ein Knopf ohne Wahl. Dann fällt sie weg und
   // der Inhalt bekommt die volle Höhe (siehe html.no-tabs im Stil).
   // Gezaehlt werden die KNOEPFE und nicht die Bereiche: „Schule" ist einer fuer
@@ -6782,6 +6827,7 @@ function handleMessage(data) {
     store.voiceHandsFree = !!data.voiceHandsFree;
     store.voiceWakeWord = data.voiceWakeWord || 'Hey SymDo';
     store.tabs = normalizeTabs(data.tabs);
+    store.tabOrder = Array.isArray(data.tabOrder) ? data.tabOrder : null;
     store.hiddenIDs = data.hiddenIDs || [];
     store.instances = data.instances || [];
     store.states = data.states || {};
@@ -6867,6 +6913,8 @@ function handleMessage(data) {
     store.hiddenIDs = data.hiddenIDs || [];
     store.gatewayAvailable = !!data.gatewayAvailable;
     store.tabs = normalizeTabs(data.tabs);
+    // Reihenfolge nur, wenn sie mitkommt — derselbe Riegel wie bei users unten.
+    if (Array.isArray(data.tabOrder)) { store.tabOrder = data.tabOrder; }
     /* Mitglieder NUR wenn welche mitkommen. Sie fehlten hier ganz: ein neu
        angelegtes Familienmitglied erreichte eine offene Oberflaeche nie. Der
        Riegel ist noetig, weil ein Meta-Push ohne users sonst die vorhandenen
