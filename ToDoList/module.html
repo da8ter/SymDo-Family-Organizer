@@ -1974,9 +1974,14 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
    (data-nest="1"), nicht beliebig viele. */
 .mail-head {
   /* Oben ausgerichtet, nicht mittig (Wunsch 21.09.2026): mit der mehrzeiligen
-     Zusammenfassung hing das Symbol sonst irgendwo in der Mitte des Textes. */
+     Zusammenfassung hing das Symbol sonst irgendwo in der Mitte des Textes.
+     Und ein eigener Kasten wie eine Vorschlagszeile (gleiche Flaeche, gleiche
+     Rundung, gleiches Polster): der Kopf traegt jetzt Absender und
+     Zusammenfassung — Inhalt, kein Etikett mehr. */
   display: flex; align-items: flex-start; gap: 8px;
-  margin: 0 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--row-item);
 }
 /* Briefsymbol statt Portraitfoto (Wunsch vom 21.08.2026). Die frueheren
    Avatar-Regeln fuer diesen Kopf sind damit entfallen — es gibt KEINE allgemeine
