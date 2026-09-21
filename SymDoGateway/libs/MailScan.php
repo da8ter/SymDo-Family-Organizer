@@ -2508,7 +2508,7 @@ trait MailScan
             return false;
         }
         $r = $this->AiRunCompletion(
-            'Du fasst Nachrichten an eine Familie zusammen. Antworte mit ZWEI bis VIER Saetzen auf Deutsch: '
+            'Du fasst Nachrichten an eine Familie zusammen. Antworte mit VIER bis SECHS Saetzen auf Deutsch: '
             . 'WER schreibt (Schule, Klasse, Verein, Arzt …) und WORUM es geht. Keine Anrede, keine '
             . 'Aufzaehlung, kein JSON, keine Anfuehrungszeichen — nur die Saetze.',
             MailAnalyseCalc::ZusammenfassungsStoff($treffer), null);

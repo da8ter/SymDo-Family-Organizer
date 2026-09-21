@@ -259,7 +259,7 @@ pruefe('Ohne summary-Element: leer; ohne Array: leer; Rueckfall auf text/summary
      MailAnalyseCalc::Zusammenfassung('[{"kind":"SUMMARY","summary":"Kurz"}]')],
     ['', '', 'Kurz']);
 pruefe('Die Zusammenfassung ist gedeckelt',
-    mb_strlen(MailAnalyseCalc::Zusammenfassung('[{"kind":"summary","title":"' . str_repeat('a', 500) . '"}]')),
+    mb_strlen(MailAnalyseCalc::Zusammenfassung('[{"kind":"summary","title":"' . str_repeat('a', 900) . '"}]')),
     MailAnalyseCalc::ZUSAMMENFASSUNG_MAX);
 $satz = MailAnalyseCalc::Satz('m:1', ['Subject' => 'B'], 'B', 'u', [], [['title' => 'x']], 1, ' Worum es geht ');
 pruefe('Der Satz traegt die Zusammenfassung; ohne Angabe bleibt sie leer',

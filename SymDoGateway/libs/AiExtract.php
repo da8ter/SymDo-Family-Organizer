@@ -2303,7 +2303,7 @@ trait AiExtract
     private function AiSummaryRule(): string
     {
         return ' ZUSAMMENFASSUNG: Gib als ERSTES Element des Arrays zusaetzlich '
-            . '{"kind": "summary", "title": string} zurueck — zwei bis vier Saetze, WER '
+            . '{"kind": "summary", "title": string} zurueck — vier bis sechs Saetze, WER '
             . 'schreibt (Schule, Klasse, Verein, Arzt …) und WORUM es geht, ohne Anrede '
             . 'und ohne Wiederholung der Eintraege. Kein anderer Eintrag hat "kind": "summary".';
     }

@@ -29,8 +29,8 @@ declare(strict_types=1);
  */
 final class MailAnalyseCalc
 {
-    /** Hoechstlaenge der Zusammenfassung — bis zu sieben Zeilen in der Kachel, keine Abschrift. */
-    public const ZUSAMMENFASSUNG_MAX = 600;
+    /** Hoechstlaenge der Zusammenfassung — vier bis sechs Saetze, bis zu sieben Zeilen in der Kachel. */
+    public const ZUSAMMENFASSUNG_MAX = 700;
 
     /**
      * Die Zusammenfassung aus der Antwort des Modells (19.09.2026).
