@@ -1986,6 +1986,17 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 /* Die obere Zeile: Symbol, Betreff mit Absender, Papierkorb — alle am OBEREN
    Rand, also auf Hoehe des Titels (Wunsch 21.09.2026). */
 .mail-head-zeile { display: flex; align-items: flex-start; gap: 8px; }
+/* Der Papierkorb als runder Knopf (Wunsch 21.09.2026) — Form wie .icon-btn, nur
+   kleiner, damit er neben der Betreffzeile nicht groesser wirkt als sie. */
+.mail-head-zeile .row-btn {
+  width: 30px; height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 14px;
+}
 /* Briefsymbol statt Portraitfoto (Wunsch vom 21.08.2026). Die frueheren
    Avatar-Regeln fuer diesen Kopf sind damit entfallen — es gibt KEINE allgemeine
    .avatar-Regel in dieser Datei, jede Umgebung bringt ihre eigene mit. */
