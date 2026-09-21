@@ -2617,6 +2617,10 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   align-self: flex-start;
   margin-top: 4px;
 }
+/* Nur im KI-Eingang (Wunsch 21.09.2026): rutscht die Zeile um, stehen die
+   Abzeichen LINKS unter dem Titel und die Knoepfe bleiben rechts. In den
+   Aufgaben- und Kalenderzeilen bleibt alles rechts wie bisher. */
+.mail-row.stacked .mail-side { justify-content: space-between; }
 /* Prioritäts-Chip — identisch zur ToDoList-Kachel (.badge.high/normal/low) */
 .badge {
   font-size: 11px;
