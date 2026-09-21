@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../libs/AiJobStore.php';
 require_once __DIR__ . '/../../libs/AiJobRunner.php';
+// Fuer die Zusammenfassung der Mail-Vorschlaege — laeuft auch in der Scanner-Instanz.
+require_once __DIR__ . '/MailAnalyseCalc.php';
 
 /**
  * KI-Auftraege: einreihen, abholen, fertigmelden.
@@ -513,6 +515,12 @@ trait AiJobs
             if ($art === 'todos') {
                 $arten = (array)($kopf['parse']['arten'] ?? ['task', 'event']);
                 $rumpf = ['ok' => true, 'todos' => $this->AiParseTodos($text, $arten)];
+                // Worum es geht (Mail-Vorschlaege): vor der Pruefung gelesen, sonst weg.
+                // Nur wenn das Modell eine geliefert hat — Foto-Auftraege kennen keine.
+                $zusammen = MailAnalyseCalc::Zusammenfassung($text);
+                if ($zusammen !== '') {
+                    $rumpf['summary'] = $zusammen;
+                }
             } elseif ($art === 'recipe') {
                 $rezept = $this->AiParseRecipe($text);
                 $rumpf = ['ok' => true, 'title' => $rezept['title'] ?? null,

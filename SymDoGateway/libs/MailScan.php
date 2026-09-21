@@ -925,6 +925,8 @@ trait MailScan
                 (string)($kopf['SenderAddress'] ?? '?'), $quelle, $anhaenge, $zahlen),
             'aufgaben'  => $aufgaben,
             'zahlen'    => $zahlen,
+            // Worum es geht — aus derselben Antwort, vor der Eintrags-Pruefung gelesen.
+            'summary'   => MailAnalyseCalc::Zusammenfassung((string)$r['text']),
         ];
     }
 
@@ -1147,6 +1149,7 @@ trait MailScan
             return;
         }
         $aufgaben = is_array($rumpf['todos'] ?? null) ? $rumpf['todos'] : [];
+        $zusammen = trim((string)($rumpf['summary'] ?? ''));
         $mkopf    = is_array($h['kopf'] ?? null) ? $h['kopf'] : [];
         $quelle   = (string)($h['quelle'] ?? 'IMAP');
         $zahlen   = MailAnalyseCalc::Zaehlen($aufgaben);
@@ -1168,7 +1171,7 @@ trait MailScan
         if ($zahlen['notizen'] <= 0) {
             $gespeichert = $this->MailVorschlagEinpflegen((string)($h['vorschlag'] ?? ''), $mkopf,
                 (string)($h['text'] ?? ''), [], (string)($h['userId'] ?? ''), $quelle,
-                ['aufgaben' => $aufgaben, 'zahlen' => $zahlen]);
+                ['aufgaben' => $aufgaben, 'zahlen' => $zahlen, 'summary' => $zusammen]);
             $this->MailAuftragAbschliessen($h, $gespeichert);
             return;
         }
@@ -1188,7 +1191,7 @@ trait MailScan
                 is_array($h['merker'] ?? null) ? $h['merker'] : []);
             $gespeichert = $this->MailVorschlagEinpflegen((string)($h['vorschlag'] ?? ''), $mkopf,
                 (string)($h['text'] ?? ''), $anhaenge, (string)($h['userId'] ?? ''), $quelle,
-                ['aufgaben' => $aufgaben, 'zahlen' => $zahlen]);
+                ['aufgaben' => $aufgaben, 'zahlen' => $zahlen, 'summary' => $zusammen]);
         } finally {
             if ($speicherVorher !== '') {
                 @ini_set('memory_limit', $speicherVorher);
@@ -1336,7 +1339,7 @@ trait MailScan
 
         $gespeichert = $this->MailStoreProposal(
             MailAnalyseCalc::Satz($vorschlagsId, $kopf, $betreff, $userId,
-                $this->MailDetectOrigin($text), $aufgaben, time())
+                $this->MailDetectOrigin($text), $aufgaben, time(), (string)($erg['summary'] ?? ''))
             /* Wann WIR den Vorschlag gemacht haben. Danach richtet sich die
                Aufbewahrung, und nur danach: sonst verschwindet ein gerade erst
                ausgewerteter alter Elternbrief noch im selben Atemzug. Genau das

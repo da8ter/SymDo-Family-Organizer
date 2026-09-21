@@ -2001,11 +2001,15 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   text-transform: uppercase;
 }
 .mail-row-kind i { font-size: 12px; }
-/* Die Art-Wahl in der Zeile: der Pillenkranz des Dokumentenscans (.ai-kind), nur
-   kleiner, mit Symbol vor dem Wort. text-transform der Kopfzeile gilt hier nicht. */
-.mail-kind { text-transform: none; letter-spacing: 0; font-weight: 600; }
-.mail-kind button { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 9px; }
-.mail-kind button i { font-size: 11px; }
+/* Die Art-Wahl in der Zeile: ein schmales Auswahlfeld hinter dem Symbol der Art.
+   Die Kopfzeile schreibt in Kapitaelchen — das Feld nicht. */
+.mail-kind-select { font: inherit; font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0;
+  color: inherit; background: transparent; border: 1px solid color-mix(in srgb, var(--content-color) 25%, transparent);
+  border-radius: 999px; padding: 1px 8px; max-width: 160px; }
+.mail-kind-select option { color: initial; }
+/* Worum es geht: unter Betreff und Absender, zwei Zeilen, dann abgeschnitten. */
+.mail-summary { margin-top: 3px; font-size: 12.5px; line-height: 1.35; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
 .mail-who { flex: 1 1 auto; min-width: 0; }
 .mail-subject {
   font-size: 13px; font-weight: 700;
@@ -11698,6 +11702,9 @@ function renderMailAi() {
         `<div class="mail-who">` +
           `<div class="mail-subject">${escapeHtml(titelText)}</div>` +
           `<div class="mail-meta">${escapeHtml(von)}</div>` +
+          // Worum es geht, in ein, zwei Saetzen (vom Modell, seit 21.09.2026).
+          // Aeltere Vorschlaege haben keine — dann bleibt es bei Betreff und Absender.
+          (String(p.summary || '').trim() ? `<div class="mail-summary">${escapeHtml(String(p.summary).trim())}</div>` : '') +
         `</div>` +
         `<button class="row-btn destructive" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}" aria-label="${translate('Discard mail')}" title="${translate('Discard mail')}"><i class="fa-light fa-trash-can"></i></button>` +
       `</div>` +
@@ -11745,6 +11752,13 @@ function initMailAi() {
 
 function mailAiBind(area) {
   if (!area) return;
+  // Das Auswahlfeld der Art meldet sich mit change, nicht mit click.
+  area.addEventListener('change', (e) => {
+    const feld = e.target.closest('select[data-mail="kind"]');
+    const zeile = feld && feld.closest('.mail-row');
+    if (!feld || !zeile) return;
+    mailArtSetzen(zeile.getAttribute('data-id') || '', zeile.getAttribute('data-i') || '', feld.value);
+  });
   area.addEventListener('click', (e) => {
     const knopf = e.target.closest('[data-mail]');
     if (!knopf) return;
@@ -11760,10 +11774,7 @@ function mailAiBind(area) {
     if (!zeile) return;
     const id = zeile.getAttribute('data-id') || '';
     const i = zeile.getAttribute('data-i') || '';
-    if (art === 'kind') {
-      mailArtSetzen(id, i, knopf.getAttribute('data-k') || '');
-      return;
-    }
+    if (art === 'kind') return;   // das Auswahlfeld — erledigt der change-Hoerer oben
     if (art === 'drop') {
       mailDrop(id, i);
       return;
@@ -11792,9 +11803,13 @@ function mailArtWahlHtml(sorte) {
     homework: homeworkMoeglich() && (store.users || []).some(u => String(u.persona || '') === 'child'),
     note: notizenMoeglich()
   };
-  return '<span class="ai-kind mail-kind">' + MAIL_SORTEN.filter(k => kann[k] || k === sorte).map(k =>
-    `<button type="button" data-mail="kind" data-k="${k}"${k === sorte ? ' class="on"' : ''} title="${escapeHtml(translate(MAIL_ART_ZEICHEN[k][1]))}">` +
-    `<i class="fa-light ${MAIL_ART_ZEICHEN[k][0]}"></i><span>${escapeHtml(translate(MAIL_ART_ZEICHEN[k][1]))}</span></button>`).join('') + '</span>';
+  // Ein Auswahlfeld (Wunsch 21.09.2026), kein Pillenkranz: das Symbol der Art
+  // davor, das Feld selbst schmal, mit dem Wort als Auswahl.
+  return `<i class="fa-light ${MAIL_ART_ZEICHEN[sorte][0]}"></i>` +
+    '<select class="mail-kind-select" data-mail="kind" aria-label="' + escapeHtml(translate('Kind')) + '">' +
+    MAIL_SORTEN.filter(k => kann[k] || k === sorte).map(k =>
+      `<option value="${k}"${k === sorte ? ' selected' : ''}>${escapeHtml(translate(MAIL_ART_ZEICHEN[k][1]))}</option>`).join('') +
+    '</select>';
 }
 function mailArtSetzen(id, i, kind) {
   if (!MAIL_SORTEN.includes(kind)) return;

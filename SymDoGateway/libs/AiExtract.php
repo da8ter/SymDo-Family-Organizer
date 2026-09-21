@@ -2258,7 +2258,8 @@ trait AiExtract
                         . 'die Handlungsaufforderung. Erfinde aber keine Angaben, die nur in der '
                         . 'Datei stehen koennen.')
                 . $this->AiKindRule(true)
-                . ($mitHausaufgaben ? $this->AiHomeworkKindRule() : '');
+                . ($mitHausaufgaben ? $this->AiHomeworkKindRule() : '')
+                . $this->AiSummaryRule();
         }
         if ($mitAnhang) {
             return $this->AiSystemPrompt($today)
@@ -2271,7 +2272,8 @@ trait AiExtract
                 . 'dort. Stehen im Anhang mehrere eigenstaendige Termine oder Aufgaben, gib sie '
                 . 'als eigene Eintraege zurueck.'
                 . $this->AiKindRule(true)
-                . ($mitHausaufgaben ? $this->AiHomeworkKindRule() : '');
+                . ($mitHausaufgaben ? $this->AiHomeworkKindRule() : '')
+                . $this->AiSummaryRule();
         }
         return $this->AiSystemPrompt($today)
             . ' ZUSATZ FUER E-MAILS: Der Text ist eine E-Mail, oft weitergeleitet — der '
@@ -2289,7 +2291,21 @@ trait AiExtract
             . '„Ferienabfrage Herbstferien ausfuellen und zurueckschicken“ — und vermerke in '
             . '"info", dass die Details im Anhang stehen. Erfinde lediglich keine Angaben, '
             . 'die nur im Anhang stehen koennen: keine Fristen, Betraege, Uhrzeiten oder '
-            . 'Namen, die im Mailtext nicht vorkommen.';
+            . 'Namen, die im Mailtext nicht vorkommen.' . $this->AiSummaryRule();
+    }
+
+    /**
+     * Die Zusammenfassung ueber den Eintraegen (19.09.2026): ein zusaetzliches
+     * Element im selben Array, damit das Antwortformat gleich bleibt — kleine
+     * Modelle halten EIN Format durch, zwei nicht. MailAnalyseCalc::Zusammenfassung
+     * liest es heraus, die Eintrags-Pruefung verwirft es still.
+     */
+    private function AiSummaryRule(): string
+    {
+        return ' ZUSAMMENFASSUNG: Gib als ERSTES Element des Arrays zusaetzlich '
+            . '{"kind": "summary", "title": string} zurueck — ein bis zwei Saetze, WER '
+            . 'schreibt (Schule, Klasse, Verein, Arzt …) und WORUM es geht, ohne Anrede '
+            . 'und ohne Wiederholung der Eintraege. Kein anderer Eintrag hat "kind": "summary".';
     }
 
     private function AiAllowedCategories(array $body): array

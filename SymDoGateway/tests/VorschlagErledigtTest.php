@@ -130,11 +130,17 @@ pruefe('Zeile: Haken statt Knoepfe, keine Wischgeste, kein Uebernehmen an erledi
      str_contains($html, "if (!eintrag || eintrag.taken === true) return;")],
     [true, true, true]);
 $kopien = ['ShoppingList', 'ToDoList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'];
-pruefe('Zeile: Art-Wahl an offenen Zeilen, Klick setzt sie hier und beim Server',
-    [str_contains($html, 'function mailArtWahlHtml'), str_contains($html, 'data-mail="kind"'),
+pruefe('Zeile: Art-Wahl als Auswahlfeld an offenen Zeilen, change setzt sie hier und beim Server',
+    [str_contains($html, 'function mailArtWahlHtml'), str_contains($html, '<select class="mail-kind-select" data-mail="kind"'),
+     str_contains($html, "e.target.closest('select[data-mail=\"kind\"]')"), str_contains($html, 'class="mail-summary"'),
      str_contains($html, "aiPost('/mail/proposals', { action: 'kind', id: id, i: Number(i), kind: kind })"),
      str_contains($html, ": `<div class=\"mail-row-kind\">\${mailArtWahlHtml(sorte)}</div>`)")],
-    [true, true, true, true]);
+    [true, true, true, true, true, true]);
+$php = $lesen('SymDoGateway/libs/MailScan.php') . $lesen('SymDoGateway/libs/AiJobs.php') . $lesen('SymDoGateway/libs/AiExtract.php');
+pruefe('Server: die Zusammenfassung reist auf BEIDEN Wegen (synchron und Auftrag) und der Prompt bittet darum',
+    [substr_count($php, 'MailAnalyseCalc::Zusammenfassung(') >= 2, substr_count($php, "'summary' => \$zusammen]") === 2,
+     substr_count($php, '$this->AiSummaryRule()') === 3],
+    [true, true, true]);
 pruefe('Alle fuenf Kachel-Kopien tragen den Haken',
     array_map(static fn($k) => str_contains($lesen("$k/module.html"), 'function mailErledigt'), $kopien), array_fill(0, 5, true));
 pruefe('„Taken over" heisst ueberall „Uebernommen"',

@@ -29,6 +29,41 @@ declare(strict_types=1);
  */
 final class MailAnalyseCalc
 {
+    /** Hoechstlaenge der Zusammenfassung — ein, zwei Saetze, keine Abschrift. */
+    public const ZUSAMMENFASSUNG_MAX = 300;
+
+    /**
+     * Die Zusammenfassung aus der Antwort des Modells (19.09.2026).
+     *
+     * Das Modell antwortet mit einem JSON-Array von Eintraegen; auf Bitte des
+     * Prompts steht darin ZUSAETZLICH ein Element {"kind":"summary","title":…}
+     * — worum es geht, von wem. Die Eintrags-Pruefung verwirft diese Zeile
+     * still (unbekannte Art), deshalb wird sie HIER vorher herausgelesen.
+     * Fehlt sie (kleines Modell, alte Antwort), ist die Zusammenfassung leer
+     * und die Oberflaeche zeigt nur Betreff und Absender wie bisher.
+     */
+    public static function Zusammenfassung(string $text): string
+    {
+        $start = strpos($text, '[');
+        $end   = strrpos($text, ']');
+        if ($start === false || $end === false || $end < $start) {
+            return '';
+        }
+        $rows = json_decode(substr($text, $start, $end - $start + 1), true);
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (!is_array($row) || strtolower(trim((string)($row['kind'] ?? ''))) !== 'summary') {
+                continue;
+            }
+            foreach (['title', 'summary', 'text', 'info'] as $feld) {
+                $wert = $row[$feld] ?? null;
+                if (is_scalar($wert) && trim((string)$wert) !== '') {
+                    return mb_substr(trim(preg_replace('/\s+/u', ' ', (string)$wert) ?? ''), 0, self::ZUSAMMENFASSUNG_MAX);
+                }
+            }
+        }
+        return '';
+    }
+
     /**
      * Die Funde auszaehlen.
      *
@@ -159,10 +194,12 @@ final class MailAnalyseCalc
      * @return array<string,mixed>
      */
     public static function Satz(string $vorschlagsId, array $kopf, string $betreff,
-        string $userId, array $herkunft, array $aufgaben, int $jetzt): array
+        string $userId, array $herkunft, array $aufgaben, int $jetzt, string $zusammenfassung = ''): array
     {
         return [
             'id'        => $vorschlagsId,
+            // Worum es geht, in ein, zwei Saetzen — steht ueber den Eintraegen.
+            'summary'   => mb_substr(trim($zusammenfassung), 0, self::ZUSAMMENFASSUNG_MAX),
             // Datum des DOKUMENTS — es steht in der App und sortiert die Liste.
             'at'        => (int)($kopf['Date'] ?? $jetzt),
             'from'      => (string)($kopf['SenderAddress'] ?? ''),

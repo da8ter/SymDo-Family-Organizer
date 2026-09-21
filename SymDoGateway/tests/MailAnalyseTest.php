@@ -248,5 +248,22 @@ pruefe('Der Dateiname steht in der Eingabe',
 /* Nichts gefunden ist kein Fehler — nur nichts zu tun. */
 pruefe('Ohne Funde bleibt es ein Erfolg', [$e['ok'], $e['aufgaben']], [true, []]);
 
+/* Die Zusammenfassung: ein Element {"kind":"summary"} im selben Array. Sie wird
+   VOR der Eintrags-Pruefung gelesen, denn die verwirft die Zeile still. */
+$antwort = '```json' . "\n" . '[{"kind":"summary","title":"  Die Klasse 5a lädt zum   Elternabend ein. "},'
+    . '{"title":"Elternabend","kind":"event","due":"2026-10-01"}]' . "\n" . '```';
+pruefe('Zusammenfassung wird aus dem Array gelesen, Leerraum gebuendelt',
+    MailAnalyseCalc::Zusammenfassung($antwort), 'Die Klasse 5a lädt zum Elternabend ein.');
+pruefe('Ohne summary-Element: leer; ohne Array: leer; Rueckfall auf text/summary-Feld',
+    [MailAnalyseCalc::Zusammenfassung('[{"title":"x","kind":"task"}]'), MailAnalyseCalc::Zusammenfassung('nichts'),
+     MailAnalyseCalc::Zusammenfassung('[{"kind":"SUMMARY","summary":"Kurz"}]')],
+    ['', '', 'Kurz']);
+pruefe('Die Zusammenfassung ist gedeckelt',
+    mb_strlen(MailAnalyseCalc::Zusammenfassung('[{"kind":"summary","title":"' . str_repeat('a', 500) . '"}]')),
+    MailAnalyseCalc::ZUSAMMENFASSUNG_MAX);
+$satz = MailAnalyseCalc::Satz('m:1', ['Subject' => 'B'], 'B', 'u', [], [['title' => 'x']], 1, ' Worum es geht ');
+pruefe('Der Satz traegt die Zusammenfassung; ohne Angabe bleibt sie leer',
+    [$satz['summary'], MailAnalyseCalc::Satz('m:1', [], 'B', 'u', [], [], 1)['summary']], ['Worum es geht', '']);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);
