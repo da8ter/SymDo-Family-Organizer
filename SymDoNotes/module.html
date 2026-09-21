@@ -1987,10 +1987,11 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
    Rand, also auf Hoehe des Titels (Wunsch 21.09.2026). */
 .mail-head-zeile { display: flex; align-items: flex-start; gap: 8px; }
 .mail-head-zeile .avatar-stack { flex: 0 0 auto; margin-top: 1px; }
-/* Die ganze Nachricht verwerfen: rechtsbuendig unter dem letzten Eintrag, flach
-   und in Rot — ein Knopf mit Wort, damit klar ist, dass er MEHR loescht als die
+/* Fusszeile: links die Quelle, rechts der Loesch-Knopf. Der ist flach und rot —
+   ein Knopf mit Wort, damit klar ist, dass er MEHR loescht als die
    Zeilenknoepfe darueber. */
-.mail-fuss { display: flex; justify-content: flex-end; }
+.mail-fuss { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mail-quelle { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mail-weg {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 5px 12px;
@@ -11772,8 +11773,10 @@ function renderMailAi() {
          Vorher war es ein Papierkorb im Kopf — dort sass er neben dem Betreff und
          sah aus, als loesche er nur diese eine Zeile. */
       `<div class="mail-fuss" data-key="mailfuss:${escapeHtml(String(p.id))}">` +
+        // Woher der Vorschlag stammt — klein und gedeckt, links unten.
+        `<span class="mail-quelle">${escapeHtml(mailQuellWort(p) ? translate('Source: %1').replace('%1', mailQuellWort(p)) : '')}</span>` +
         `<button class="mail-weg" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}">` +
-        `<i class="fa-light fa-trash-can"></i>${escapeHtml(mailQuellWort(p))}</button>` +
+        `<i class="fa-light fa-trash-can"></i>${escapeHtml(translate('Delete'))}</button>` +
       `</div>` +
     `</div>`;   /* schliesst die Karte — ohne das stand der Knopf NEBEN ihr */
   }).join('');
@@ -11889,19 +11892,18 @@ function mailArtSetzen(id, i, kind) {
 }
 
 /**
- * Wie der Verwerfen-Knopf heisst (21.09.2026): „Mail verwerfen" ist falsch,
- * wenn der Vorschlag von einer Klassenseite oder aus LOGINEO stammt. Die Quelle
- * steht seit heute im Vorschlag; aeltere kennen sie nicht, fuer die verraet sie
- * die Kennung (`edu:`, `moodle…`) — und wenn auch die nichts sagt, bleibt es
- * beim neutralen „Vorschläge verwerfen".
+ * Woher der Vorschlag stammt (21.09.2026) — als kleiner Hinweis unter den
+ * Eintraegen. Die Quelle steht seit heute im Vorschlag; aeltere kennen sie
+ * nicht, fuer die verraet sie die Kennung (`edu:`, `moodle…`). Sagt auch die
+ * nichts, bleibt der Hinweis weg statt zu raten.
  */
 function mailQuellWort(p) {
   const quelle = String((p && p.source) || '').toLowerCase();
   const id = String((p && p.id) || '');
-  if (quelle === 'imap' || quelle === 'webhook' || id.startsWith('hook:')) return translate('Discard mail');
-  if (quelle === 'edumaps' || id.startsWith('edu:')) return translate('Discard card');
-  if (quelle === 'logineo' || quelle === 'moodle' || id.startsWith('moodle')) return translate('Discard post');
-  return translate('Discard suggestions');
+  if (quelle === 'imap' || quelle === 'webhook' || id.startsWith('hook:')) return translate('E-mail');
+  if (quelle === 'edumaps' || id.startsWith('edu:')) return translate('Class page');
+  if (quelle === 'logineo' || quelle === 'moodle' || id.startsWith('moodle')) return 'LOGINEO';
+  return '';
 }
 
 /** Vorschlag verwerfen — derselbe Weg fuer den ✕-Knopf und das Wischen nach links. */

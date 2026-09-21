@@ -166,15 +166,16 @@ pruefe('Server: die Zusammenfassung reist auf BEIDEN Wegen (synchron und Auftrag
     [substr_count($php, 'MailAnalyseCalc::Zusammenfassung(') >= 2, substr_count($php, "'summary' => \$zusammen]") === 2,
      substr_count($php, '$this->AiSummaryRule()') === 3],
     [true, true, true]);
-pruefe('Der Verwerfen-Knopf heisst nach der Quelle, mit Rueckfall auf die Kennung',
+pruefe('Fusszeile: „Löschen" rechts, links die Quelle — mit Rueckfall auf die Kennung, sonst gar nichts',
     [str_contains($html, 'function mailQuellWort'), str_contains($html, "id.startsWith('edu:')"),
-     str_contains($html, "id.startsWith('moodle')"), str_contains($html, "translate('Discard suggestions')"),
-     str_contains($html, '${escapeHtml(mailQuellWort(p))}'), str_contains($lesen('SymDoGateway/libs/MailScan.php'), "(string)(\$erg['summary'] ?? ''), \$quelle)")],
-    [true, true, true, true, true, true]);
+     str_contains($html, "id.startsWith('moodle')"), str_contains($html, "translate('Source: %1')"),
+     str_contains($html, 'class="mail-quelle"'), str_contains($html, "<i class=\"fa-light fa-trash-can\"></i>\${escapeHtml(translate('Delete'))}"),
+     str_contains($lesen('SymDoGateway/libs/MailScan.php'), "(string)(\$erg['summary'] ?? ''), \$quelle)")],
+    [true, true, true, true, true, true, true]);
 pruefe('Die Quellen-Woerter stehen in allen locale.json',
     array_map(static fn($k) => array_map(static fn($w) => json_decode($lesen("$k/locale.json"), true)['translations']['de'][$w] ?? null,
-        ['Discard card', 'Discard post', 'Discard suggestions']), array_merge(['SymDoWebApp'], $kopien)),
-    array_fill(0, 6, ['Karte verwerfen', 'Beitrag verwerfen', 'Vorschläge verwerfen']));
+        ['Source: %1', 'Class page', 'Delete']), array_merge(['SymDoWebApp'], $kopien)),
+    array_fill(0, 6, ['Quelle: %1', 'Klassenseite', 'Löschen']));
 pruefe('Alle fuenf Kachel-Kopien tragen den Haken',
     array_map(static fn($k) => str_contains($lesen("$k/module.html"), 'function mailErledigt'), $kopien), array_fill(0, 5, true));
 pruefe('„Taken over" heisst ueberall „Uebernommen"',

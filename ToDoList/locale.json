@@ -733,7 +733,9 @@
             "Taken over": "Übernommen",
             "Discard card": "Karte verwerfen",
             "Discard post": "Beitrag verwerfen",
-            "Discard suggestions": "Vorschläge verwerfen"
+            "Discard suggestions": "Vorschläge verwerfen",
+            "Class page": "Klassenseite",
+            "Source: %1": "Quelle: %1"
         },
         "en": {
             "SymDo ToDo List": "SymDo - ToDo List",

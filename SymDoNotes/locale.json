@@ -561,6 +561,8 @@
       "Discard card": "Karte verwerfen",
       "Discard post": "Beitrag verwerfen",
       "Discard suggestions": "Vorschläge verwerfen",
+      "Class page": "Klassenseite",
+      "Source: %1": "Quelle: %1",
       "SymDo Notes": "SymDo - Notizen",
       "Shows the notes of the SymDo app as a tile — the same notes, the same view. There is nothing to set up: the notes come from the SymDo Gateway.": "Zeigt die Notizen der SymDo-App als Kachel — dieselben Notizen, dieselbe Ansicht. Einzurichten ist nichts: die Notizen kommen aus dem SymDo Gateway.",
       "Gateway: %1$s (#%2$d)": "Gateway: %1$s (#%2$d)",
