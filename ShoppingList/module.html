@@ -2129,8 +2129,10 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   gap: 6px; flex: none;
 }
 .mail-chips {
-  display: flex; flex-direction: row; align-items: center; align-self: center;
-  gap: 6px; flex: none;
+  /* Im Textbereich unter dem Titel, linksbuendig und umbrechend — nicht mehr in
+     der Knopfspalte rechts (21.09.2026). */
+  display: flex; flex-direction: row; flex-wrap: wrap; align-items: center;
+  gap: 6px; margin-top: 5px;
 }
 /* Titel und Zusatz genau wie in einer Aufgabenzeile (.todo-title/.todo-info) —
    ein Vorschlag soll lesbar sein wie das, was aus ihm wird. */
@@ -2617,10 +2619,7 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   align-self: flex-start;
   margin-top: 4px;
 }
-/* Nur im KI-Eingang (Wunsch 21.09.2026): rutscht die Zeile um, stehen die
-   Abzeichen LINKS unter dem Titel und die Knoepfe bleiben rechts. In den
-   Aufgaben- und Kalenderzeilen bleibt alles rechts wie bisher. */
-.mail-row.stacked .mail-side { justify-content: space-between; }
+
 /* Prioritäts-Chip — identisch zur ToDoList-Kachel (.badge.high/normal/low) */
 .badge {
   font-size: 11px;
@@ -11800,15 +11799,16 @@ function renderMailAi() {
           // ohne diesen Vorzug zeigte die Zeile nur den Titel, und genau die
           // Zusammenfassung ist der Grund, warum es eine Notiz wird.
           ((it.text || it.info) ? `<div class="mail-row-info">${escapeHtml(String(it.text || it.info))}</div>` : '') +
+          /* Die Merkmale (Faelligkeit, Reihe, ganztags, Dringlichkeit) stehen im
+             TEXTBEREICH unter dem Titel — damit stehen sie linksbuendig (Wunsch
+             21.09.2026). In der .mail-side rechts sassen sie sonst am rechten
+             Rand neben den Knoepfen, egal ob die Zeile umbricht oder nicht. */
+          (chips ? `<span class="mail-chips">${chips}</span>` : '') +
         `</div>` +
-        // Aufbau wie in der Aufgabenzeile: erst die Merkmale, dann wer zustaendig
-        // waere, dann die Knoepfe — alles in EINER Spalte, die layoutRowMeta() bei
-        // Platznot als eigene Zeile unter den Inhalt schiebt.
-        /* Das Mitgliedsfoto steht seit dem 21.09.2026 EINMAL im Kopf, nicht an
-           jeder Zeile: es gehoert zur Nachricht, nicht zum einzelnen Eintrag. */
-        `<span class="mail-side"><span class="mail-chips">` +
-          chips +
-        `</span>` +
+        /* Rechts nur noch die Knoepfe. Das Mitgliedsfoto steht seit dem
+           21.09.2026 EINMAL im Kopf: es gehoert zur Nachricht, nicht zum
+           einzelnen Eintrag. */
+        `<span class="mail-side">` +
         (erledigt
           // Uebernommen: ein Haken statt der Knoepfe. Nichts mehr zu tun.
           ? `<span class="mail-done" title="${translate('Taken over')}" aria-label="${translate('Taken over')}"><i class="fa-light fa-check"></i></span>`
