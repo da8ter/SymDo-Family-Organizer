@@ -1973,7 +1973,9 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
    noch tiefer verschachtelt. renderRows vergleicht genau EINE Ebene tiefer
    (data-nest="1"), nicht beliebig viele. */
 .mail-head {
-  display: flex; align-items: center; gap: 8px;
+  /* Oben ausgerichtet, nicht mittig (Wunsch 21.09.2026): mit der mehrzeiligen
+     Zusammenfassung hing das Symbol sonst irgendwo in der Mitte des Textes. */
+  display: flex; align-items: flex-start; gap: 8px;
   margin: 0 2px;
 }
 /* Briefsymbol statt Portraitfoto (Wunsch vom 21.08.2026). Die frueheren
@@ -1981,6 +1983,7 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
    .avatar-Regel in dieser Datei, jede Umgebung bringt ihre eigene mit. */
 .mail-head .mail-icon {
   width: 22px;
+  margin-top: 3px;   /* auf die Hoehe der Betreffzeile */
   font-size: 16px;
   color: var(--muted);
   text-align: center;
