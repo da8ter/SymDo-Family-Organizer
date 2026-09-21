@@ -2007,6 +2007,8 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   color: inherit; background: transparent; border: 1px solid color-mix(in srgb, var(--content-color) 25%, transparent);
   border-radius: 999px; padding: 1px 8px; max-width: 160px; }
 .mail-kind-select option { color: initial; }
+/* Luft zwischen dem Auswahlfeld und dem Titel darunter (Wunsch 21.09.2026). */
+.mail-row-kind:has(.mail-kind-select) { margin-bottom: 7px; }
 /* Worum es geht: unter Betreff und Absender, hoechstens sieben Zeilen (Wunsch
    21.09.2026), dann abgeschnitten. */
 .mail-summary { margin-top: 3px; font-size: 12.5px; line-height: 1.35; color: var(--muted);
