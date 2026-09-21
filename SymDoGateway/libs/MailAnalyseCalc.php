@@ -223,10 +223,15 @@ final class MailAnalyseCalc
      * @return array<string,mixed>
      */
     public static function Satz(string $vorschlagsId, array $kopf, string $betreff,
-        string $userId, array $herkunft, array $aufgaben, int $jetzt, string $zusammenfassung = ''): array
+        string $userId, array $herkunft, array $aufgaben, int $jetzt, string $zusammenfassung = '',
+        string $quelle = ''): array
     {
         return [
             'id'        => $vorschlagsId,
+            /* Woher der Vorschlag stammt ('IMAP', 'Edumaps', 'LOGINEO', 'Webhook').
+               Die Oberflaeche beschriftet damit den Verwerfen-Knopf: „Mail
+               verwerfen" waere bei einer Klassenseite falsch (21.09.2026). */
+            'source'    => $quelle,
             // Worum es geht, in ein, zwei Saetzen — steht ueber den Eintraegen.
             'summary'   => mb_substr(trim($zusammenfassung), 0, self::ZUSAMMENFASSUNG_MAX),
             // Datum des DOKUMENTS — es steht in der App und sortiert die Liste.

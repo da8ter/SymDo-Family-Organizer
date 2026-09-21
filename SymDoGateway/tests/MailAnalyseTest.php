@@ -261,9 +261,11 @@ pruefe('Ohne summary-Element: leer; ohne Array: leer; Rueckfall auf text/summary
 pruefe('Die Zusammenfassung ist gedeckelt',
     mb_strlen(MailAnalyseCalc::Zusammenfassung('[{"kind":"summary","title":"' . str_repeat('a', 900) . '"}]')),
     MailAnalyseCalc::ZUSAMMENFASSUNG_MAX);
-$satz = MailAnalyseCalc::Satz('m:1', ['Subject' => 'B'], 'B', 'u', [], [['title' => 'x']], 1, ' Worum es geht ');
-pruefe('Der Satz traegt die Zusammenfassung; ohne Angabe bleibt sie leer',
-    [$satz['summary'], MailAnalyseCalc::Satz('m:1', [], 'B', 'u', [], [], 1)['summary']], ['Worum es geht', '']);
+$satz = MailAnalyseCalc::Satz('m:1', ['Subject' => 'B'], 'B', 'u', [], [['title' => 'x']], 1, ' Worum es geht ', 'Edumaps');
+pruefe('Der Satz traegt Zusammenfassung und Quelle; ohne Angabe bleiben beide leer',
+    [$satz['summary'], $satz['source'],
+     MailAnalyseCalc::Satz('m:1', [], 'B', 'u', [], [], 1)['summary'], MailAnalyseCalc::Satz('m:1', [], 'B', 'u', [], [], 1)['source']],
+    ['Worum es geht', 'Edumaps', '', '']);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

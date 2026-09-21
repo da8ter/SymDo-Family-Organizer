@@ -1339,7 +1339,7 @@ trait MailScan
 
         $gespeichert = $this->MailStoreProposal(
             MailAnalyseCalc::Satz($vorschlagsId, $kopf, $betreff, $userId,
-                $this->MailDetectOrigin($text), $aufgaben, time(), (string)($erg['summary'] ?? ''))
+                $this->MailDetectOrigin($text), $aufgaben, time(), (string)($erg['summary'] ?? ''), $quelle)
             /* Wann WIR den Vorschlag gemacht haben. Danach richtet sich die
                Aufbewahrung, und nur danach: sonst verschwindet ein gerade erst
                ausgewerteter alter Elternbrief noch im selben Atemzug. Genau das
