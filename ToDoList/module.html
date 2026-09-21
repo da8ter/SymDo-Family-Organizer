@@ -11826,7 +11826,8 @@ function renderMailAi() {
       `<div class="mail-fuss" data-key="mailfuss:${escapeHtml(String(p.id))}">` +
         `<button class="mail-weg" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}">` +
         `<i class="fa-light fa-trash-can"></i>${escapeHtml(translate('Discard mail'))}</button>` +
-      `</div>`;
+      `</div>` +
+    `</div>`;   /* schliesst die Karte — ohne das stand der Knopf NEBEN ihr */
   }).join('');
 
   // renderRows liefert NUR die neu erzeugten Knoten: die behalten ihre Gesten nicht,
