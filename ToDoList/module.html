@@ -1994,7 +1994,9 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
    ein Knopf mit Wort, damit klar ist, dass er MEHR loescht als die
    Zeilenknoepfe darueber. */
 .mail-fuss { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.mail-quelle { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-quelle { display: flex; flex-direction: column; min-width: 0;
+  font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+.mail-quelle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mail-weg {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 5px 12px;
@@ -11848,8 +11850,12 @@ function renderMailAi() {
          Vorher war es ein Papierkorb im Kopf — dort sass er neben dem Betreff und
          sah aus, als loesche er nur diese eine Zeile. */
       `<div class="mail-fuss" data-key="mailfuss:${escapeHtml(String(p.id))}">` +
-        // Woher der Vorschlag stammt — klein und gedeckt, links unten.
-        `<span class="mail-quelle">${escapeHtml(mailQuellWort(p) ? translate('Source: %1').replace('%1', mailQuellWort(p)) : '')}</span>` +
+        // Woher der Vorschlag stammt und wann er entstand — klein und gedeckt,
+        // links unten, Datum und Uhrzeit in einer zweiten Zeile darunter.
+        `<span class="mail-quelle">` +
+          (mailQuellWort(p) ? `<span>${escapeHtml(translate('Source: %1').replace('%1', mailQuellWort(p)))}</span>` : '') +
+          (mailWannText(p) ? `<span>${escapeHtml(mailWannText(p))}</span>` : '') +
+        `</span>` +
         `<button class="mail-weg" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}">` +
         `<i class="fa-light fa-trash-can"></i>${escapeHtml(translate('Delete'))}</button>` +
       `</div>` +
@@ -11972,6 +11978,14 @@ function mailArtSetzen(id, i, kind) {
  * nicht, fuer die verraet sie die Kennung (`edu:`, `moodle…`). Sagt auch die
  * nichts, bleibt der Hinweis weg statt zu raten.
  */
+/** Wann der Vorschlag entstanden ist — Datum und Uhrzeit, kurz. */
+function mailWannText(p) {
+  const sek = Number((p && (p.created || p.at)) || 0);
+  if (!sek) return '';
+  const d = new Date(sek * 1000);
+  return d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+    ', ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
 function mailQuellWort(p) {
   const quelle = String((p && p.source) || '').toLowerCase();
   const id = String((p && p.id) || '');
