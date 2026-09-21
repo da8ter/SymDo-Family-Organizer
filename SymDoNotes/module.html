@@ -1978,11 +1978,14 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
      Und ein eigener Kasten wie eine Vorschlagszeile (gleiche Flaeche, gleiche
      Rundung, gleiches Polster): der Kopf traegt jetzt Absender und
      Zusammenfassung — Inhalt, kein Etikett mehr. */
-  display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px;
+  display: flex; flex-direction: column;
   padding: 10px 12px;
   border-radius: 12px;
   background: var(--row-item);
 }
+/* Die obere Zeile: Symbol, Betreff mit Absender, Papierkorb — alle am OBEREN
+   Rand, also auf Hoehe des Titels (Wunsch 21.09.2026). */
+.mail-head-zeile { display: flex; align-items: flex-start; gap: 8px; }
 /* Briefsymbol statt Portraitfoto (Wunsch vom 21.08.2026). Die frueheren
    Avatar-Regeln fuer diesen Kopf sind damit entfallen — es gibt KEINE allgemeine
    .avatar-Regel in dieser Datei, jede Umgebung bringt ihre eigene mit. */
@@ -2020,7 +2023,7 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 .mail-row-kind:has(.mail-kind-select) { margin-bottom: 7px; }
 /* Worum es geht: unter Betreff und Absender, hoechstens sieben Zeilen (Wunsch
    21.09.2026), dann abgeschnitten. */
-.mail-summary { flex: 0 0 100%; margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--accent);
+.mail-summary { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--accent);
   font-size: 12.5px; line-height: 1.35; color: var(--muted);
   display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
 .mail-who { flex: 1 1 auto; min-width: 0; }
@@ -11714,12 +11717,17 @@ function renderMailAi() {
     // den ganzen Kasten zu ersetzen — sonst verloeren die Zeilen bei jeder
     // Aenderung ihre Knoten und eine Wischgeste unter dem Finger wuerde ruckeln.
     return `<div class="card mail-box" data-nest="1" data-key="mailbox:${escapeHtml(String(p.id))}">` +
-      `<div class="mail-head" data-key="mailkopf:${escapeHtml(String(p.id))}">${kopf}` +
-        `<div class="mail-who">` +
-          `<div class="mail-subject">${escapeHtml(titelText)}</div>` +
-          `<div class="mail-meta">${escapeHtml(von)}</div>` +
+      `<div class="mail-head" data-key="mailkopf:${escapeHtml(String(p.id))}">` +
+        /* Symbol, Betreff mit Absender und der Papierkorb in EINER Zeile; die
+           Zusammenfassung steht als eigene Zeile darunter und traegt die
+           Trennlinie ueber die ganze Breite. */
+        `<div class="mail-head-zeile">${kopf}` +
+          `<div class="mail-who">` +
+            `<div class="mail-subject">${escapeHtml(titelText)}</div>` +
+            `<div class="mail-meta">${escapeHtml(von)}</div>` +
+          `</div>` +
+          `<button class="row-btn destructive" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}" aria-label="${translate('Discard mail')}" title="${translate('Discard mail')}"><i class="fa-light fa-trash-can"></i></button>` +
         `</div>` +
-        `<button class="row-btn destructive" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}" aria-label="${translate('Discard mail')}" title="${translate('Discard mail')}"><i class="fa-light fa-trash-can"></i></button>` +
         /* Worum es geht (vom Modell, seit 21.09.2026). GESCHWISTER von .mail-who,
            nicht Kind: nur so laeuft die Trennlinie darueber durch den ganzen
            Kasten und nicht erst hinter dem Symbol los. Aeltere Vorschlaege haben
