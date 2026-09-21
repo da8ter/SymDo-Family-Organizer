@@ -2024,12 +2024,16 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 /* Briefsymbol statt Portraitfoto (Wunsch vom 21.08.2026). Die frueheren
    Avatar-Regeln fuer diesen Kopf sind damit entfallen — es gibt KEINE allgemeine
    .avatar-Regel in dieser Datei, jede Umgebung bringt ihre eigene mit. */
+/* Briefsymbol im Kopf und Art-Symbol in der Zeile stehen an DERSELBEN linken
+   Kante (Wunsch 21.09.2026): beide Kaesten haben 12px Innenabstand, also darf
+   das Briefsymbol nicht mehr in einem 22px breiten Feld zentriert sitzen — es
+   sass dadurch ein paar Pixel weiter rechts als das Symbol darunter. */
 .mail-head .mail-icon {
-  width: 22px;
+  width: auto;
   margin-top: 3px;   /* auf die Hoehe der Betreffzeile */
   font-size: 16px;
   color: var(--accent);
-  text-align: center;
+  text-align: left;
   flex: 0 0 auto;
 }
 /* Art der Zeile: eigene Kopfzeile UEBER dem Titel, Symbol und Wort nebeneinander.
