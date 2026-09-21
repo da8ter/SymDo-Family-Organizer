@@ -11800,7 +11800,9 @@ function renderMailAi() {
         (erledigt
           // Uebernommen: ein Haken statt der Knoepfe. Nichts mehr zu tun.
           ? `<span class="mail-done" title="${translate('Taken over')}" aria-label="${translate('Taken over')}"><i class="fa-light fa-check"></i></span>`
-          : `<button class="row-btn" data-mail="drop" aria-label="${translate('Discard')}" title="${translate('Discard')}"><i class="fa-light fa-xmark"></i></button>` +
+          // destructive: rot wie ueberall, wo etwas verworfen wird — und die runde
+          // Flaeche nimmt die Farbe ueber currentColor mit.
+          : `<button class="row-btn destructive" data-mail="drop" aria-label="${translate('Discard')}" title="${translate('Discard')}"><i class="fa-light fa-xmark"></i></button>` +
             `<button class="row-btn accent" data-mail="add" aria-label="${translate('Add')}" title="${translate('Add')}"><i class="fa-light fa-plus"></i></button>`) +
         `</span>` +
         `</div>` +
