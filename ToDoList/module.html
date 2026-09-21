@@ -2129,10 +2129,19 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   gap: 6px; flex: none;
 }
 .mail-chips {
-  /* Im Textbereich unter dem Titel, linksbuendig und umbrechend — nicht mehr in
-     der Knopfspalte rechts (21.09.2026). */
   display: flex; flex-direction: row; flex-wrap: wrap; align-items: center;
-  gap: 6px; margin-top: 5px;
+  gap: 6px; flex: 1 1 auto; min-width: 0;
+}
+/* Merkmale und Knoepfe stehen im KI-Eingang IMMER in einer eigenen Zeile unter
+   dem Titel — links die Merkmale, rechts die Knoepfe (21.09.2026). Vorher
+   entschied das layoutRowMeta() nach Platz; dann sassen die Merkmale mal neben
+   dem Titel am rechten Rand, mal darunter. */
+.mail-row { flex-wrap: wrap; row-gap: 0; }
+.mail-row .mail-side {
+  flex-basis: 100%;
+  justify-content: space-between;
+  align-self: flex-start;
+  margin-top: 5px;
 }
 /* Titel und Zusatz genau wie in einer Aufgabenzeile (.todo-title/.todo-info) —
    ein Vorschlag soll lesbar sein wie das, was aus ihm wird. */
@@ -11791,16 +11800,14 @@ function renderMailAi() {
           // ohne diesen Vorzug zeigte die Zeile nur den Titel, und genau die
           // Zusammenfassung ist der Grund, warum es eine Notiz wird.
           ((it.text || it.info) ? `<div class="mail-row-info">${escapeHtml(String(it.text || it.info))}</div>` : '') +
-          /* Die Merkmale (Faelligkeit, Reihe, ganztags, Dringlichkeit) stehen im
-             TEXTBEREICH unter dem Titel — damit stehen sie linksbuendig (Wunsch
-             21.09.2026). In der .mail-side rechts sassen sie sonst am rechten
-             Rand neben den Knoepfen, egal ob die Zeile umbricht oder nicht. */
-          (chips ? `<span class="mail-chips">${chips}</span>` : '') +
         `</div>` +
-        /* Rechts nur noch die Knoepfe. Das Mitgliedsfoto steht seit dem
-           21.09.2026 EINMAL im Kopf: es gehoert zur Nachricht, nicht zum
-           einzelnen Eintrag. */
-        `<span class="mail-side">` +
+        /* Eine eigene Zeile unter dem Titel: LINKS die Merkmale (Faelligkeit,
+           Reihe, ganztags, Dringlichkeit), RECHTS die Knoepfe (Wunsch
+           21.09.2026). Das Mitgliedsfoto steht seit demselben Tag EINMAL im
+           Kopf: es gehoert zur Nachricht, nicht zum einzelnen Eintrag. */
+        `<span class="mail-side"><span class="mail-chips">` +
+          chips +
+        `</span>` +
         (erledigt
           // Uebernommen: ein Haken statt der Knoepfe. Nichts mehr zu tun.
           ? `<span class="mail-done" title="${translate('Taken over')}" aria-label="${translate('Taken over')}"><i class="fa-light fa-check"></i></span>`
