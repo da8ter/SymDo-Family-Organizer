@@ -1986,15 +1986,19 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 /* Die obere Zeile: Symbol, Betreff mit Absender, Papierkorb — alle am OBEREN
    Rand, also auf Hoehe des Titels (Wunsch 21.09.2026). */
 .mail-head-zeile { display: flex; align-items: flex-start; gap: 8px; }
-/* Der Papierkorb als runder Knopf (Wunsch 21.09.2026) — randlos, auf einer
-   durchscheinenden roten Flaeche; kleiner als .icon-btn, damit er neben der
-   Betreffzeile nicht groesser wirkt als sie. */
-.mail-head-zeile .row-btn {
+/* Runde Knoepfe im KI-Eingang (Wunsch 21.09.2026): Papierkorb im Kopf, Verwerfen
+   und Uebernehmen in der Zeile — randlos, auf einer durchscheinenden Flaeche in
+   ihrer eigenen Farbe. Kleiner als .icon-btn, damit sie neben dem Text nicht
+   groesser wirken als er. Die Farbe kommt von der Schriftfarbe des Knopfes
+   (currentColor), so passt jede Flaeche automatisch zu ihrem Symbol: rot beim
+   Verwerfen, Akzent beim Uebernehmen. */
+.mail-head-zeile .row-btn,
+.mail-row .row-btn {
   width: 30px; height: 30px;
   padding: 0;
   border-radius: 999px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: color-mix(in srgb, var(--red) 14%, transparent);
+  background: color-mix(in srgb, currentColor 14%, transparent);
   border: 0;
   font-size: 14px;
 }
@@ -2115,7 +2119,6 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.mail-row .row-btn { font-size: 17px; padding: 4px 5px; }
 /* Uebernommen (19.09.2026): gedaempft, mit Haken statt Knoepfen. */
 .mail-row.erledigt { opacity: .6; }
 .mail-row.erledigt .mail-row-title { text-decoration: line-through; }
