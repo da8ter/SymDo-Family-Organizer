@@ -1978,7 +1978,7 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
      Und ein eigener Kasten wie eine Vorschlagszeile (gleiche Flaeche, gleiche
      Rundung, gleiches Polster): der Kopf traegt jetzt Absender und
      Zusammenfassung — Inhalt, kein Etikett mehr. */
-  display: flex; align-items: flex-start; gap: 8px;
+  display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px;
   padding: 10px 12px;
   border-radius: 12px;
   background: var(--row-item);
@@ -1990,7 +1990,7 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   width: 22px;
   margin-top: 3px;   /* auf die Hoehe der Betreffzeile */
   font-size: 16px;
-  color: var(--muted);
+  color: var(--accent);
   text-align: center;
   flex: 0 0 auto;
 }
@@ -2011,6 +2011,7 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 .mail-row-kind i { font-size: 12px; }
 /* Die Art-Wahl in der Zeile: ein schmales Auswahlfeld hinter dem Symbol der Art.
    Die Kopfzeile schreibt in Kapitaelchen — das Feld nicht. */
+.mail-row-kind:has(.mail-kind-select) i { font-size: 16px; }   /* so gross wie die uebrigen Symbole */
 .mail-kind-select { font: inherit; font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0;
   color: inherit; background: transparent; border: 1px solid color-mix(in srgb, var(--content-color) 25%, transparent);
   border-radius: 999px; padding: 1px 8px; max-width: 160px; }
@@ -2019,7 +2020,8 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 .mail-row-kind:has(.mail-kind-select) { margin-bottom: 7px; }
 /* Worum es geht: unter Betreff und Absender, hoechstens sieben Zeilen (Wunsch
    21.09.2026), dann abgeschnitten. */
-.mail-summary { margin-top: 6px; font-size: 12.5px; line-height: 1.35; color: var(--muted);
+.mail-summary { flex: 0 0 100%; margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--accent);
+  font-size: 12.5px; line-height: 1.35; color: var(--muted);
   display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
 .mail-who { flex: 1 1 auto; min-width: 0; }
 .mail-subject {
@@ -2027,9 +2029,9 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .mail-meta { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Trennlinie in der Akzentfarbe unter „Von: …" — aber nur, wenn darunter die
-   Zusammenfassung steht (Wunsch 21.09.2026). Ohne sie waere es ein Strich ins Leere. */
-.mail-meta:has(+ .mail-summary) { padding-bottom: 6px; border-bottom: 1px solid var(--accent); }
+/* Die Zusammenfassung nimmt die GANZE Breite des Kastens ein (eigene Zeile im
+   umbrechenden Kopf) und traegt die Trennlinie in der Akzentfarbe ueber sich —
+   so laeuft sie von Kante zu Kante statt erst hinter dem Symbol zu beginnen. */
 /* Wischen wie in den Listen: links verwerfen (rot, Papierkorb), rechts uebernehmen
    (gruen, Plus — dieselbe Farbwahl wie „auf die Einkaufsliste" bei den Favoriten).
    Der Behaelter traegt Rundung und overflow, die Zeile darin wird verschoben; ihre
@@ -11776,11 +11778,13 @@ function renderMailAi() {
         `<div class="mail-who">` +
           `<div class="mail-subject">${escapeHtml(titelText)}</div>` +
           `<div class="mail-meta">${escapeHtml(von)}</div>` +
-          // Worum es geht, in ein, zwei Saetzen (vom Modell, seit 21.09.2026).
-          // Aeltere Vorschlaege haben keine — dann bleibt es bei Betreff und Absender.
-          (String(p.summary || '').trim() ? `<div class="mail-summary">${escapeHtml(String(p.summary).trim())}</div>` : '') +
         `</div>` +
         `<button class="row-btn destructive" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}" aria-label="${translate('Discard mail')}" title="${translate('Discard mail')}"><i class="fa-light fa-trash-can"></i></button>` +
+        /* Worum es geht (vom Modell, seit 21.09.2026). GESCHWISTER von .mail-who,
+           nicht Kind: nur so laeuft die Trennlinie darueber durch den ganzen
+           Kasten und nicht erst hinter dem Symbol los. Aeltere Vorschlaege haben
+           keine Zusammenfassung — dann bleibt es bei Betreff und Absender. */
+        (String(p.summary || '').trim() ? `<div class="mail-summary">${escapeHtml(String(p.summary).trim())}</div>` : '') +
       `</div>` +
       zeilen +
     `</div>`;
