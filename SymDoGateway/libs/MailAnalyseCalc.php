@@ -65,6 +65,35 @@ final class MailAnalyseCalc
     }
 
     /**
+     * Der Stoff fuer eine nachgeholte Zusammenfassung (21.09.2026): der
+     * Quelltext ist nach der Auswertung nicht mehr da — Betreff, Absender und
+     * die Eintraege (Titel, Hinweis) sind es. Daraus laesst sich sagen, wer
+     * schreibt und worum es geht.
+     *
+     * @param array<string,mixed> $p ein gespeicherter Vorschlag
+     */
+    public static function ZusammenfassungsStoff(array $p): string
+    {
+        $herkunft = is_array($p['origin'] ?? null) ? $p['origin'] : [];
+        $zeilen = [
+            'Betreff: ' . trim((string)(($herkunft['subject'] ?? '') ?: ($p['subject'] ?? ''))),
+            'Von: ' . trim((string)(($herkunft['name'] ?? '') ?: ($herkunft['address'] ?? '') ?: ($p['fromName'] ?? '') ?: ($p['from'] ?? ''))),
+        ];
+        foreach ((array)($p['items'] ?? []) as $it) {
+            if (!is_array($it)) {
+                continue;
+            }
+            $zeile = '- ' . trim((string)($it['title'] ?? ''));
+            $info = trim((string)(($it['info'] ?? '') ?: ($it['text'] ?? '')));
+            if ($info !== '') {
+                $zeile .= ': ' . mb_substr($info, 0, 400);
+            }
+            $zeilen[] = $zeile;
+        }
+        return implode("\n", $zeilen);
+    }
+
+    /**
      * Die Funde auszaehlen.
      *
      * @param list<array<string,mixed>> $aufgaben

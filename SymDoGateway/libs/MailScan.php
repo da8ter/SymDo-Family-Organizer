@@ -2473,6 +2473,9 @@ trait MailScan
             case 'taken':
                 // dropped: verworfen statt uebernommen — verschwindet statt Haken.
                 return ['ok' => $id !== '' && $this->MailMarkTaken($id, (int)($body['i'] ?? -1), ($body['dropped'] ?? false) === true)];
+            case 'summarize':
+                // Zusammenfassung NACHHOLEN fuer einen Vorschlag von vor dem 21.09.2026.
+                return ['ok' => $id !== '' && $this->MailZusammenfassungNachholen($id)];
             case 'kind':
                 // Die Art umstellen (Aufgabe/Termin/Hausaufgabe/Notiz), wie beim
                 // Dokumentenscan — der Nutzer weiss es besser als das Modell.
@@ -2485,6 +2488,53 @@ trait MailScan
     // Kachel-Relay) und aendern denselben Bestand, den der Timer gleichzeitig
     // fortschreibt. Ohne Sperre verschwand der neue Vorschlag, wenn der Nutzer im
     // selben Moment einen alten verwarf.
+    /**
+     * Die Zusammenfassung fuer einen bestehenden Vorschlag nachholen.
+     *
+     * Ein Aufruf beim Anbieter mit dem, was noch da ist (Betreff, Absender,
+     * Eintraege — der Quelltext ist weg). Ein bis zwei Saetze, sonst nichts:
+     * eine Antwort mit Anrede oder JSON wird gekuerzt, eine leere verworfen.
+     */
+    private function MailZusammenfassungNachholen(string $id): bool
+    {
+        $treffer = null;
+        foreach ($this->MailProposals() as $p) {
+            if ((string)($p['id'] ?? '') === $id) {
+                $treffer = $p;
+                break;
+            }
+        }
+        if ($treffer === null) {
+            return false;
+        }
+        $r = $this->AiRunCompletion(
+            'Du fasst Nachrichten an eine Familie zusammen. Antworte mit EIN bis ZWEI Saetzen auf Deutsch: '
+            . 'WER schreibt (Schule, Klasse, Verein, Arzt …) und WORUM es geht. Keine Anrede, keine '
+            . 'Aufzaehlung, kein JSON, keine Anfuehrungszeichen — nur die Saetze.',
+            MailAnalyseCalc::ZusammenfassungsStoff($treffer), null);
+        if (($r['ok'] ?? false) !== true) {
+            return false;
+        }
+        $text = trim(preg_replace('/\s+/u', ' ', (string)($r['text'] ?? '')) ?? '');
+        $text = trim($text, " \"'`");
+        if ($text === '' || $text[0] === '[' || $text[0] === '{') {
+            return false;
+        }
+        $text = mb_substr($text, 0, MailAnalyseCalc::ZUSAMMENFASSUNG_MAX);
+        return $this->MailWithProposalLock(function () use ($id, $text): bool {
+            $alle = $this->MailProposals();
+            $ok = false;
+            foreach ($alle as &$p) {
+                if ((string)($p['id'] ?? '') === $id) {
+                    $p['summary'] = $text;
+                    $ok = true;
+                }
+            }
+            unset($p);
+            return $ok && $this->MailWriteProposals($alle);
+        }, false);
+    }
+
     private function MailDismiss(string $id): bool
     {
         return $this->MailWithProposalLock(function () use ($id): bool {

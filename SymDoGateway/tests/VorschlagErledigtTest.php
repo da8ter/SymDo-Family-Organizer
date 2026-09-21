@@ -35,6 +35,13 @@ final class VorschlagProbe extends IPSModuleStrict
     protected function SendDebug(string $Message, string $Data, int $Format): bool { return true; }
     public function Translate(string $Text): string { return $Text; }
     private function HomeworkKinder(): array { return []; }
+    public string $kiAntwort = '';
+    public array $kiRufe = [];
+    private function AiRunCompletion(string $system, string $userText, ?string $imageBase64, ?string $pdfBase64 = null): array
+    {
+        $this->kiRufe[] = $userText;
+        return $this->kiAntwort === 'FEHLER' ? ['ok' => false] : ['ok' => true, 'text' => $this->kiAntwort];
+    }
 
     public function pAktion(array $body): array { return $this->MailHandleAction($body); }
     public function pSetzen(array $liste): void { $this->attr['MailProposals'] = json_encode($liste, JSON_UNESCAPED_UNICODE); }
@@ -109,6 +116,24 @@ pruefe('kind: unbekannte Art und uebernommene Zeile werden abgewiesen',
     [$m->pAktion(['action' => 'kind', 'id' => 'edu:3', 'i' => 0, 'kind' => 'shopping'])['ok'],
      $m->pAktion(['action' => 'kind', 'id' => 'edu:3', 'i' => 1, 'kind' => 'event'])['ok'], $m->pRoh()[0]['items'][1]['kind']],
     [false, false, 'task']);
+
+// ── Zusammenfassung nachholen ──────────────────────────────────────────────
+$m->pSetzen([['id' => 'mail:9', 'at' => $jetzt, 'created' => $jetzt, 'subject' => 'Fwd: Info', 'fromName' => 'Papa',
+    'origin' => ['name' => 'Grundschule Musterstadt', 'subject' => 'Elternabend 5a'],
+    'items' => [['title' => 'Elternabend', 'info' => 'Am 1.10. um 19 Uhr in der Aula', 'kind' => 'event']]]]);
+$m->kiAntwort = "  \"Die Grundschule Musterstadt lädt zum   Elternabend der 5a ein.\" ";
+pruefe('summarize: Antwort gesaeubert gespeichert, Stoff nennt Betreff, Absender und Eintraege',
+    [$m->pAktion(['action' => 'summarize', 'id' => 'mail:9'])['ok'], $m->pRoh()[0]['summary'],
+     str_contains($m->kiRufe[0], 'Betreff: Elternabend 5a'), str_contains($m->kiRufe[0], 'Von: Grundschule Musterstadt'),
+     str_contains($m->kiRufe[0], '- Elternabend: Am 1.10.')],
+    [true, 'Die Grundschule Musterstadt lädt zum Elternabend der 5a ein.', true, true, true]);
+$m->kiAntwort = '[{"kind":"summary"}]';
+pruefe('summarize: JSON, Leeres oder Fehler des Anbieters aendern nichts',
+    [$m->pAktion(['action' => 'summarize', 'id' => 'mail:9'])['ok'],
+     (function () use ($m) { $m->kiAntwort = ''; return $m->pAktion(['action' => 'summarize', 'id' => 'mail:9'])['ok']; })(),
+     (function () use ($m) { $m->kiAntwort = 'FEHLER'; return $m->pAktion(['action' => 'summarize', 'id' => 'mail:9'])['ok']; })(),
+     $m->pAktion(['action' => 'summarize', 'id' => 'gibtsnicht'])['ok'], $m->pRoh()[0]['summary']],
+    [false, false, false, false, 'Die Grundschule Musterstadt lädt zum Elternabend der 5a ein.']);
 
 // ── Riegel an der Web-App ──────────────────────────────────────────────────
 $wurzel = __DIR__ . '/../..';
