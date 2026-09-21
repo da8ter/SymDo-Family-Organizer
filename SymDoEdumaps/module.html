@@ -1986,7 +1986,10 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 /* Die obere Zeile: Symbol, Betreff mit Absender, Mitgliedsfoto — alle am OBEREN
    Rand, also auf Hoehe des Titels (Wunsch 21.09.2026). */
 .mail-head-zeile { display: flex; align-items: flex-start; gap: 8px; }
-.mail-head-zeile .avatar-stack { flex: 0 0 auto; margin-top: 1px; }
+/* Das Mitgliedsfoto so gross wie die runden Knoepfe der Zeilen (30px), damit es
+   im Kopf nicht kleiner wirkt als sie (Wunsch 21.09.2026). */
+.mail-head-zeile .avatar-stack { flex: 0 0 auto; }
+.mail-head-zeile .avatar-stack .avatar { width: 30px; height: 30px; font-size: 13px; }
 /* Fusszeile: links die Quelle, rechts der Loesch-Knopf. Der ist flach und rot —
    ein Knopf mit Wort, damit klar ist, dass er MEHR loescht als die
    Zeilenknoepfe darueber. */
