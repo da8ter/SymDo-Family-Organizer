@@ -1986,15 +1986,16 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 /* Die obere Zeile: Symbol, Betreff mit Absender, Papierkorb — alle am OBEREN
    Rand, also auf Hoehe des Titels (Wunsch 21.09.2026). */
 .mail-head-zeile { display: flex; align-items: flex-start; gap: 8px; }
-/* Der Papierkorb als runder Knopf (Wunsch 21.09.2026) — Form wie .icon-btn, nur
-   kleiner, damit er neben der Betreffzeile nicht groesser wirkt als sie. */
+/* Der Papierkorb als runder Knopf (Wunsch 21.09.2026) — randlos, auf einer
+   durchscheinenden roten Flaeche; kleiner als .icon-btn, damit er neben der
+   Betreffzeile nicht groesser wirkt als sie. */
 .mail-head-zeile .row-btn {
   width: 30px; height: 30px;
   padding: 0;
   border-radius: 999px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--red) 14%, transparent);
+  border: 0;
   font-size: 14px;
 }
 /* Briefsymbol statt Portraitfoto (Wunsch vom 21.08.2026). Die frueheren
