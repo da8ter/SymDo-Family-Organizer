@@ -2049,7 +2049,10 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 .mail-row-kind i { font-size: 12px; }
 /* Die Art-Wahl in der Zeile: ein schmales Auswahlfeld hinter dem Symbol der Art.
    Die Kopfzeile schreibt in Kapitaelchen — das Feld nicht. */
-.mail-row-kind:has(.mail-kind-select) i { font-size: 16px; color: var(--accent); }   /* so gross wie die uebrigen Symbole, in der Akzentfarbe */
+/* Eigene KLASSE statt des Elements: /icons.js tauscht das <i> nachtraeglich
+   gegen ein <svg> und nimmt die Klassen mit — ein Selektor auf `i` griffe danach
+   ins Leere (gemessen am 21.09.2026: das Symbol blieb grau). */
+.mail-kind-icon { font-size: 16px; color: var(--accent); }
 .mail-kind-select { font: inherit; font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0;
   color: inherit; background: transparent; border: 1px solid color-mix(in srgb, var(--content-color) 25%, transparent);
   border-radius: 999px; padding: 1px 8px; max-width: 160px; }
@@ -11929,7 +11932,7 @@ function mailArtWahlHtml(sorte) {
   };
   // Ein Auswahlfeld (Wunsch 21.09.2026), kein Pillenkranz: das Symbol der Art
   // davor, das Feld selbst schmal, mit dem Wort als Auswahl.
-  return `<i class="fa-light ${MAIL_ART_ZEICHEN[sorte][0]}"></i>` +
+  return `<i class="fa-light ${MAIL_ART_ZEICHEN[sorte][0]} mail-kind-icon"></i>` +
     '<select class="mail-kind-select" data-mail="kind" aria-label="' + escapeHtml(translate('Kind')) + '">' +
     MAIL_SORTEN.filter(k => kann[k] || k === sorte).map(k =>
       `<option value="${k}"${k === sorte ? ' selected' : ''}>${escapeHtml(translate(MAIL_ART_ZEICHEN[k][1]))}</option>`).join('') +
