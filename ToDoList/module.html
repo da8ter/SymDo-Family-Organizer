@@ -1983,16 +1983,31 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   border-radius: 12px;
   background: var(--row-item);
 }
-/* Die obere Zeile: Symbol, Betreff mit Absender, Papierkorb — alle am OBEREN
+/* Die obere Zeile: Symbol, Betreff mit Absender, Mitgliedsfoto — alle am OBEREN
    Rand, also auf Hoehe des Titels (Wunsch 21.09.2026). */
 .mail-head-zeile { display: flex; align-items: flex-start; gap: 8px; }
-/* Runde Knoepfe im KI-Eingang (Wunsch 21.09.2026): Papierkorb im Kopf, Verwerfen
-   und Uebernehmen in der Zeile — randlos, auf einer durchscheinenden Flaeche in
-   ihrer eigenen Farbe. Kleiner als .icon-btn, damit sie neben dem Text nicht
-   groesser wirken als er. Die Farbe kommt von der Schriftfarbe des Knopfes
-   (currentColor), so passt jede Flaeche automatisch zu ihrem Symbol: rot beim
-   Verwerfen, Akzent beim Uebernehmen. */
-.mail-head-zeile .row-btn,
+.mail-head-zeile .avatar-stack { flex: 0 0 auto; margin-top: 1px; }
+/* Die ganze Nachricht verwerfen: rechtsbuendig unter dem letzten Eintrag, flach
+   und in Rot — ein Knopf mit Wort, damit klar ist, dass er MEHR loescht als die
+   Zeilenknoepfe darueber. */
+.mail-fuss { display: flex; justify-content: flex-end; }
+.mail-weg {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  color: var(--red);
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  cursor: pointer;
+}
+.mail-weg i { font-size: 13px; }
+/* Runde Knoepfe im KI-Eingang (Wunsch 21.09.2026): Verwerfen und Uebernehmen in
+   der Zeile — randlos, auf einer durchscheinenden Flaeche in ihrer eigenen
+   Farbe. Kleiner als .icon-btn, damit sie neben dem Text nicht groesser wirken
+   als er. Die Farbe kommt von der Schriftfarbe des Knopfes (currentColor), so
+   passt jede Flaeche automatisch zu ihrem Symbol: rot beim Verwerfen, Akzent
+   beim Uebernehmen. */
 .mail-row .row-btn {
   width: 30px; height: 30px;
   padding: 0;
@@ -11766,9 +11781,10 @@ function renderMailAi() {
         // Aufbau wie in der Aufgabenzeile: erst die Merkmale, dann wer zustaendig
         // waere, dann die Knoepfe — alles in EINER Spalte, die layoutRowMeta() bei
         // Platznot als eigene Zeile unter den Inhalt schiebt.
+        /* Das Mitgliedsfoto steht seit dem 21.09.2026 EINMAL im Kopf, nicht an
+           jeder Zeile: es gehoert zur Nachricht, nicht zum einzelnen Eintrag. */
         `<span class="mail-side"><span class="mail-chips">` +
           chips +
-          renderAvatarStack(p.userId ? [String(p.userId)] : []) +
         `</span>` +
         (erledigt
           // Uebernommen: ein Haken statt der Knoepfe. Nichts mehr zu tun.
@@ -11793,7 +11809,9 @@ function renderMailAi() {
             `<div class="mail-subject">${escapeHtml(titelText)}</div>` +
             `<div class="mail-meta">${escapeHtml(von)}</div>` +
           `</div>` +
-          `<button class="row-btn destructive" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}" aria-label="${translate('Discard mail')}" title="${translate('Discard mail')}"><i class="fa-light fa-trash-can"></i></button>` +
+          /* Wem die Nachricht gilt — an der Stelle, an der bis zum 21.09.2026 der
+             Papierkorb stand. Der ist jetzt der Loesch-Knopf unter den Eintraegen. */
+          renderAvatarStack(p.userId ? [String(p.userId)] : []) +
         `</div>` +
         /* Worum es geht (vom Modell, seit 21.09.2026). GESCHWISTER von .mail-who,
            nicht Kind: nur so laeuft die Trennlinie darueber durch den ganzen
@@ -11802,7 +11820,13 @@ function renderMailAi() {
         (String(p.summary || '').trim() ? `<div class="mail-summary">${escapeHtml(String(p.summary).trim())}</div>` : '') +
       `</div>` +
       zeilen +
-    `</div>`;
+      /* Die ganze Nachricht verwerfen: unter dem letzten Eintrag, rechtsbuendig.
+         Vorher war es ein Papierkorb im Kopf — dort sass er neben dem Betreff und
+         sah aus, als loesche er nur diese eine Zeile. */
+      `<div class="mail-fuss" data-key="mailfuss:${escapeHtml(String(p.id))}">` +
+        `<button class="mail-weg" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}">` +
+        `<i class="fa-light fa-trash-can"></i>${escapeHtml(translate('Discard mail'))}</button>` +
+      `</div>`;
   }).join('');
 
   // renderRows liefert NUR die neu erzeugten Knoten: die behalten ihre Gesten nicht,
