@@ -2068,8 +2068,7 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 /* Worum es geht: unter Betreff und Absender, hoechstens sieben Zeilen (Wunsch
    21.09.2026), dann abgeschnitten. */
 .mail-summary { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--accent);
-  font-size: 12.5px; line-height: 1.35; color: var(--muted);
-  display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
+  font-size: 12.5px; line-height: 1.35; color: var(--muted); white-space: normal; }
 .mail-who { flex: 1 1 auto; min-width: 0; }
 .mail-subject {
   font-size: 13px; font-weight: 700;
@@ -2078,7 +2077,9 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 .mail-meta { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Die Zusammenfassung nimmt die GANZE Breite des Kastens ein (eigene Zeile im
    umbrechenden Kopf) und traegt die Trennlinie in der Akzentfarbe ueber sich —
-   so laeuft sie von Kante zu Kante statt erst hinter dem Symbol zu beginnen. */
+   so laeuft sie von Kante zu Kante statt erst hinter dem Symbol zu beginnen.
+   UNGEKUERZT (Wunsch 22.09.2026): keine Zeilenklammer mehr. Sie stand auf
+   sieben Zeilen und schnitt je nach Breite mitten im Satz ab. */
 /* Wischen wie in den Listen: links verwerfen (rot, Papierkorb), rechts uebernehmen
    (gruen, Plus — dieselbe Farbwahl wie „auf die Einkaufsliste" bei den Favoriten).
    Der Behaelter traegt Rundung und overflow, die Zeile darin wird verschoben; ihre

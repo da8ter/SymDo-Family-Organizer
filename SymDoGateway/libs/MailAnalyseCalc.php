@@ -29,8 +29,12 @@ declare(strict_types=1);
  */
 final class MailAnalyseCalc
 {
-    /** Hoechstlaenge der Zusammenfassung — vier bis sechs Saetze, bis zu sieben Zeilen in der Kachel. */
-    public const ZUSAMMENFASSUNG_MAX = 700;
+    /* Hoechstlaenge der Zusammenfassung. Angezeigt wird sie seit dem 22.09.2026
+       UNGEKUERZT; diese Grenze ist nur noch der Riegel gegen ein Modell, das
+       statt vier bis sechs Saetzen den ganzen Elternbrief hineinschreibt. Sie
+       liegt deshalb weit ueber dem, was der Prompt verlangt (400–700 Zeichen) —
+       bei 700 schnitt sie auf breiten Schirmen mitten im Wort. */
+    public const ZUSAMMENFASSUNG_MAX = 2000;
 
     /**
      * Die Zusammenfassung aus der Antwort des Modells (19.09.2026).
