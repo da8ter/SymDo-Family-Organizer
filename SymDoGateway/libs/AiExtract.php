@@ -1469,6 +1469,16 @@ trait AiExtract
             if (!is_array($row)) {
                 continue;
             }
+            /* Die ZUSAMMENFASSUNG ist kein Eintrag (22.09.2026). Sie reist seit
+               dem 21.09. als zusaetzliches Element {"kind":"summary"} in derselben
+               Antwort mit; MailAnalyseCalc::Zusammenfassung liest sie vorher
+               heraus. Hier muss sie RAUS — die Weiche unten kennt „summary" nicht
+               und machte daraus eine Aufgabe, deren Titel der ganze
+               Zusammenfassungssatz war (auf 120 Zeichen abgeschnitten, ohne Info).
+               Genau das stand seither in jedem Vorschlag. */
+            if (strtolower(trim($this->AiRowStr($row, 'kind'))) === 'summary') {
+                continue;
+            }
             // Auf NOTE_TITLE_MAX gekappt: ungedeckelt baute die KI aus einem
             // Elternbrief Titel von weit ueber 120 Zeichen, der Editor fuellte sie
             // vor, und jedes Speichern lief in „invalid_payload" — eine Sackgasse,

@@ -99,6 +99,16 @@ pruefe('Ohne Kinder im Haus steht „homework" nicht in der Weissliste — dann 
         return array_map(static fn(array $z): string => $z['kind'], $r);
     })(), ['task']);
 
+// ── Die Zusammenfassung ist kein Eintrag ───────────────────────────────────
+pruefe('Das summary-Element wird verworfen, nicht zur Aufgabe gemacht',
+    $art($m->pPruefen([
+        ['kind' => 'summary', 'title' => 'Die Schule informiert über Dreharbeiten für den Schulfilm.'],
+        ['kind' => 'SUMMARY', 'title' => 'Auch gross geschrieben raus.'],
+        ['title' => 'Zweiter Drehtag', 'kind' => 'event', 'due' => '2027-09-25'],
+    ])), ['event/-']);
+pruefe('Eine unbekannte Art bleibt dagegen eine Aufgabe',
+    $art($m->pPruefen([['kind' => 'quatsch', 'title' => 'Bleibt drin']])), ['task/-']);
+
 // ── Riegel am Prompt ───────────────────────────────────────────────────────
 $prompt = $m->pPrompt();
 pruefe('Der Prompt schliesst das Fach aus dem Heft und erlaubt ein leeres Fach',
