@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/VoiceLiveCalc.php';
+
 /**
  * Sprachdialog (SymDo Voice) — Sitzungsseite.
  *
@@ -43,6 +45,10 @@ trait Voice
         $this->RegisterPropertyBoolean('VoiceEnabled', false);
         $this->RegisterPropertyString('VoiceModel', 'gpt-realtime-mini');
         $this->RegisterPropertyString('VoiceVoice', 'marin');
+        /* GPT-Live (23.09.2026): zweiter Sprachweg. Das Live-Modell spricht,
+           ein Backend-Modell denkt und ruft die Werkzeuge; eigene Stimmen. */
+        $this->RegisterPropertyString('VoiceLiveBackend', VoiceLiveCalc::BACKEND_VORGABE);
+        $this->RegisterPropertyString('VoiceLiveVoice', VoiceLiveCalc::STIMME_VORGABE);
         $this->RegisterPropertyInteger('VoiceDailyMinutes', 15);
         $this->RegisterPropertyInteger('VoiceMaxSessionSeconds', 180);
         // Reserve für den unified-Handschlag (Etappe 0 hat ihn nicht gebraucht).
@@ -111,7 +117,7 @@ trait Voice
                 if (($jetzt - (int)($c['lastPing'] ?? 0)) <= self::$VOICE_PING_MAX) {
                     continue;   // spricht noch
                 }
-                $this->VoiceHangup((string)$callId);
+                $this->VoiceHangup((string)$callId, ($c['live'] ?? false) === true);
                 unset($offen[$callId]);
                 $tot++;
             }
@@ -212,6 +218,16 @@ trait Voice
             return true;
         }
         if ($Ident === 'VoiceTest') {
+            if (VoiceLiveCalc::IstLive(trim($this->ReadPropertyString('VoiceModel')))) {
+                // GPT-Live kennt keine Marke: die Modellabfrage beweist Schluessel
+                // und Freigabe — eine Sitzung kostete ab dem ersten Aufbau Geld.
+                $r = $this->VoiceLiveTest();
+                $this->UpdateFormField('VoiceErgebnis', 'caption', ($r['ok'] ?? false)
+                    ? sprintf($this->Translate('Test connection OK — GPT-Live model %s is available; backend %s.'),
+                        VoiceLiveCalc::MODELL, VoiceLiveCalc::Backend(trim($this->ReadPropertyString('VoiceLiveBackend'))))
+                    : (string)($r['error']['message'] ?? 'Fehler'));
+                return true;
+            }
             // Testverbindung: 10-Sekunden-Marke prägen und verwerfen. Beweist
             // Schlüssel und Modellfreigabe, ohne eine Sekunde Ton zu bezahlen.
             $r = $this->VoiceMintSecret(10);
@@ -245,6 +261,9 @@ trait Voice
         switch ($action) {
             case 'open':
                 return $this->VoiceOpen($body);
+            case 'livesdp':
+                // GPT-Live: das Angebot des Browsers gegen die Antwort tauschen.
+                return $this->VoiceLiveSdp($body);
             case 'opened':
                 return $this->VoiceOpened($body);
             case 'ping':
@@ -502,6 +521,13 @@ trait Voice
         if (($body['warm'] ?? false) === true) {
             $ttl = max(self::$VOICE_SECRET_TTL, min(300, (int)($body['ttl'] ?? 300)));
         }
+        /* GPT-Live braucht keine Marke: die Sitzung entsteht erst mit dem
+           SDP-Tausch (Aktion livesdp), und den macht das Gateway selbst. Der Kern
+           bekommt hier nur die Fristen und das Signal, welchen Weg er geht. */
+        if (VoiceLiveCalc::IstLive(trim($this->ReadPropertyString('VoiceModel')))) {
+            return ['ok' => true, 'live' => true, 'model' => VoiceLiveCalc::MODELL, 'ttl' => $ttl,
+                    'sessionSeconds' => max(30, $sitzung), 'pingSeconds' => 30];
+        }
         $r = $this->VoiceMintSecret($ttl, (string)($body['userId'] ?? ''));
         if (!($r['ok'] ?? false)) {
             return $r;
@@ -564,6 +590,8 @@ trait Voice
             'startedAt' => time(),
             'lastPing'  => time(),
             'accrued'   => time(),
+            // GPT-Live-Sitzung? Dann legt VoiceHangup am anderen Endpunkt auf.
+            'live'      => ($body['live'] ?? false) === true,
         ];
         $this->VoiceCallsSchreiben($offen);
         $this->VoiceZaehlen(0, 1);
@@ -694,16 +722,115 @@ trait Voice
         ];
     }
 
+    /**
+     * GPT-Live: das SDP-Angebot des Browsers gegen die Antwort des Anbieters
+     * tauschen (23.09.2026). Dieselben Tore wie beim Oeffnen — Einwilligung,
+     * Schluessel, Budget — denn hier entsteht die Sitzung, die Geld kostet.
+     *
+     * @return array<string,mixed>
+     */
+    private function VoiceLiveSdp(array $body): array
+    {
+        $zu = $this->VoiceTorZu();
+        if ($zu !== null) {
+            return $zu;
+        }
+        $key = trim((string) $this->AiProp('AiOpenAIKey'));
+        if ($key === '') {
+            return $this->VoiceErr('ai_not_configured', $this->Translate('No OpenAI API key configured.'));
+        }
+        if ($this->VoiceBudgetLeft() <= 0) {
+            return $this->VoiceErr('voice_quota', $this->Translate('The daily talk time is used up.'));
+        }
+        $sdp = (string)($body['sdp'] ?? '');
+        if (!str_starts_with($sdp, 'v=') || strlen($sdp) > 65536) {
+            return $this->VoiceErr('invalid_payload', $this->Translate('Invalid call'));
+        }
+        $userId = (string)($body['userId'] ?? '');
+        $rumpf = VoiceLiveCalc::SitzungsRumpf([
+            'sprech'           => VoiceLiveCalc::SprechAnweisung($this->VoiceNameVon($userId), $this->VoiceDatumZeile()),
+            'backend'          => trim($this->ReadPropertyString('VoiceLiveBackend')),
+            'backendAnweisung' => $this->VoiceInstructions($userId),
+            'werkzeuge'        => $this->VoiceToolSpec(),
+            'stimme'           => trim($this->ReadPropertyString('VoiceLiveVoice')),
+        ], $sdp);
+        $resp = $this->AiHttpPost(
+            'https://api.openai.com/v1/live/sessions',
+            ['Authorization: Bearer ' . $key, 'Content-Type: application/json',
+             'OpenAI-Safety-Identifier: symdo-' . substr(hash('sha256', self::MODULE_GUID . '|' . $userId), 0, 24)],
+            (string)json_encode($rumpf, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            30
+        );
+        $daten = json_decode((string)($resp['body'] ?? ''), true);
+        $gelesen = VoiceLiveCalc::AntwortLesen(is_array($daten) ? $daten : null);
+        // Der Live-Endpunkt antwortet mit 201 Created (gemessen 23.09.2026), nicht 200.
+        $status = (int)($resp['status'] ?? 0);
+        if ($status < 200 || $status >= 300 || $gelesen['sdp'] === '') {
+            $grund = is_array($daten) ? (string)(($daten['error'] ?? [])['message'] ?? '') : '';
+            $this->SendDebug('Voice', 'live/sessions HTTP ' . (string)($resp['status'] ?? '?') . ': '
+                . mb_substr($grund !== '' ? $grund : (string)($resp['body'] ?? $resp['err'] ?? ''), 0, 300), 0);
+            return $this->VoiceErr('voice_mint_failed',
+                $this->Translate('Could not create a voice session.') . ' (HTTP ' . (string)($resp['status'] ?? 0) . ')'
+                . ($grund !== '' ? ': ' . mb_substr($grund, 0, 160) : ''));
+        }
+        return ['ok' => true, 'sdp' => $gelesen['sdp'], 'callId' => $gelesen['id'], 'model' => VoiceLiveCalc::MODELL];
+    }
+
+    /** Der Name des Gespraechspartners, fuer die Sprech-Anweisung. */
+    private function VoiceNameVon(string $userId): string
+    {
+        if ($userId === '') {
+            return '';
+        }
+        try {
+            foreach ($this->LoadUsers() as $u) {
+                if ((string)($u['id'] ?? '') === $userId) {
+                    return trim((string)($u['name'] ?? ''));
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+        return '';
+    }
+
+    /** Testknopf fuer GPT-Live: ist das Modell im Konto sichtbar? */
+    private function VoiceLiveTest(): array
+    {
+        $key = trim((string) $this->AiProp('AiOpenAIKey'));
+        if ($key === '') {
+            return $this->VoiceErr('ai_not_configured', $this->Translate('No OpenAI API key configured.'));
+        }
+        $ch = curl_init('https://api.openai.com/v1/models/' . VoiceLiveCalc::MODELL);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15,
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $key]]);
+        $antwort = curl_exec($ch);
+        $status  = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($status !== 200) {
+            $d = json_decode((string)$antwort, true);
+            return $this->VoiceErr('voice_mint_failed', $this->Translate('GPT-Live is not available in this account.')
+                . ' (HTTP ' . $status . ')' . (is_array($d) && isset($d['error']['message']) ? ': ' . mb_substr((string)$d['error']['message'], 0, 160) : ''));
+        }
+        return ['ok' => true];
+    }
+
     /** Auflegen beim Anbieter — best effort, ein toter Anruf antwortet mit Fehler und ist trotzdem tot. */
-    private function VoiceHangup(string $callId): void
+    private function VoiceHangup(string $callId, bool $live = false): void
     {
         $key = trim((string) $this->AiProp('AiOpenAIKey'));
         if ($key === '' || $callId === '') {
             return;
         }
         try {
+            /* GPT-Live: der Kern schickt beim Beenden selbst session.close ueber
+               den Datenkanal; das hier ist der Rueckhalt fuer verwaiste
+               Sitzungen (Watchdog, Kernelstart). Der Pfad folgt dem Muster der
+               Realtime-Schnittstelle; schlaegt er fehl, laeuft die Sitzung in
+               ihre eigene Frist. */
             $this->AiHttpPost(
-                'https://api.openai.com/v1/realtime/calls/' . rawurlencode($callId) . '/hangup',
+                $live
+                    ? 'https://api.openai.com/v1/live/sessions/' . rawurlencode($callId) . '/hangup'
+                    : 'https://api.openai.com/v1/realtime/calls/' . rawurlencode($callId) . '/hangup',
                 ['Authorization: Bearer ' . $key, 'Content-Type: application/json'],
                 '{}',
                 10
@@ -717,12 +844,13 @@ trait Voice
     private function VoiceEndCall(string $callId, string $grund): void
     {
         $offen = $this->VoiceCalls();
+        $live  = ($offen[$callId]['live'] ?? false) === true;
         if (isset($offen[$callId])) {
             $this->VoiceZaehlen(max(0, time() - (int)$offen[$callId]['accrued']), 0);
             unset($offen[$callId]);
             $this->VoiceCallsSchreiben($offen);
         }
-        $this->VoiceHangup($callId);
+        $this->VoiceHangup($callId, $live);
         if ($offen === []) {
             @$this->SetTimerInterval('VoiceWatchdog', 0);
         }
@@ -1052,12 +1180,26 @@ trait Voice
                      ['caption' => 'gpt-realtime-2.1-mini',        'value' => 'gpt-realtime-2.1-mini'],
                      ['caption' => 'gpt-realtime',                 'value' => 'gpt-realtime'],
                      ['caption' => 'gpt-realtime-2.1',             'value' => 'gpt-realtime-2.1'],
+                     ['caption' => 'gpt-live-1 (GPT-Live: ' . $this->Translate('speaks itself, a backend model thinks') . ')', 'value' => VoiceLiveCalc::MODELL],
                  ]],
-                ['type' => 'Select', 'name' => 'VoiceVoice', 'caption' => $this->Translate('Voice'),
+                ['type' => 'Select', 'name' => 'VoiceVoice', 'caption' => $this->Translate('Voice (Realtime)'),
                  'options' => array_map(
                      static fn(string $v): array => ['caption' => $v, 'value' => $v],
                      ['marin', 'cedar', 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']
                  )],
+                ...(array_key_exists('VoiceLiveBackend', $cfg) ? [
+                    ['type' => 'Select', 'name' => 'VoiceLiveVoice', 'caption' => $this->Translate('Voice (GPT-Live)'),
+                     'options' => array_map(
+                         static fn(string $v): array => ['caption' => $v, 'value' => $v], VoiceLiveCalc::STIMMEN)],
+                    ['type' => 'Select', 'name' => 'VoiceLiveBackend', 'caption' => $this->Translate('Backend model (GPT-Live)'),
+                     'options' => [
+                         ['caption' => 'gpt-5.6-luna (' . $this->Translate('cheaper') . ')', 'value' => 'gpt-5.6-luna'],
+                         ['caption' => 'gpt-5.6-terra (' . $this->Translate('stronger') . ')', 'value' => 'gpt-5.6-terra'],
+                     ]],
+                    ['type' => 'Label', 'caption' => $this->Translate('GPT-Live speaks and listens at the same time (full duplex) and hands every task to the backend model, which calls the tools. The audio still runs directly from the browser to OpenAI; only the connection offer passes through this gateway. Billed per second of conversation plus backend tokens.')],
+                ] : [
+                    ['type' => 'Label', 'caption' => $this->Translate('The GPT-Live settings (voice, backend model) appear after the next Symcon restart.')],
+                ]),
                 ['type' => 'NumberSpinner', 'name' => 'VoiceDailyMinutes', 'minimum' => 0, 'maximum' => 480,
                  'caption' => $this->Translate('Talk time per day (minutes, 0 = unlimited)'), 'suffix' => ' min'],
                 ['type' => 'NumberSpinner', 'name' => 'VoiceMaxSessionSeconds', 'minimum' => 30, 'maximum' => 3540,

@@ -41,7 +41,7 @@ Heikle Aktionen — Löschen, Geräte auf der Rückfrage-Liste, Zeitpläne dafü
 
 - Symcon ab Version **8.1**
 - Eine **SymDo - Gateway**-Instanz mit eingeschaltetem Sprachdialog (Bereich *Sprachdialog*) und erteilter Einwilligung
-- Ein **OpenAI-API-Schlüssel** im Gateway — der Dialog läuft über die Realtime-Schnittstelle (Modelle `gpt-realtime-mini` oder `gpt-realtime`); Handbuch-Antworten liest ein Textmodell (Standard `gpt-4.1`)
+- Ein **OpenAI-API-Schlüssel** im Gateway — der Dialog läuft über die Realtime-Schnittstelle (Modelle `gpt-realtime-mini` oder `gpt-realtime`) oder über **GPT-Live** (`gpt-live-1`: ein Modell spricht, ein zweites denkt und ruft die Werkzeuge — im Gateway umschaltbar); Handbuch-Antworten liest ein Textmodell (Standard `gpt-4.1`)
 - Ein Gerät mit **Mikrofon** und einem Browser, der WebRTC kann; die Kachel braucht einen **sicheren Kontext** (HTTPS oder localhost). In der Symcon-App auf iOS und Android und im Browser über Symcon Connect ist das gegeben; eine lokale http-Adresse liefert kein Mikrofon
 - Für das Weckwort: Chrome oder Edge ab Version 139 mit deutschem Sprachpaket (Kapitel 6)
 

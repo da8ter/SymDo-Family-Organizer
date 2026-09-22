@@ -984,7 +984,17 @@
             "Nothing is due there.": "Da steht nichts an.",
             "I do not know anyone called \"%1$s\" in the chore plan. Known are: %2$s.": "Im Ämtchenplan kenne ich niemanden namens „%1$s\". Bekannt sind: %2$s.",
             "%1$d chores, %2$d of them still open.": "%1$d Ämtchen, davon %2$d noch offen.",
-            "homework not readable this time — kept as it was": "Hausaufgaben diesmal nicht lesbar — Bestand unverändert"
+            "homework not readable this time — kept as it was": "Hausaufgaben diesmal nicht lesbar — Bestand unverändert",
+            "speaks itself, a backend model thinks": "spricht selbst, ein Backend-Modell denkt",
+            "Voice (Realtime)": "Stimme (Realtime)",
+            "Voice (GPT-Live)": "Stimme (GPT-Live)",
+            "Backend model (GPT-Live)": "Backend-Modell (GPT-Live)",
+            "cheaper": "günstiger",
+            "stronger": "stärker",
+            "GPT-Live speaks and listens at the same time (full duplex) and hands every task to the backend model, which calls the tools. The audio still runs directly from the browser to OpenAI; only the connection offer passes through this gateway. Billed per second of conversation plus backend tokens.": "GPT-Live spricht und hört gleichzeitig (Vollduplex) und gibt jede Aufgabe an das Backend-Modell, das die Werkzeuge ruft. Der Ton läuft weiter direkt vom Browser zu OpenAI; nur das Verbindungsangebot geht über dieses Gateway. Abgerechnet je Gesprächssekunde plus Backend-Tokens.",
+            "The GPT-Live settings (voice, backend model) appear after the next Symcon restart.": "Die GPT-Live-Einstellungen (Stimme, Backend-Modell) erscheinen nach dem nächsten Symcon-Neustart.",
+            "Test connection OK — GPT-Live model %s is available; backend %s.": "Testverbindung OK — GPT-Live-Modell %s ist freigeschaltet; Backend %s.",
+            "GPT-Live is not available in this account.": "GPT-Live ist in diesem Konto nicht freigeschaltet."
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

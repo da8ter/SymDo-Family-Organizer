@@ -275,12 +275,15 @@ Der Sprachdialog ist ein Gespräch mit der KI in Echtzeit (OpenAI Realtime über
 | Einstellung | Eigenschaft | Bedeutung |
 |---|---|---|
 | Sprachdialog aktivieren | `VoiceEnabled` | Hauptschalter; nutzt den OpenAI-Schlüssel der KI-Funktionen |
-| Modell, Stimme | `VoiceModel`, `VoiceVoice` | `gpt-realtime-mini` (Standard) oder `gpt-realtime`; Stimme des Anbieters |
+| Modell, Stimme | `VoiceModel`, `VoiceVoice` | `gpt-realtime-mini` (Standard), `gpt-realtime` oder **`gpt-live-1`** (GPT-Live, siehe unten); Stimme des Anbieters (Realtime) |
+| GPT-Live: Stimme, Backend | `VoiceLiveVoice`, `VoiceLiveBackend` | nur für `gpt-live-1`: eine der zwölf Live-Stimmen (Standard `quartz`) und das Modell, das denkt und die Werkzeuge ruft — `gpt-5.6-luna` (Standard, günstiger) oder `gpt-5.6-terra` (stärker) |
 | Sprechzeit pro Tag | `VoiceDailyMinutes` | Kontingent für den ganzen Haushalt in Minuten (Standard 15, 0 = unbegrenzt) |
 | Höchstdauer je Gespräch | `VoiceMaxSessionSeconds` | danach legt die Kachel auf (Standard 180 s) |
 | Leser für Handbuchfragen | `VoiceDocModel` | ein Textmodell (Standard `gpt-4.1`) liest die Fundstellen aus dem Symcon-Handbuch und formuliert die Antwort; ohne Modell wird der Auszug vorgelesen |
 | Freihändig mit Weckwort | `VoiceHandsFreeAllowed` | Experiment: das Weckwort startet das Gespräch; Erkennung auf dem Gerät, eigene Einwilligung nötig. Ist es erlaubt, lauschen Sprach-Kachel und Web-App von selbst — ohne Knopf; sichtbar bleibt das Lauschzeichen unten links |
 | Weckwort | `VoiceWakeWord` | Standard „Hey SymDo". Frei wählbar, mindestens sechs Buchstaben, mehrere durch Komma („Hey SymDo, Hallo Haus"). Zwei bis drei Silben mit klarem Anfang treffen am besten; „Hey SymDo" behält sein eigens auf Fehlhörer geeichtes Muster, eigene Wörter werden über Buchstabennähe erkannt. Was direkt nach dem Weckwort gesagt wird, schreibt der Erkenner mit und reicht es als Text nach, sobald die Verbindung steht |
+
+**GPT-Live** (seit Build 197) ist der zweite Weg zum selben Anbieter: Ein Sprachmodell führt nur das Gespräch — es spricht und hört gleichzeitig, lässt sich unterbrechen — und **delegiert** jede Aufgabe an ein Backend-Modell, das mit denselben Werkzeugen und derselben Anweisung arbeitet wie der Realtime-Weg. Für Kacheln und Web-App ändert sich nichts Sichtbares; unter der Haube tauscht das Gateway das Verbindungsangebot des Browsers selbst gegen die Antwort des Anbieters (der Schlüssel bleibt auf dem Server), der Ton läuft danach wieder direkt Browser ↔ Anbieter. Abgerechnet wird je Gesprächssekunde plus die Tokens des Backends; Sprechzeit, Höchstdauer und Einwilligungen gelten unverändert. Die **Testverbindung** fragt bei GPT-Live nur die Modellfreigabe ab, weil dort schon der Aufbau einer Sitzung Geld kostet.
 
 **Drei Einwilligungen**, mit Absicht getrennt und einzeln widerrufbar: für den Dialog selbst (der Raumton geht während des Gesprächs zum Anbieter), fürs Dauerlauschen mit Weckwort und für die Gerätesteuerung. Ein Widerruf beendet laufende Gespräche sofort. Die **Testverbindung** prägt einen Zugang für zehn Sekunden und prüft Schlüssel und Modellfreigabe, ohne Sprechzeit zu bezahlen; **Alle Sitzungen beenden** legt überall auf. Die Statuszeile nennt die heutige Sprechzeit und die offenen Gespräche.
 

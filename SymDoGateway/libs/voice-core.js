@@ -27,6 +27,17 @@ function erzeuge(opt) {
   var pingUhr = null, stilleUhr = null, verstecktSeit = 0, verstecktUhr = null;
   var offenSeit = 0;
   var beendet = true;
+  /* GPT-Live (23.09.2026): zweiter Weg zum selben Anbieter. Der Server sagt
+     beim Oeffnen `live:true`; dann tauscht das GATEWAY das SDP (keine Marke im
+     Browser), die Ereignisse heissen anders, und Denken/Werkzeuge laufen in
+     einem delegierten Backend-Modell, dessen Ereignisse in `response.event`
+     eingepackt ankommen. Alles Live-Spezifische haengt an diesem Schalter. */
+  var live = false;
+  /* Live liefert Mitschriften nur als Deltas ohne Ende-Ereignis. Eine Pause
+     schliesst die Blase: je Redezug eine Kennung, damit die Kachel nicht alles
+     in eine Blase haengt. */
+  var duUhr = null, duLauf = 0, duText = '';
+  var sprechUhr = null, sprechLauf = 0, sprechText = '';
   /* Frist fuer den Verbindungsaufbau. Ohne sie bleibt die Anzeige ewig auf
      "verbinde" stehen, wenn die Mikrofonfrage unbeantwortet bleibt:
      getUserMedia loest dann WEDER auf NOCH ab (headless nachgestellt und
@@ -55,7 +66,7 @@ function erzeuge(opt) {
     if (!warmGewuenscht || !beendet || warmLaeuft) { return; }
     warmLaeuft = true;
     post({ action: 'open', warm: true, ttl: WARM_TTL }).then(function (r) {
-      if (r && r.ok === true && r.value) {
+      if (r && r.ok === true && (r.value || r.live === true)) {
         warmMarke = r;
         warmBis = Date.now() + ((r.ttl || WARM_TTL) - 15) * 1000;
       }
@@ -99,7 +110,8 @@ function erzeuge(opt) {
       text = String(text || '').trim();
       if (!beendet && text !== '') {
         wennKanalOffen(function () {
-          senden({ type: 'conversation.item.create',
+          // Live kennt kein conversation.*: getippter Text geht als Antwort-Element.
+          senden({ type: live ? 'response.item.create' : 'conversation.item.create',
                    item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: text }] } });
           senden({ type: 'response.create' });
           ereignis({ art: 'mitschrift', text: text });
@@ -218,12 +230,12 @@ function erzeuge(opt) {
     var markeP = vor ? Promise.resolve(vor)
       : post({ action: 'open' }).catch(function () { return { ok: false, verbindung: true }; });
     var frisch = function (r) {
-      if (!r || r.ok !== true || !r.value) {
+      if (!r || r.ok !== true || (!r.value && r.live !== true)) {
         var text = (r && r.verbindung) ? 'Das Gateway war nicht erreichbar.'
           : ((r && (r.sag || (r.error && r.error.message))) || 'Keine Sitzung bekommen.');
         throw { eigene: true, message: text };
       }
-      return handschlag(r);
+      return r.live === true ? handschlagLive(r) : handschlag(r);
     };
     return Promise.all([
       navigator.mediaDevices.getUserMedia({
@@ -260,7 +272,8 @@ function erzeuge(opt) {
     });
   }
 
-  function handschlag(sitzung) {
+  /* Der gemeinsame Unterbau beider Wege: Verbindung, Tonspur, Datenkanal. */
+  function verbindungAnlegen() {
     pc = new RTCPeerConnection();
     // ontrack VOR setRemoteDescription, sonst verpasst man die Spur.
     pc.ontrack = function (ev) {
@@ -271,12 +284,9 @@ function erzeuge(opt) {
     };
     pc.onconnectionstatechange = function () {
       if (!pc) { return; }
-      if (pc.connectionState === 'connected') {
-        if (startUhr) { clearTimeout(startUhr); startUhr = 0; }
-        hiTon();
-        zustand('hoert'); stilleZuruecksetzen();
-        ereignis({ art: 'bereit' });
-        mitschriftAbschliessen();
+      if (pc.connectionState === 'connected' && !live) {
+        // Live meldet sich erst mit session.started als bereit (siehe dort).
+        bereitMelden();
       }
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected'
           || pc.connectionState === 'closed') {
@@ -292,7 +302,72 @@ function erzeuge(opt) {
       kern.handleServerEvent(daten);
     };
     dc.onclose = function () { if (!beendet) { stop('Kanal geschlossen'); } };
+  }
 
+  function bereitMelden() {
+    if (startUhr) { clearTimeout(startUhr); startUhr = 0; }
+    hiTon();
+    zustand('hoert'); stilleZuruecksetzen();
+    ereignis({ art: 'bereit' });
+    mitschriftAbschliessen();
+  }
+
+  function pingStarten(sitzung) {
+    pingUhr = setInterval(function () {
+      post({ action: 'ping', callId: callId }).then(function (r) {
+        if (r && r.stop === true) { stop(r.grund || 'Zeitdeckel'); }
+        else if (r && typeof r.secondsLeft === 'number') {
+          ereignis({ art: 'rest', sekunden: r.secondsLeft });
+        }
+      }).catch(function () {});
+    }, (sitzung.pingSeconds || 15) * 1000);
+  }
+
+  /* Auf das Ende der ICE-Sammlung warten (mit Frist). GPT-Live bekommt das
+     Angebot nur EINMAL ueber das Gateway — Kandidaten, die erst danach
+     eintrudeln, erreichen es nicht mehr. */
+  function eisSammeln() {
+    if (!pc || pc.iceGatheringState === 'complete') { return Promise.resolve(); }
+    return new Promise(function (res) {
+      var p = pc, uhr = setTimeout(fertig, 2500);
+      function fertig() { clearTimeout(uhr); try { p.removeEventListener('icegatheringstatechange', pruefen); } catch (e) {} res(); }
+      function pruefen() { if (p.iceGatheringState === 'complete') { fertig(); } }
+      p.addEventListener('icegatheringstatechange', pruefen);
+    });
+  }
+
+  /* GPT-Live: das Angebot geht ans Gateway, das die Sitzung beim Anbieter
+     anlegt und die Antwort zurueckreicht. Der Schluessel bleibt so auf dem
+     Server; der Ton laeuft danach wieder direkt Browser ↔ Anbieter. */
+  function handschlagLive(sitzung) {
+    live = true;
+    verbindungAnlegen();
+    return pc.createOffer().then(function (angebot) {
+      return pc.setLocalDescription(angebot);
+    }).then(eisSammeln).then(function () {
+      if (beendet || !pc) { throw { eigene: true, message: 'abgebrochen' }; }
+      return post({ action: 'livesdp', sdp: pc.localDescription.sdp })
+        .catch(function () { return { ok: false, verbindung: true }; });
+    }).then(function (r) {
+      if (!r || r.ok !== true || !r.sdp) {
+        var text = (r && r.verbindung) ? 'Das Gateway war nicht erreichbar.'
+          : ((r && (r.sag || (r.error && r.error.message))) || 'Keine Live-Sitzung bekommen.');
+        throw { eigene: true, message: text };
+      }
+      callId = r.callId || '';
+      return pc.setRemoteDescription({ type: 'answer', sdp: r.sdp });
+    }).then(function () {
+      offenSeit = Date.now();
+      post({ action: 'opened', callId: callId, live: true }).catch(function () {});
+      pingStarten(sitzung);
+      stilleZuruecksetzen();
+      return true;
+    });
+  }
+
+  function handschlag(sitzung) {
+    live = false;
+    verbindungAnlegen();
     return pc.createOffer().then(function (angebot) {
       return pc.setLocalDescription(angebot);
     }).then(function () {
@@ -336,14 +411,7 @@ function erzeuge(opt) {
       offenSeit = Date.now();
       // Ab hier läuft die Uhr serverseitig — der Wachhund kennt den Anruf.
       post({ action: 'opened', callId: callId }).catch(function () {});
-      pingUhr = setInterval(function () {
-        post({ action: 'ping', callId: callId }).then(function (r) {
-          if (r && r.stop === true) { stop(r.grund || 'Zeitdeckel'); }
-          else if (r && typeof r.secondsLeft === 'number') {
-            ereignis({ art: 'rest', sekunden: r.secondsLeft });
-          }
-        }).catch(function () {});
-      }, (sitzung.pingSeconds || 15) * 1000);
+      pingStarten(sitzung);
       stilleZuruecksetzen();
       return true;
     });
@@ -391,7 +459,8 @@ function erzeuge(opt) {
       if (fertig) { return; }
       fertig = true;
       senden({
-        type: 'conversation.item.create',
+        // Live: response.item.create — dasselbe Element, anderer Umschlag.
+        type: live ? 'response.item.create' : 'conversation.item.create',
         item: { type: 'function_call_output', call_id: callIdFn,
                 output: JSON.stringify(ergebnis) }
       });
@@ -418,9 +487,92 @@ function erzeuge(opt) {
       });
   }
 
+  /* Live-Mitschrift: Deltas sammeln, eine Pause schliesst die Blase. */
+  function duMelden(delta) {
+    if (!duUhr) { duLauf++; duText = ''; }
+    else { clearTimeout(duUhr); }
+    duText += delta;
+    zustand('duSprichst'); stilleZuruecksetzen();
+    ereignis({ art: 'duDelta', text: delta, item: 'live' + duLauf });
+    duUhr = setTimeout(function () {
+      duUhr = null;
+      ereignis({ art: 'duFertig', text: duText, item: 'live' + duLauf });
+      if (!beendet && !sprechUhr) { zustand('denkt'); }
+    }, 1200);
+  }
+  function sprechenMelden(delta) {
+    if (!sprechUhr) { sprechLauf++; sprechText = ''; zustand('spricht'); }
+    else { clearTimeout(sprechUhr); }
+    sprechText += delta;
+    stilleZuruecksetzen();
+    ereignis({ art: 'symdoDelta', text: delta, antwort: 'live' + sprechLauf });
+    sprechUhr = setTimeout(function () {
+      sprechUhr = null;
+      ereignis({ art: 'symdoFertig', text: sprechText, antwort: 'live' + sprechLauf });
+      if (!beendet) { zustand('hoert'); }
+    }, 1500);
+  }
+  function liveSchlussText(grund) {
+    switch (grund) {
+      case 'close_requested': return 'beendet';
+      case 'expired':         return 'Zeitdeckel des Anbieters';
+      case 'content':         return 'vom Anbieter beendet (Inhalt)';
+      case 'connection_lost': return 'Verbindung verloren';
+      default:                return grund ? ('Sitzung geschlossen: ' + grund) : 'Sitzung geschlossen';
+    }
+  }
+  /* Ende einer Backend-Antwort (Realtime: response.done, Live: response.completed
+     im Umschlag) — zaehlen, wie viele Werkzeugergebnisse noch fehlen. */
+  function antwortZuEnde(r, status) {
+    var a = antwortZustand(r.id || 'r');
+    var aufrufe = 0;
+    (r.output || []).forEach(function (it) { if (it && it.type === 'function_call') { aufrufe++; } });
+    a.erwartet = aufrufe;
+    a.status = status;
+    if (aufrufe === 0 && !sprechUhr) { zustand('hoert'); }
+    vielleichtWeiter(r.id || 'r');
+  }
+
   function handleServerEvent(ev) {
     var typ = (ev && ev.type) || '';
     switch (typ) {
+      /* ── GPT-Live ── */
+      case 'session.started':
+        live = true;
+        ereignis({ art: 'sitzung', modell: (ev.session && ev.session.model) || 'gpt-live-1' });
+        bereitMelden();
+        return;
+      case 'session.input_transcript.delta':
+        duMelden(ev.delta || '');
+        return;
+      case 'session.output_transcript.delta':
+        sprechenMelden(ev.delta || '');
+        return;
+      case 'session.delegation.created':
+        zustand('denkt'); stilleZuruecksetzen();
+        return;
+      case 'response.event':
+        // Umschlag des Backend-Modells: den Inhalt wie ein eigenes Ereignis behandeln.
+        if (ev.event && typeof ev.event === 'object') { handleServerEvent(ev.event); }
+        return;
+      case 'response.output_item.done':
+        // Realtime meldet Werkzeugaufrufe ueber function_call_arguments.done — nur Live hier.
+        if (live && ev.item && ev.item.type === 'function_call') {
+          werkzeugAusfuehren(ev.response_id || (ev.response && ev.response.id) || 'r',
+                             ev.item.call_id || '', ev.item.name || '', ev.item.arguments || '{}');
+        }
+        return;
+      case 'response.completed':
+        antwortZuEnde(ev.response || {}, 'completed');
+        return;
+      case 'response.incomplete':
+      case 'response.failed':
+        antwortZuEnde(ev.response || {}, (ev.response && ev.response.status) || 'incomplete');
+        return;
+      case 'session.closed':
+        if (!beendet) { stop(liveSchlussText(ev.reason || '')); }
+        return;
+      /* ── Realtime ── */
       case 'session.created':
         ereignis({ art: 'sitzung', modell: (ev.session && ev.session.model) || '' });
         return;
@@ -465,13 +617,7 @@ function erzeuge(opt) {
         return;
       case 'response.done': {
         var r = ev.response || {};
-        var a = antwortZustand(r.id || 'r');
-        var aufrufe = 0;
-        (r.output || []).forEach(function (it) { if (it && it.type === 'function_call') { aufrufe++; } });
-        a.erwartet = aufrufe;
-        a.status = r.status || 'completed';
-        if (aufrufe === 0) { zustand('hoert'); }
-        vielleichtWeiter(r.id || 'r');
+        antwortZuEnde(r, r.status || 'completed');
         return;
       }
       case 'error':
@@ -484,8 +630,15 @@ function erzeuge(opt) {
 
   /** „Ruhe"-Knopf: laufende Ausgabe abbrechen und leeren, Sitzung bleibt. */
   function ruhe() {
-    senden({ type: 'response.cancel' });
-    senden({ type: 'output_audio_buffer.clear' });
+    if (live) {
+      // Live kennt kein Abbrechen des Tonpuffers; eine Anweisung mitten im
+      // Gespraech unterbricht laut Doku die laufende Ausgabe.
+      senden({ type: 'session.instructions.append', delegation_id: null,
+               content: 'Hör sofort auf zu sprechen und warte schweigend auf die nächste Frage.' });
+    } else {
+      senden({ type: 'response.cancel' });
+      senden({ type: 'output_audio_buffer.clear' });
+    }
     zustand('hoert');
   }
 
@@ -493,6 +646,8 @@ function erzeuge(opt) {
     if (startUhr) { clearTimeout(startUhr); startUhr = 0; }
     if (pingUhr) { clearInterval(pingUhr); pingUhr = null; }
     if (stilleUhr) { clearTimeout(stilleUhr); stilleUhr = null; }
+    if (duUhr) { clearTimeout(duUhr); duUhr = null; }
+    if (sprechUhr) { clearTimeout(sprechUhr); sprechUhr = null; }
     try { if (dc) { dc.close(); } } catch (e) {}
     try { if (pc) { pc.getSenders().forEach(function (s) { if (s.track) { s.track.stop(); } }); } } catch (e) {}
     try { if (pc) { pc.close(); } } catch (e) {}
@@ -507,6 +662,21 @@ function erzeuge(opt) {
     beendet = true;
     var id = callId;
     callId = '';
+    // Live: die Sitzung beim Anbieter selbst schliessen, bevor der Kanal faellt —
+    // sonst laeuft sie (und die Abrechnung) bis zu ihrer eigenen Frist weiter.
+    if (live) {
+      senden({ type: 'session.close' });
+      live = false;
+      /* Den Kanal noch einen Moment offen lassen, damit session.close den
+         Browser auch verlaesst — ein sofortiges close() wirft die letzte
+         Nachricht mitunter weg. Das Uebrige (Mikrofon, Uhren) faellt sofort. */
+      var altPc = pc, altDc = dc;
+      pc = null; dc = null;
+      setTimeout(function () {
+        try { if (altDc) { altDc.close(); } } catch (e) {}
+        try { if (altPc) { altPc.close(); } } catch (e) {}
+      }, 600);
+    }
     aufraeumen();
     zustand('ende', grund || '');
     ereignis({ art: 'ende', grund: grund || '' });
@@ -545,6 +715,7 @@ function erzeuge(opt) {
     /* Vor start(): das Versprechen des Weckwort-Erkenners auf den Nachsatz. */
     mitschrift: mitschriftSetzen,
     handleServerEvent: handleServerEvent,
+    istLive: function () { return live; },
     _testSend: null
   };
   return kern;
