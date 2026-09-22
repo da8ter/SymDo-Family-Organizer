@@ -34,7 +34,6 @@ final class VorschlagProbe extends IPSModuleStrict
     protected function WriteAttributeString(string $Name, string $Value): bool { $this->attr[$Name] = $Value; return true; }
     protected function SendDebug(string $Message, string $Data, int $Format): bool { return true; }
     public function Translate(string $Text): string { return $Text; }
-    private function HomeworkKinder(): array { return []; }
     public string $kiAntwort = '';
     public array $kiRufe = [];
     private function AiRunCompletion(string $system, string $userText, ?string $imageBase64, ?string $pdfBase64 = null): array
@@ -45,7 +44,18 @@ final class VorschlagProbe extends IPSModuleStrict
 
     public array $nachgezogen = [];
     private function EduMerkerNachziehen(string $id): void { $this->nachgezogen[] = $id; }
+    /* Die Kette bis zum Ablegen — so weit gestubbt, dass eine Auswertung
+       WIRKLICH einen Vorschlag schreibt. Nur so beweist die Gegenprobe etwas:
+       ohne den Riegel steht danach ein Vorschlag da, mit ihm nicht. */
     private function MailAnalyseEingabe(array $kopf, string $text, array $anhaenge): array { return ['x', null]; }
+    private function AiMailSystemPrompt(string $heute, bool $mitAnhang = false, string $quelle = 'IMAP'): string { return 'S'; }
+    private function AiParseTodos(string $t, array $arten = []): array { return [['title' => 'Neu', 'kind' => 'task']]; }
+    private function MailDetectOrigin(string $text): array { return []; }
+    private function HomeworkKinder(): array { return []; }
+    public array $eduPushSammlung = [];
+    private function AiJobMoeglich(): bool { return false; }
+    private function MailPushSenden(string $titel, string $text, string $userId): void {}
+    private function EduPushMerken(string $userId, int $aufgaben, int $termine, int $notizen): void {}
 
     public function pAktion(array $body): array { return $this->MailHandleAction($body); }
     public function pAuswerten(string $id): bool
@@ -126,8 +136,11 @@ pruefe('Verwerfen loescht den Vorschlag, merkt die Kennung und zieht den Karten-
     [$m->pAktion(['action' => 'dismiss', 'id' => 'edu:99:1700'])['ok'], $m->pRoh(),
      $m->pVerworfen('edu:99:1700'), $m->nachgezogen],
     [true, [], true, ['edu:99:1700']]);
+$m->kiAntwort = '[{"title":"Neu","kind":"task"}]';
 pruefe('Dieselbe Karte wird NICHT noch einmal ausgewertet — und gilt trotzdem als erledigt',
     [$m->pAuswerten('edu:99:1700'), $m->pRoh()], [true, []]);
+pruefe('Eine NICHT verworfene Karte laeuft dagegen durch und legt einen Vorschlag an',
+    [$m->pAuswerten('edu:98:1700'), array_column($m->pRoh(), 'id')], [true, ['edu:98:1700']]);
 pruefe('Eine andere Kennung ist nicht gesperrt (geaenderte Karte kommt weiter durch)',
     [$m->pVerworfen('edu:99:1800'), $m->pVerworfen('')], [false, false]);
 $m->nachgezogen = [];
@@ -163,8 +176,8 @@ $m->pSetzen([['id' => 'mail:9', 'at' => $jetzt, 'created' => $jetzt, 'subject' =
 $m->kiAntwort = "  \"Die Grundschule Musterstadt lädt zum   Elternabend der 5a ein.\" ";
 pruefe('summarize: Antwort gesaeubert gespeichert, Stoff nennt Betreff, Absender und Eintraege',
     [$m->pAktion(['action' => 'summarize', 'id' => 'mail:9'])['ok'], $m->pRoh()[0]['summary'],
-     str_contains($m->kiRufe[0], 'Betreff: Elternabend 5a'), str_contains($m->kiRufe[0], 'Von: Grundschule Musterstadt'),
-     str_contains($m->kiRufe[0], '- Elternabend: Am 1.10.')],
+     str_contains($letzterRuf = (string)end($m->kiRufe), 'Betreff: Elternabend 5a'),
+     str_contains($letzterRuf, 'Von: Grundschule Musterstadt'), str_contains($letzterRuf, '- Elternabend: Am 1.10.')],
     [true, 'Die Grundschule Musterstadt lädt zum Elternabend der 5a ein.', true, true, true]);
 $m->kiAntwort = '[{"kind":"summary"}]';
 pruefe('summarize: JSON, Leeres oder Fehler des Anbieters aendern nichts',
