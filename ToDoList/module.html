@@ -974,7 +974,11 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    einem farbigen Kopf (.bunt) weiss, sonst ginge die Pille im Farbband unter. */
 .edu-neu { flex: 0 0 auto; font-size: 10px; font-weight: 700; line-height: 16px; padding: 0 6px;
   border-radius: 999px; background: var(--accent); color: #fff; }
-.edu-kopf.bunt .edu-neu { background: #fff; color: inherit; opacity: .9; }
+/* Auf dem farbigen Kopf steht die Pille weiss — die Schrift darf dann NICHT
+   `inherit` sein: der Kopf faerbt seinen Text je nach Helligkeit, auf einem
+   roten Band also weiss, und damit stand Weiss auf Weiss (22.09.2026: die
+   Pille sah leer aus). Ein festes Dunkelgrau ist auf Weiss immer lesbar. */
+.edu-kopf.bunt .edu-neu { background: #fff; color: #1b1b1b; }
 /* Zaehler neuer Karten an Ordnern und Abschnitten: der Kasten des Tab-Abzeichens,
    aber im Textfluss statt absolut. */
 .edu-neu-zahl { display: inline-block; vertical-align: middle; margin-left: 6px; min-width: 16px; height: 16px;
