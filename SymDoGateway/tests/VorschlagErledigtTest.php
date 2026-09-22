@@ -43,7 +43,20 @@ final class VorschlagProbe extends IPSModuleStrict
         return $this->kiAntwort === 'FEHLER' ? ['ok' => false] : ['ok' => true, 'text' => $this->kiAntwort];
     }
 
+    public array $nachgezogen = [];
+    private function EduMerkerNachziehen(string $id): void { $this->nachgezogen[] = $id; }
+    private function MailAnalyseEingabe(array $kopf, string $text, array $anhaenge): array { return ['x', null]; }
+
     public function pAktion(array $body): array { return $this->MailHandleAction($body); }
+    public function pAuswerten(string $id): bool
+    {
+        return (bool)(new ReflectionMethod(self::class, 'MailAnalyseRecord'))
+            ->invoke($this, $id, ['Subject' => 'B'], 'text', [], 'u', 'Edumaps');
+    }
+    public function pVerworfen(string $id): bool
+    {
+        return (bool)(new ReflectionMethod(self::class, 'MailIstVerworfen'))->invoke($this, $id);
+    }
     public function pSetzen(array $liste): void { $this->attr['MailProposals'] = json_encode($liste, JSON_UNESCAPED_UNICODE); }
     public function pRoh(): array { return json_decode($this->attr['MailProposals'] ?? '[]', true); }
 }
@@ -104,6 +117,23 @@ pruefe('Unbekannte Nummer oder Kennung: false, nichts geaendert',
     [$m->pAktion(['action' => 'taken', 'id' => 'edu:2', 'i' => 9])['ok'], $m->pAktion(['action' => 'taken', 'id' => 'x', 'i' => 0])['ok'],
      count($m->pRoh()[0]['items'])],
     [false, false, 2]);
+
+// ── Verworfenes bleibt verworfen (22.09.2026) ──────────────────────────────
+$m->pSetzen([['id' => 'edu:99:1700', 'at' => $jetzt, 'created' => $jetzt,
+    'items' => [['title' => 'Kommt nicht wieder', 'kind' => 'task']]]]);
+$m->nachgezogen = [];
+pruefe('Verwerfen loescht den Vorschlag, merkt die Kennung und zieht den Karten-Merker nach',
+    [$m->pAktion(['action' => 'dismiss', 'id' => 'edu:99:1700'])['ok'], $m->pRoh(),
+     $m->pVerworfen('edu:99:1700'), $m->nachgezogen],
+    [true, [], true, ['edu:99:1700']]);
+pruefe('Dieselbe Karte wird NICHT noch einmal ausgewertet — und gilt trotzdem als erledigt',
+    [$m->pAuswerten('edu:99:1700'), $m->pRoh()], [true, []]);
+pruefe('Eine andere Kennung ist nicht gesperrt (geaenderte Karte kommt weiter durch)',
+    [$m->pVerworfen('edu:99:1800'), $m->pVerworfen('')], [false, false]);
+$m->nachgezogen = [];
+pruefe('Verwerfen einer unbekannten Kennung aendert nichts',
+    [$m->pAktion(['action' => 'dismiss', 'id' => 'gibtsnicht'])['ok'], $m->pVerworfen('gibtsnicht'), $m->nachgezogen],
+    [false, false, []]);
 
 // ── Reihenfolge: zuletzt eingetroffen oben ─────────────────────────────────
 $m->pSetzen([

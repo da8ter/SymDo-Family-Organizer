@@ -45,6 +45,9 @@ trait MailScan
     private const MAIL_TEXT_MAX      = 12000;
     private const MAIL_PROPOSALS_MAX = 50;
     private const MAIL_RETENTION_DAYS = 21;
+    /* So viele verworfene Kennungen bleiben gesperrt. 2000 traegt Jahre: die
+       Klassenseiten haben rund 55 Karten, LOGINEO ein paar Dutzend Dokumente. */
+    private const MAIL_DISMISSED_MAX = 2000;
     /* Wie lange ein UEBERNOMMENER Eintrag noch mit Haken in der Liste steht
        (Wunsch 19.09.2026): lange genug, um zu sehen, was schon erledigt ist —
        kurz genug, dass der KI-Eingang nicht zum Archiv wird. */
@@ -129,6 +132,10 @@ trait MailScan
         $this->RegisterPropertyString('MailHookApiKey', '');
 
         $this->RegisterAttributeString('MailProposals', '[]');
+        /* Verworfene Vorschlaege: Kennung => wann (22.09.2026). Ohne diese Liste
+           kam ein geloeschter Vorschlag wieder, sobald die Karte erneut zur
+           Auswertung kam — etwa nachdem der Merker der Seite ueberlief. */
+        $this->RegisterAttributeString('MailDismissed', '{}');
         // Je Instanz die bereits verarbeiteten UIDs: {"26939":["1","2"]}
         $this->RegisterAttributeString('MailSeenUIDs', '{}');
         $this->RegisterAttributeString('MailDayCount', '{}');
@@ -790,6 +797,14 @@ trait MailScan
         string $userId,
         string $quelle = 'IMAP'
     ): bool {
+        /* Schon einmal verworfen? Dann gar nicht erst auswerten (22.09.2026).
+           `true` heisst „erledigt": der Aufrufer setzt daraufhin den Merker, die
+           Karte kommt also auch nicht beim naechsten Lauf wieder — und der
+           Anbieter-Aufruf bleibt gespart. */
+        if ($this->MailIstVerworfen($vorschlagsId)) {
+            $this->SendDebug('MailScan', 'Vorschlag war verworfen — keine Auswertung: ' . $vorschlagsId, 0);
+            return true;
+        }
         /* Luft fuer den Anbieter-Aufruf: das base64 des Anhangs liegt im
            JSON-Rumpf ein zweites Mal.
 
@@ -977,6 +992,11 @@ trait MailScan
         ?string &$grund = null): bool
     {
         $grund = '';
+        // Derselbe Riegel wie auf dem geraden Weg (siehe MailAnalyseRecord).
+        if ($this->MailIstVerworfen($vorschlagsId)) {
+            $this->SendDebug('MailScan', 'Vorschlag war verworfen — kein Auftrag: ' . $vorschlagsId, 0);
+            return true;
+        }
         [$eingabe, $anhang] = $this->MailAnalyseEingabe($kopf, $text, $anhaenge);
 
         /* Die Beschreibung der Anhaenge reist mit, nicht ihr Inhalt: der
@@ -2544,7 +2564,7 @@ trait MailScan
 
     private function MailDismiss(string $id): bool
     {
-        return $this->MailWithProposalLock(function () use ($id): bool {
+        $weg = $this->MailWithProposalLock(function () use ($id): bool {
             $alle = $this->MailProposals();
             $neu  = array_values(array_filter($alle, static fn(array $p): bool => (string)($p['id'] ?? '') !== $id));
             if (count($neu) === count($alle)) {
@@ -2552,6 +2572,48 @@ trait MailScan
             }
             return $this->MailWriteProposals($neu);
         }, false);
+        if (!$weg) {
+            return false;
+        }
+        /* Gemerkt, damit derselbe Vorschlag nicht wiederkommt (22.09.2026) — und
+           der Merker der Karte auf ihren HEUTIGEN Stand gezogen, damit auch eine
+           belanglose Aenderung zwischen Auswertung und Loeschen sie nicht
+           zurueckbringt. Beides greift nur bei Klassenseiten und LOGINEO; eine
+           Mail hat keinen Karten-Merker. */
+        $this->MailVerworfenMerken($id);
+        if (method_exists($this, 'EduMerkerNachziehen')) {
+            $this->EduMerkerNachziehen($id);
+        }
+        return true;
+    }
+
+    /** Die Sperrliste der verworfenen Vorschlaege: Kennung => Zeitpunkt. */
+    private function MailVerworfenKarte(): array
+    {
+        $karte = json_decode($this->MailAttr('MailDismissed', '{}'), true);
+        return is_array($karte) ? $karte : [];
+    }
+
+    private function MailIstVerworfen(string $id): bool
+    {
+        return $id !== '' && array_key_exists($id, $this->MailVerworfenKarte());
+    }
+
+    private function MailVerworfenMerken(string $id): void
+    {
+        if ($id === '') {
+            return;
+        }
+        $karte = $this->MailVerworfenKarte();
+        $karte[$id] = time();
+        /* Gedeckelt auf die juengsten Eintraege. Eine Kennung traegt den
+           Aenderungsstand der Karte — eine Seite, die sich staendig aendert,
+           erzeugt also immer neue Kennungen, und die Liste waechst. */
+        if (count($karte) > self::MAIL_DISMISSED_MAX) {
+            asort($karte);
+            $karte = array_slice($karte, -self::MAIL_DISMISSED_MAX, null, true);
+        }
+        $this->MailWriteJsonAttr('MailDismissed', $karte);
     }
 
     /** Die Art eines Eintrags umstellen (19.09.2026). Nur die vier bekannten Arten, nur offene Eintraege. */

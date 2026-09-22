@@ -629,6 +629,47 @@ trait EduMaps
         return $this->EduIsEnabled();
     }
 
+    /**
+     * Den Merker einer Karte auf ihren HEUTIGEN Stand ziehen (22.09.2026).
+     *
+     * Gerufen wird das beim Verwerfen eines Vorschlags. Seine Kennung nennt den
+     * Stand, der ausgewertet WURDE („edu:<boxid>:<updated>" bzw.
+     * „moodle:<id>:<updated>"). Hat die Schule die Karte seither angefasst,
+     * traegt sie einen neueren Stand, der noch nicht im Merker steht — und
+     * dieselbe Karte kaeme beim naechsten Lauf sofort wieder. Also hier
+     * nachziehen: Karte im Bestand suchen, ihren aktuellen Schluessel vermerken.
+     *
+     * Eine Mail-Kennung findet keine Karte und laeuft ins Leere; das ist richtig,
+     * eine Mail hat keinen Karten-Merker.
+     */
+    private function EduMerkerNachziehen(string $vorschlagsId): void
+    {
+        $schnitt = strrpos($vorschlagsId, ':');
+        if ($schnitt === false) {
+            return;
+        }
+        $srcId = substr($vorschlagsId, 0, $schnitt);
+        foreach ((array)($this->EduStoreRead()['notes'] ?? []) as $karte) {
+            if (!is_array($karte) || (string)($karte['srcId'] ?? '') !== $srcId) {
+                continue;
+            }
+            $ordner = (string)($karte['folderId'] ?? '');
+            if (!str_starts_with($ordner, 'edupage:')) {
+                return;
+            }
+            /* Merker-Topf und Seitenordner teilen sich denselben md5 der Adresse
+               (siehe EduMerkerTopf und EduOrdner) — deshalb reicht der Ordner. */
+            $md5 = substr($ordner, strlen('edupage:'));
+            $quelle = EduStoreCalc::Quelle($karte);
+            $stand = (int)($karte['srcRev'] ?? 0);
+            $schluessel = $quelle === 'moodle'
+                ? $srcId . ':' . $stand
+                : substr($srcId, strlen('edu:')) . ':' . $stand;
+            $this->EduMerkerSetzen($quelle, ($quelle === 'moodle' ? 'moodle:' : 'edu:') . $md5, $schluessel);
+            return;
+        }
+    }
+
     /** Der Merker-Topf DIESER Seite. Je Quelle ein eigener Bestand. */
     private function EduMerkerTopf(string $quelle, string $url): string
     {
