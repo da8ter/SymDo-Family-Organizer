@@ -2450,8 +2450,15 @@ trait MailScan
             $p['items'] = $offen;
             $raus[] = $p;
         }
-        // Neueste oben — in der Oberflaeche steht die frische Post vorn.
-        usort($raus, static fn(array $a, array $b): int => (int)($b['at'] ?? 0) <=> (int)($a['at'] ?? 0));
+        /* Zuletzt EINGETROFFENES oben (22.09.2026). Sortiert wurde bis dahin nach
+           `at`, dem Datum der QUELLE — und das liegt bei einer LOGINEO-Abfrage in
+           der Zukunft (Ende der Befragung). Dadurch standen Vorschläge oben, die
+           seit Tagen dalagen, während ein frisches Protokoll darunter rutschte.
+           `created` ist der Zeitpunkt, an dem WIR den Vorschlag gemacht haben;
+           Vorschläge von vor dem 03.09.2026 kennen das Feld nicht und fallen auf
+           `at` zurück. */
+        $wann = static fn(array $p): int => (int)($p['created'] ?? 0) ?: (int)($p['at'] ?? 0);
+        usort($raus, static fn(array $a, array $b): int => $wann($b) <=> $wann($a));
         return $raus;
     }
 

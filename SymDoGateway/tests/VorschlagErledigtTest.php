@@ -105,6 +105,15 @@ pruefe('Unbekannte Nummer oder Kennung: false, nichts geaendert',
      count($m->pRoh()[0]['items'])],
     [false, false, 2]);
 
+// ── Reihenfolge: zuletzt eingetroffen oben ─────────────────────────────────
+$m->pSetzen([
+    ['id' => 'a', 'at' => $jetzt + 9 * 86400, 'created' => $jetzt - 5 * 86400, 'items' => [['title' => 'Alt, Quelldatum in der Zukunft', 'kind' => 'task']]],
+    ['id' => 'b', 'at' => $jetzt - 3 * 86400, 'created' => $jetzt,             'items' => [['title' => 'Frisch', 'kind' => 'task']]],
+    ['id' => 'c', 'at' => $jetzt - 1 * 86400,                                  'items' => [['title' => 'Ohne created', 'kind' => 'task']]],
+]);
+pruefe('Sortiert wird nach dem EINTREFFEN (created), nicht nach dem Quelldatum — ohne created gilt at',
+    array_column($m->pAktion(['action' => 'list'])['proposals'], 'id'), ['b', 'c', 'a']);
+
 // ── Art umstellen (wie beim Dokumentenscan) ────────────────────────────────
 $m->pSetzen([['id' => 'edu:3', 'at' => $jetzt, 'created' => $jetzt, 'items' => [
     ['title' => 'A', 'kind' => 'task'], ['title' => 'B', 'kind' => 'task', 'taken' => true, 'takenAt' => $jetzt]]]]);
