@@ -1563,28 +1563,28 @@ trait AiExtract
                 $eintrag['priority'] = 'normal';
             }
             if ($kind === 'homework') {
-                /* Eine Hausaufgabe hat ein FACH und eine Faelligkeit, aber keinen
-                   Takt und keine Uhrzeit. Ohne Fach ist es keine Hausaufgabe: dann
-                   wird daraus wieder eine Aufgabe, damit der Fund nicht verloren
-                   geht (die Oberflaeche kann ihn danach umstimmen). */
-                $fach = HomeworkCalc::FachAufloesen($this->AiRowStr($row, 'subject'), $this->HomeworkFaecher());
-                if ($fach === '') {
-                    $eintrag['kind'] = 'task';
-                } else {
-                    $eintrag['subject'] = $fach;
-                    $eintrag['note'] = mb_substr(trim($this->AiRowText(
-                        $row['info'] ?? null, HomeworkCalc::NOTE_MAX)), 0, HomeworkCalc::NOTE_MAX);
-                    /* Nur KINDER: ein „Papa" im Text darf keine Hausaufgabe erben.
-                       assignedTo bleibt leer, damit der ToDo-Weg sie nicht
-                       versehentlich als Aufgabe anlegt. */
-                    $eintrag['childId'] = $this->HomeworkKindZuBenutzer($this->AiRowStr($row, 'person'));
-                    $eintrag['assignedTo'] = [];
-                    $eintrag['time'] = null;
-                    $eintrag['end'] = null;
-                    $eintrag['allDay'] = false;
-                    $eintrag['recurrence'] = null;
-                    $eintrag['priority'] = 'normal';
-                }
+                /* Eine Hausaufgabe hat eine Faelligkeit, aber keinen Takt und keine
+                   Uhrzeit. Das FACH darf seit dem 22.09.2026 fehlen: ein
+                   Lernzeitplan der ersten Klasse nennt Hefte statt Faecher
+                   („Buchstabenheft S. 16"), und die Herabstufung zur Aufgabe machte
+                   daraus reihenweise Elternaufgaben. Ohne Fach bleibt es eine
+                   Hausaufgabe mit leerem Fach — der Dialog fragt es beim Uebernehmen
+                   ab (er speichert nicht ohne), und die Oberflaeche kann die Art
+                   ohnehin umstellen. */
+                $eintrag['subject'] = HomeworkCalc::FachAufloesen(
+                    $this->AiRowStr($row, 'subject'), $this->HomeworkFaecher());
+                $eintrag['note'] = mb_substr(trim($this->AiRowText(
+                    $row['info'] ?? null, HomeworkCalc::NOTE_MAX)), 0, HomeworkCalc::NOTE_MAX);
+                /* Nur KINDER: ein „Papa" im Text darf keine Hausaufgabe erben.
+                   assignedTo bleibt leer, damit der ToDo-Weg sie nicht
+                   versehentlich als Aufgabe anlegt. */
+                $eintrag['childId'] = $this->HomeworkKindZuBenutzer($this->AiRowStr($row, 'person'));
+                $eintrag['assignedTo'] = [];
+                $eintrag['time'] = null;
+                $eintrag['end'] = null;
+                $eintrag['allDay'] = false;
+                $eintrag['recurrence'] = null;
+                $eintrag['priority'] = 'normal';
             }
             if ($kind === 'note') {
                 // Eine Notiz hat keine Frist und keinen Takt — sie hat einen Text.
@@ -2165,8 +2165,21 @@ trait AiExtract
             . 'zusammen. ABGRENZUNG: Eine Hausaufgabe ist etwas, das das KIND fuer den '
             . 'Unterricht tut. Elternbriefe, Zettel zum Unterschreiben, Beitraege, '
             . 'Elternabende, Ausfluege und Materiallisten bleiben "task" bzw. "event" — '
-            . 'auch dann, wenn sie von der Schule kommen. Ist kein Fach erkennbar, gib '
-            . '"task" zurueck und nicht "homework".';
+            . 'auch dann, wenn sie von der Schule kommen. '
+            . 'DAS FACH AUS DEM MATERIAL SCHLIESSEN: In den ersten Klassen nennt ein '
+            . 'Lernzeitplan oft nur das Heft. Buchstabenheft, Leseheft, Lesetagebuch, '
+            . 'Schreibheft, Leseteppich, Diktat, Anlauttabelle heissen Deutsch; '
+            . 'Zahlenheft, Rechenheft, Mathetrainer, Knobelheft heissen Mathematik; '
+            . 'Forscherheft, Sachheft heissen Sachunterricht; Workbook, Vokabeln '
+            . 'heissen Englisch. Ist das Fach danach noch unklar, gib die Hausaufgabe '
+            . 'TROTZDEM mit "kind":"homework" und leerem "subject" zurueck — das Fach '
+            . 'traegt der Nutzer nach. '
+            . 'EIN LERNZEITPLAN ENTHAELT BEIDES: Was das Kind UEBT oder BEARBEITET '
+            . '(Seiten, Hefte, Lesen, Rechnen, Vokabeln, eine Lernplattform) ist eine '
+            . 'Hausaufgabe. Was besorgt, unterschrieben, bezahlt, angemeldet oder '
+            . 'mitgebracht werden muss, und jeder Termin darin (Fototermin, Ausflug, '
+            . 'Elternabend, Schliesstag) bleibt "task" bzw. "event" — auch mitten in '
+            . 'einem Lernzeitplan.';
     }
 
     /**
