@@ -63,6 +63,19 @@ final class VorschlagProbe extends IPSModuleStrict
         return (bool)(new ReflectionMethod(self::class, 'MailAnalyseRecord'))
             ->invoke($this, $id, ['Subject' => 'B'], 'text', [], 'u', 'Edumaps');
     }
+    /** Derselbe Weg, aber als Hintergrund-Auftrag — er hat seinen eigenen Riegel. */
+    public function pAuftrag(string $id): bool
+    {
+        $grund = null;
+        return (bool)(new ReflectionMethod(self::class, 'MailAnalyseAuftrag'))
+            ->invokeArgs($this, [$id, ['Subject' => 'B'], 'text', [], 'u', 'Edumaps', [], &$grund]);
+    }
+    public array $eingereiht = [];
+    private function AiJobEnqueue(string $art, array $auftrag, array $kopf = []): array
+    {
+        $this->eingereiht[] = (string)($kopf['vorschlag'] ?? '?');
+        return ['ok' => true, 'id' => 'j1'];
+    }
     public function pVerworfen(string $id): bool
     {
         return (bool)(new ReflectionMethod(self::class, 'MailIstVerworfen'))->invoke($this, $id);
@@ -141,6 +154,9 @@ pruefe('Dieselbe Karte wird NICHT noch einmal ausgewertet — und gilt trotzdem 
     [$m->pAuswerten('edu:99:1700'), $m->pRoh()], [true, []]);
 pruefe('Eine NICHT verworfene Karte laeuft dagegen durch und legt einen Vorschlag an',
     [$m->pAuswerten('edu:98:1700'), array_column($m->pRoh(), 'id')], [true, ['edu:98:1700']]);
+$m->eingereiht = [];
+pruefe('Auch der Hintergrund-Auftrag wird fuer eine verworfene Karte gar nicht erst eingereiht',
+    [$m->pAuftrag('edu:99:1700'), $m->eingereiht], [true, []]);
 pruefe('Eine andere Kennung ist nicht gesperrt (geaenderte Karte kommt weiter durch)',
     [$m->pVerworfen('edu:99:1800'), $m->pVerworfen('')], [false, false]);
 $m->nachgezogen = [];
