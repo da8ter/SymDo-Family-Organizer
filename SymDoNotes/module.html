@@ -12953,6 +12953,9 @@ function hwKarteHtml() {
 
 /* ── Hausaufgabe anlegen und ändern ──────────────────────────────────────── */
 let hwCtx = null;
+/** Vorschlaege („id#i"), deren Speichern gerade laeuft — siehe hwSpeichern. */
+const hwFundInArbeit = new Set();
+function hwFundSchluessel(p) { return p ? String(p.id) + '#' + String(p.i) : ''; }
 
 /**
  * Das Hausaufgaben-Blatt aus einem KI-Fund vorbelegen (23.09.2026) — EIN Weg
@@ -13041,6 +13044,8 @@ function hwEditorOeffnen(bestand, vorschlag) {
   quelle.textContent = bestand ? translate('Source: SymDo') : '';
   document.getElementById('btnHwDelete').style.display = bestand ? '' : 'none';
   document.getElementById('btnHwSave').style.display = '';
+  // Frei, ausser der Vorschlag dieses Blatts wird gerade schon gespeichert.
+  document.getElementById('btnHwSave').disabled = hwFundInArbeit.has(hwFundSchluessel(hwCtx && hwCtx.proposal));
   document.getElementById('btnHwCancel').textContent = translate('Cancel');
   openOverlay('hwOverlay');
 }
@@ -13075,33 +13080,65 @@ function hwAnzeigeblatt(eintrag) {
 function hwLoeschen() {
   // Zweiter Riegel: der Knopf ist verborgen, aber ein Tastendruck oder ein
   // spaeter angebauter Weg soll hier nicht durchkommen.
-  if (!hwCtx || !hwCtx.id || hwCtx.nurLesen) return;
+  const ctx = hwCtx;
+  if (!ctx || !ctx.id || ctx.nurLesen) return;
   // Mit Rueckfrage, wie bei Notiz und Termin: ein Fehlgriff ist folgenlos.
   showConfirm(translate('Delete this homework?'), translate('Delete'), () => {
-    hausaufgabenAktion({ action: 'delete', id: hwCtx.id }, () => {
-      closeOverlay('hwOverlay');
-      hwCtx = null;
-    });
+    hausaufgabenAktion({ action: 'delete', id: ctx.id }, () => hwBlattSchliessen(ctx));
   });
 }
 
+/**
+ * Das Blatt nach einer Antwort schliessen — aber nur, wenn noch DIESES Blatt
+ * offen ist (23.09.2026). Die Antwort kommt spaet, ueber das Kachel-Relay auch
+ * mal nach Sekunden; wer inzwischen abgebrochen und den naechsten Vorschlag
+ * geoeffnet hat, dem schloss sie sonst dessen Blatt.
+ */
+function hwBlattSchliessen(ctx) {
+  if (hwCtx !== ctx) return;
+  closeOverlay('hwOverlay');
+  hwCtx = null;
+}
+
 function hwSpeichern() {
-  if (hwCtx && hwCtx.nurLesen) return;
+  /* DIESES Blatt festhalten (23.09.2026). Der Rueckruf las hwCtx erst, wenn die
+     Antwort kam — dann war es womoeglich schon das Blatt des NAECHSTEN
+     Vorschlags: Speichern bei A, Abbrechen, „+" bei B, und die Antwort fuer A
+     schloss B und hakte B als uebernommen ab, waehrend A offen blieb und ein
+     zweites Mal uebernommen werden konnte. */
+  const ctx = hwCtx;
+  if (!ctx || ctx.nurLesen) return;
+  // Zweimal getippt, zweimal angelegt: create entdoppelt nicht (neue Kennung je Aufruf).
+  if (ctx.speichert) return;
+  /* Dasselbe fuer den VORSCHLAG: speichern, abbrechen und ihn sofort wieder
+     oeffnen gibt ein neues Blatt — der Riegel oben saesse am alten. */
+  const fund = hwFundSchluessel(ctx.proposal);
+  if (fund && hwFundInArbeit.has(fund)) return;
   const kind = document.getElementById('hwChild').value;
   const fach = document.getElementById('hwSubject').value;
   const due = document.getElementById('hwDue').value;
   const note = document.getElementById('hwNote').value;
   if (!fach) { showToast(translate('Please pick a subject.')); return; }
-  const nutzlast = hwCtx && hwCtx.id
-    ? { action: 'update', id: hwCtx.id, subject: fach, due: due, note: note }
+  const nutzlast = ctx.id
+    ? { action: 'update', id: ctx.id, subject: fach, due: due, note: note }
     : { action: 'create', childId: kind, subject: fach, due: due, note: note, source: 'app' };
+  const knopf = document.getElementById('btnHwSave');
+  ctx.speichert = true;
+  if (fund) hwFundInArbeit.add(fund);
+  knopf.disabled = true;
   hausaufgabenAktion(nutzlast, () => {
-    const p = hwCtx && hwCtx.proposal;
-    closeOverlay('hwOverlay');
-    // Aus einem KI-Vorschlag übernommen? Dann ist er jetzt erledigt — auch beim
-    // Server; bisher wurde er nur hier vergessen und stand nach dem Neuladen wieder da.
-    if (p) mailErledigt(p.id, p.i);
-    hwCtx = null;
+    // Aus einem KI-Vorschlag übernommen? Dann ist ER jetzt erledigt — auch beim
+    // Server, und auch dann, wenn inzwischen ein anderes Blatt offen ist.
+    if (ctx.proposal) mailErledigt(ctx.proposal.id, ctx.proposal.i);
+    hwBlattSchliessen(ctx);
+    // Derselbe Vorschlag inzwischen noch einmal offen? Der ist jetzt uebernommen.
+    if (fund && hwCtx && hwFundSchluessel(hwCtx.proposal) === fund) hwBlattSchliessen(hwCtx);
+  }).then(() => {
+    ctx.speichert = false;
+    if (fund) hwFundInArbeit.delete(fund);
+    // Gescheitert: nochmal versuchen koennen. Gehoert der Knopf inzwischen
+    // einem anderen Blatt, entscheidet dessen Zustand.
+    knopf.disabled = !!(hwCtx && (hwCtx.speichert || hwFundInArbeit.has(hwFundSchluessel(hwCtx.proposal))));
   });
 }
 

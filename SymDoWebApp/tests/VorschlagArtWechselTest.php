@@ -14,6 +14,9 @@ declare(strict_types=1);
  *     Liste, das Fach das erste des Stundenplans.
  *  3. Der Scan öffnete dasselbe Blatt über eine eigene Abbildung und behielt
  *     den Fehler, als der KI-Eingang ihn schon los war.
+ *  4. Eine späte Antwort beim Speichern galt dem Blatt, das GERADE offen war:
+ *     Speichern bei A, Abbrechen, „+" bei B — die Antwort für A schloss B und
+ *     hakte B ab. Ein Doppeltipp legte zwei Hausaufgaben an.
  *
  * Die REGELN (Notiz, Kind) prüft tools/homework-parity.mjs mit denselben
  * Goldwerten wie das Gateway (tests/HomeworkTest.php). Hier steht, dass beide
@@ -22,8 +25,10 @@ declare(strict_types=1);
  *
  * Der Browser-Teil fährt die echte Web-App des Docker-Gateways, aber mit
  * FESTEN Vorschlägen: `window.__symdoApiPost` wird umhüllt, `/mail/proposals`
- * beantwortet die Hülle selbst und schickt nichts davon weiter. Deine echten
- * Vorschläge bleiben unberührt. Gelesen wird nur die Mitgliederliste.
+ * beantwortet die Hülle selbst und schickt nichts davon weiter, ebenso jede
+ * schreibende Aktion auf `/homework` (mit 1,5 s Verzug, wie über das
+ * Kachel-Relay). Deine echten Vorschläge und Hausaufgaben bleiben unberührt;
+ * gelesen werden nur die Mitgliederliste und der Hausaufgaben-Bestand.
  *
  *   php SymDoWebApp/tests/VorschlagArtWechselTest.php
  *   MIT_CHROME=1 SYMDO_TOKEN_FILE=… php SymDoWebApp/tests/VorschlagArtWechselTest.php
@@ -55,6 +60,8 @@ pruefe(str_contains($html, 'function hwNotizAusFund(titel, text)') && str_contai
     'die Regeln stehen DOM-frei (von homework-parity.mjs geprüft)');
 pruefe(!str_contains($html, "note: String(e.t.note || e.t.info || '')"), 'die alte Abbildung des Scans ist weg');
 pruefe(str_contains($html, 'function mailSortSorte(id, it)'), 'die Sortierung hält umgestellte Zeilen an ihrem Platz');
+pruefe(str_contains($html, 'function hwBlattSchliessen(ctx)') && substr_count($html, 'hwBlattSchliessen(') === 4,
+    'Speichern und Löschen schließen nur das Blatt, dem die Antwort gilt');
 $locale = json_decode((string)file_get_contents(__DIR__ . '/../locale.json'), true)['translations']['de'] ?? [];
 pruefe(($locale['Pick a subject'] ?? '') === 'Fach wählen', 'locale de: Pick a subject');
 foreach (['ToDoList', 'ShoppingList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'] as $kopie) {
@@ -101,6 +108,10 @@ $vorschlaege = [
         ['i' => 2, 'kind' => 'homework', 'title' => 'Mathetrainer für jeden Tag bearbeiten', 'info' => 'Siehe Rückseite des Lernzeitplans.',
          'note' => 'Siehe Rückseite des Lernzeitplans.', 'subject' => 'Mathematik', 'childId' => '',
          'due' => '2026-09-24', 'allDay' => false, 'assignedTo' => [], 'priority' => 'normal', 'taken' => false],
+        ['i' => 3, 'kind' => 'homework', 'title' => 'Rechenheft S. 5', 'info' => null, 'note' => 'Rechenheft S. 5',
+         'subject' => 'Mathematik', 'childId' => '', 'due' => '2026-09-26', 'allDay' => false, 'assignedTo' => [], 'priority' => 'normal', 'taken' => false],
+        ['i' => 4, 'kind' => 'homework', 'title' => 'Zahlenheft S. 9', 'info' => null, 'note' => 'Zahlenheft S. 9',
+         'subject' => 'Mathematik', 'childId' => '', 'due' => '2026-09-27', 'allDay' => false, 'assignedTo' => [], 'priority' => 'normal', 'taken' => false],
     ]],
     ['id' => 'probe:mail', 'source' => 'IMAP', 'userId' => $gross, 'at' => $jetzt - 60, 'created' => $jetzt - 60,
      'from' => 'Prüfstand', 'subject' => 'Mail an die Eltern (Prüfstand)', 'items' => [
@@ -133,9 +144,13 @@ $seite = str_replace(["'/hook/lists/app/v1", '"/hook/lists/app/v1'],
    ein Neuladen zwischendurch nichts zurückdreht. */
 $huelle = '<script>try{localStorage.setItem("symdo.token",' . json_encode($token) . ');localStorage.setItem("symdo.tab","ki");}catch(e){}'
     . '(function(){var FIX=' . json_encode($vorschlaege, JSON_UNESCAPED_UNICODE) . ';var echt=null;window.__probeAktionen=[];'
-    . 'function h(path,payload){if(/\/mail\/proposals$/.test(String(path))){var a=String((payload&&payload.action)||"list");'
-    . 'window.__probeAktionen.push(a);if(a==="kind"){FIX.forEach(function(p){if(p.id===payload.id){p.items.forEach(function(it){if(it.i===payload.i){it.kind=payload.kind;}});}});}'
+    . 'function merk(w,a,pl){window.__probeAktionen.push({w:w,a:a,id:pl&&pl.id!=null?String(pl.id):"",i:pl&&pl.i!=null?Number(pl.i):null});}'
+    . 'function h(path,payload){var a=String((payload&&payload.action)||"list");'
+    . 'if(/\/mail\/proposals$/.test(String(path))){merk("mail",a,payload);'
+    . 'if(a==="kind"||a==="taken"){FIX.forEach(function(p){if(p.id===payload.id){p.items.forEach(function(it){if(it.i===payload.i){if(a==="kind"){it.kind=payload.kind;}else{it.taken=true;}}});}});}'
     . 'return Promise.resolve({status:200,json:a==="list"?{ok:true,proposals:JSON.parse(JSON.stringify(FIX))}:{ok:true}});}'
+    . 'if(/\/homework$/.test(String(path))&&a!=="list"){merk("hw",a,payload);'
+    . 'return new Promise(function(r){setTimeout(function(){r({status:200,json:{ok:true}});},1500);});}'
     . 'return echt?echt(path,payload):Promise.resolve({status:0,json:null});}'
     . 'Object.defineProperty(window,"__symdoApiPost",{configurable:true,get:function(){return h;},set:function(v){echt=v;}});})();</script>';
 $seite = substr_replace($seite, $huelle, (int)strpos($seite, '<script'), 0);
@@ -147,8 +162,55 @@ $treiber = '<script>(function(){var FAELLE=' . json_encode($faelle, JSON_UNESCAP
   function stelle(z){ return Array.from(document.querySelectorAll('.mail-row')).indexOf(z); }
   function wert(id){ var e = document.getElementById(id); return e ? String(e.value || '') : null; }
   function offen(id){ var o = document.getElementById(id); if (!o) return false; var s = getComputedStyle(o); return s.display !== 'none' && s.visibility !== 'hidden' && o.offsetHeight > 0; }
+  function klick(sel, wurzel){ var e = (wurzel || document).querySelector(sel); if (e) e.click(); return !!e; }
+  function plus(id, i){ var z = zeile({ id: id, i: i }); return !!(z && klick('[data-mail="add"]', z)); }
+  function zu(){ klick('#hwOverlay [data-close="hwOverlay"]'); }
+  function speichern(){ klick('#btnHwSave'); }
+  /* Die Wettlaeufe (Befund 4). Jede Antwort auf /homework kommt 1,5 s spaet. */
+  function wettlauf(){
+    raus.wett = {};
+    // R1: speichern bei A (lzp#2), abbrechen, „+" bei B (lzp#0) — die spaete Antwort fuer A.
+    plus('probe:lzp', 2);
+    setTimeout(function(){
+      speichern(); zu();
+      setTimeout(function(){
+        plus('probe:lzp', 0);
+        setTimeout(function(){
+          raus.wett.r1 = { hw: offen('hwOverlay'), note: wert('hwNote') };
+          zu();
+          // R2: Doppeltipp auf Speichern bei lzp#3.
+          setTimeout(function(){
+            plus('probe:lzp', 3);
+            setTimeout(function(){
+              speichern(); speichern();
+              setTimeout(function(){
+                raus.wett.r2 = { hw: offen('hwOverlay') };
+                // R3: speichern bei lzp#4, abbrechen, denselben Vorschlag gleich wieder oeffnen.
+                plus('probe:lzp', 4);
+                setTimeout(function(){
+                  speichern(); zu();
+                  setTimeout(function(){
+                    var wieder = plus('probe:lzp', 4);
+                    setTimeout(function(){
+                      var k = document.getElementById('btnHwSave');
+                      raus.wett.r3 = { wieder: wieder, gesperrt: !!(k && k.disabled) };
+                      speichern();
+                      setTimeout(function(){
+                        raus.wett.r3.danachOffen = offen('hwOverlay');
+                        fertig();
+                      }, 2500);
+                    }, 600);
+                  }, 700);
+                }, 900);
+              }, 2500);
+            }, 900);
+          }, 700);
+        }, 2500);
+      }, 700);
+    }, 900);
+  }
   function schritt(n){
-    if (n >= FAELLE.length) { fertig(); return; }
+    if (n >= FAELLE.length) { wettlauf(); return; }
     var f = FAELLE[n], z = zeile(f);
     if (!z) { raus.faelle.push({ n: n, fehler: 'Zeile fehlt' }); schritt(n + 1); return; }
     var vorher = stelle(z);
@@ -182,9 +244,12 @@ $datei = $arbeit . '/probe.html';
 file_put_contents($datei, $seite);
 
 $dom = (string)shell_exec(sprintf(
-    'perl -e %s %s --headless=new --disable-web-security --user-data-dir=%s --window-size=500,1400 '
-    . '--virtual-time-budget=45000 --dump-dom %s 2>/dev/null',
-    escapeshellarg('alarm 150; exec @ARGV'), escapeshellarg($chrome),
+    /* Ohne Bewegung: die Schliess-Animation der Blaetter laeuft in echter Zeit,
+       die Uhren der Seite in virtueller — ein geschlossenes Blatt galt sonst
+       noch als offen. Mit reduzierter Bewegung schliesst closeOverlay sofort. */
+    'perl -e %s %s --headless=new --force-prefers-reduced-motion --disable-web-security --user-data-dir=%s --window-size=500,1400 '
+    . '--virtual-time-budget=70000 --dump-dom %s 2>/dev/null',
+    escapeshellarg('alarm 200; exec @ARGV'), escapeshellarg($chrome),
     escapeshellarg($arbeit . '/profil'), escapeshellarg('file://' . $datei)
 ));
 @shell_exec('rm -rf ' . escapeshellarg($arbeit));
@@ -212,6 +277,22 @@ foreach ($faelle as $n => $f) {
     pruefe(($ist['note'] ?? null) === $f['note'], "$was: Notiz (ist " . json_encode($ist['note'] ?? null, JSON_UNESCAPED_UNICODE) . ')');
 }
 $aktionen = (array)($erg['aktionen'] ?? []);
-pruefe(in_array('list', $aktionen, true) && count(array_filter($aktionen, static fn($a) => $a === 'kind')) === 3,
-    'die Hülle hat Laden und die drei Umstellungen abgefangen — nichts ging ans Gateway: ' . json_encode($aktionen));
+$zaehle = static fn(string $w, string $a, ?string $id = null, ?int $i = null): int => count(array_filter($aktionen,
+    static fn($x) => is_array($x) && $x['w'] === $w && $x['a'] === $a && ($id === null || $x['id'] === $id) && ($i === null || $x['i'] === $i)));
+pruefe($zaehle('mail', 'list') > 0 && $zaehle('mail', 'kind') === 3,
+    'die Hülle hat Laden und die drei Umstellungen abgefangen — nichts davon ging ans Gateway');
+
+// Befund 4: die Wettläufe
+$w = (array)($erg['wett'] ?? []);
+pruefe(($w['r1']['hw'] ?? false) === true && ($w['r1']['note'] ?? '') === $faelle[0]['note'],
+    'R1: die späte Antwort für A lässt das Blatt von B offen: ' . json_encode($w['r1'] ?? null, JSON_UNESCAPED_UNICODE));
+pruefe($zaehle('mail', 'taken', 'probe:lzp', 2) === 1, 'R1: abgehakt wird A — der Vorschlag, der gespeichert wurde');
+pruefe($zaehle('mail', 'taken', 'probe:lzp', 0) === 0, 'R1: B bleibt offen (nicht als übernommen gemeldet)');
+pruefe($zaehle('hw', 'create') === 3, 'R2/R3: je Vorschlag genau EINE Hausaufgabe — Doppeltipp und Wiederöffnen legen nichts doppelt an (ist ' . $zaehle('hw', 'create') . ')');
+pruefe(($w['r2']['hw'] ?? true) === false, 'R2: nach dem Speichern ist das Blatt zu');
+pruefe(($w['r3']['wieder'] ?? false) === true && ($w['r3']['gesperrt'] ?? false) === true,
+    'R3: der sofort wieder geöffnete Vorschlag hat einen gesperrten Speichern-Knopf: ' . json_encode($w['r3'] ?? null));
+pruefe(($w['r3']['danachOffen'] ?? true) === false, 'R3: ist der Vorschlag übernommen, schließt sich auch das zweite Blatt');
+pruefe($zaehle('mail', 'taken', 'probe:lzp', 3) === 1 && $zaehle('mail', 'taken', 'probe:lzp', 4) === 1,
+    'R2/R3: beide Vorschläge genau einmal als übernommen gemeldet');
 schluss();

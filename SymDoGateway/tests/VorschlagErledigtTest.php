@@ -213,7 +213,7 @@ $cal = substr($html, strpos($html, 'function calSpeichernSenden('), 3000);
 pruefe('Kalenderdialog: meldet den Vorschlag ueber den VOR dem Schliessen gesicherten Kontext (ctx), nicht ueber calCtx',
     [str_contains($cal, 'if (ctx && ctx.proposal) mailErledigt('), str_contains($cal, 'calCtx.proposal.id')], [true, false]);
 pruefe('Alle vier Uebernahme-Wege melden „uebernommen": Kalender, Aufgabe, Hausaufgabe, Notiz',
-    [substr_count($html, 'mailErledigt(') >= 5, str_contains($html, 'if (p) mailErledigt(p.id, p.i);'),
+    [substr_count($html, 'mailErledigt(') >= 5, str_contains($html, 'if (ctx.proposal) mailErledigt(ctx.proposal.id, ctx.proposal.i);'),
      str_contains($html, 'mailErledigt(noteCtx.proposal.id, noteCtx.proposal.i)'), str_contains($html, 'if (todoCtx.proposal) mailErledigt(')],
     [true, true, true, true]);
 pruefe('Verwerfen meldet dropped; die Liste wird mit withTaken geholt; Abzeichen zaehlt nur Offene',
