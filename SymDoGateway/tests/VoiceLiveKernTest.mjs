@@ -84,12 +84,17 @@ pruefe(zustaende[zustaende.length - 1] === 'duSprichst', 'Zustand duSprichst');
 kern.handleServerEvent({ type: 'session.delegation.created', response_id: 'resp_1', target: 'responses' });
 pruefe(zustaende[zustaende.length - 1] === 'denkt', 'Delegation → denkt');
 kern.handleServerEvent({ type: 'response.event', delegation_id: 'd1', event: { type: 'response.created', response: { id: 'resp_1' } } });
+// So kommt es wirklich (Doku + Messung 23.09.2026): arguments.done OHNE call_id/name vorab,
+// output_item.done OHNE response_id, und response.completed spaeter mit output: [].
 kern.handleServerEvent({ type: 'response.event', delegation_id: 'd1', event: {
-  type: 'response.output_item.done', response_id: 'resp_1',
-  item: { type: 'function_call', call_id: 'call_1', name: 'liste_lesen', arguments: '{"liste":"Einkauf"}' } } });
+  type: 'response.function_call_arguments.done', item_id: 'fc_1', output_index: 0, arguments: '{"liste":"Einkauf"}' } });
+kern.handleServerEvent({ type: 'response.event', delegation_id: 'd1', event: {
+  type: 'response.output_item.done', output_index: 0,
+  item: { type: 'function_call', id: 'fc_1', call_id: 'call_1', name: 'liste_lesen', arguments: '{"liste":"Einkauf"}' } } });
 await warte(5);
 const werkzeug = posts.find((p) => p.action === 'tool');
 pruefe(!!werkzeug && werkzeug.name === 'liste_lesen' && werkzeug.fnId === 'call_1', 'Werkzeug ans Gateway gepostet (Name + Aufrufkennung)');
+pruefe(posts.filter((p) => p.action === 'tool').length === 1, 'arguments.done im Umschlag löst KEINEN eigenen (namenlosen) Aufruf aus');
 const ergebnis = gesendet.find((o) => o.type === 'response.item.create');
 pruefe(!!ergebnis && ergebnis.item.type === 'function_call_output' && ergebnis.item.call_id === 'call_1', 'Ergebnis als response.item.create (nicht conversation.item.create)');
 pruefe(!gesendet.some((o) => o.type === 'conversation.item.create'), 'kein Realtime-Umschlag im Live-Weg');
@@ -97,17 +102,26 @@ pruefe(!gesendet.some((o) => o.type === 'response.create'), 'noch KEIN response.
 
 // 4. Antwort abgeschlossen → genau ein response.create
 kern.handleServerEvent({ type: 'response.event', delegation_id: 'd1', event: {
-  type: 'response.completed', response: { id: 'resp_1', status: 'completed',
-  output: [{ type: 'function_call', call_id: 'call_1', name: 'liste_lesen' }] } } });
-pruefe(gesendet.filter((o) => o.type === 'response.create').length === 1, 'genau ein response.create nach dem Ergebnis');
+  type: 'response.completed', response: { id: 'resp_1', status: 'completed', output: [], tools: [], instructions: null } } });
+pruefe(gesendet.filter((o) => o.type === 'response.create').length === 1, 'genau ein response.create nach dem Ergebnis — trotz output: []');
 // nochmal completed (Doppelzustellung) → kein zweites
-kern.handleServerEvent({ type: 'response.event', event: { type: 'response.completed', response: { id: 'resp_1', status: 'completed', output: [{ type: 'function_call', call_id: 'call_1' }] } } });
+kern.handleServerEvent({ type: 'response.event', event: { type: 'response.completed', response: { id: 'resp_1', status: 'completed', output: [] } } });
 pruefe(gesendet.filter((o) => o.type === 'response.create').length === 1, 'Doppelzustellung löst kein zweites response.create aus');
 
+// 4b. Umgekehrte Reihenfolge: completed kommt, bevor das Werkzeug geliefert hat → trotzdem genau ein response.create
+kern.handleServerEvent({ type: 'response.event', event: { type: 'response.created', response: { id: 'resp_1b' } } });
+kern.handleServerEvent({ type: 'response.event', event: { type: 'response.output_item.done', item: { type: 'function_call', call_id: 'call_1b', name: 'liste_lesen', arguments: '{}' } } });
+kern.handleServerEvent({ type: 'response.event', event: { type: 'response.completed', response: { id: 'resp_1b', status: 'completed', output: [] } } });
+pruefe(gesendet.filter((o) => o.type === 'response.create').length === 1, 'vor dem Ergebnis noch kein zweites response.create');
+await warte(5);
+pruefe(gesendet.filter((o) => o.type === 'response.create').length === 2, 'nach dem Ergebnis genau ein weiteres response.create');
+pruefe(gesendet.filter((o) => o.type === 'response.item.create' && o.item.call_id === 'call_1b').length === 1, 'Ergebnis für call_1b geliefert');
+
 // 5. Antwort ohne Werkzeug → hört
-kern.handleServerEvent({ type: 'response.event', event: { type: 'response.completed', response: { id: 'resp_2', status: 'completed', output: [{ type: 'message' }] } } });
+kern.handleServerEvent({ type: 'response.event', event: { type: 'response.created', response: { id: 'resp_2' } } });
+kern.handleServerEvent({ type: 'response.event', event: { type: 'response.completed', response: { id: 'resp_2', status: 'completed', output: [] } } });
 pruefe(zustaende[zustaende.length - 1] === 'hoert', 'Antwort ohne Werkzeug → hört');
-pruefe(gesendet.filter((o) => o.type === 'response.create').length === 1, 'ohne Werkzeug kein response.create');
+pruefe(gesendet.filter((o) => o.type === 'response.create').length === 2, 'ohne Werkzeug kein response.create');
 
 // 6. SymDo spricht: Deltas → spricht, Pause → symdoFertig + hört
 kern.handleServerEvent({ type: 'session.output_transcript.delta', delta: 'Milch ' });
@@ -118,7 +132,7 @@ pruefe(sy.length === 2 && sy[0].antwort === sy[1].antwort, 'Ausgabe-Deltas in ei
 
 // 7. Realtime-Ereignis output_item.done darf im Live-Weg ohne function_call nichts tun
 kern.handleServerEvent({ type: 'response.output_item.done', item: { type: 'message' } });
-pruefe(posts.filter((p) => p.action === 'tool').length === 1, 'kein zweiter Werkzeugaufruf durch Nachrichten-Element');
+pruefe(posts.filter((p) => p.action === 'tool').length === 2, 'kein weiterer Werkzeugaufruf durch Nachrichten-Element');
 
 // 8. Anbieter schließt → Kern beendet mit Klartext, meldet dem Gateway
 kern.handleServerEvent({ type: 'session.closed', reason: 'expired' });

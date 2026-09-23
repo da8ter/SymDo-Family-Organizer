@@ -38,6 +38,10 @@ function erzeuge(opt) {
      in eine Blase haengt. */
   var duUhr = null, duLauf = 0, duText = '';
   var sprechUhr = null, sprechLauf = 0, sprechText = '';
+  /* Live: die Kennung der laufenden Backend-Antwort. Die eingepackten
+     Responses-Ereignisse tragen KEINE response_id — nur response.created
+     nennt sie, alles danach gehoert dazu. */
+  var liveAntwortId = '';
   /* Frist fuer den Verbindungsaufbau. Ohne sie bleibt die Anzeige ewig auf
      "verbinde" stehen, wenn die Mikrofonfrage unbeantwortet bleibt:
      getUserMedia loest dann WEDER auf NOCH ab (headless nachgestellt und
@@ -524,9 +528,18 @@ function erzeuge(opt) {
   /* Ende einer Backend-Antwort (Realtime: response.done, Live: response.completed
      im Umschlag) — zaehlen, wie viele Werkzeugergebnisse noch fehlen. */
   function antwortZuEnde(r, status) {
-    var a = antwortZustand(r.id || 'r');
+    var a = antwortZustand(r.id || liveAntwortId || 'r');
     var aufrufe = 0;
-    (r.output || []).forEach(function (it) { if (it && it.type === 'function_call') { aufrufe++; } });
+    if (live) {
+      /* Gemessen 23.09.2026 und so dokumentiert: die weitergereichten
+         Lebenszyklus-Ereignisse tragen `output: []`, AUCH wenn Werkzeugaufrufe
+         offen sind. Die Zahl stammt deshalb aus den output_item.done-Ereignissen
+         (siehe dort); aus `output` gelesen waere sie 0, response.create fiele
+         nie, und das Gespraech bliebe nach der ersten Frage stumm. */
+      aufrufe = a.erwartet || 0;
+    } else {
+      (r.output || []).forEach(function (it) { if (it && it.type === 'function_call') { aufrufe++; } });
+    }
     a.erwartet = aufrufe;
     a.status = status;
     if (aufrufe === 0 && !sprechUhr) { zustand('hoert'); }
@@ -558,8 +571,10 @@ function erzeuge(opt) {
       case 'response.output_item.done':
         // Realtime meldet Werkzeugaufrufe ueber function_call_arguments.done — nur Live hier.
         if (live && ev.item && ev.item.type === 'function_call') {
-          werkzeugAusfuehren(ev.response_id || (ev.response && ev.response.id) || 'r',
-                             ev.item.call_id || '', ev.item.name || '', ev.item.arguments || '{}');
+          var idL = ev.response_id || liveAntwortId || 'r';
+          var aL = antwortZustand(idL);
+          aL.erwartet = (aL.erwartet || 0) + 1;   // die einzige verlaessliche Zaehlung (s. antwortZuEnde)
+          werkzeugAusfuehren(idL, ev.item.call_id || '', ev.item.name || '', ev.item.arguments || '{}');
         }
         return;
       case 'response.completed':
@@ -592,7 +607,8 @@ function erzeuge(opt) {
         ereignis({ art: 'duFertig', text: ev.transcript || '', item: ev.item_id || '' });
         return;
       case 'response.created':
-        antwortZustand(ev.response && ev.response.id || 'r');
+        if (live) { liveAntwortId = (ev.response && ev.response.id) || ''; }
+        antwortZustand((ev.response && ev.response.id) || 'r');
         stilleZuruecksetzen();
         return;
       case 'response.output_item.added':
@@ -613,7 +629,9 @@ function erzeuge(opt) {
         zustand('hoert');
         return;
       case 'response.function_call_arguments.done':
-        werkzeugAusfuehren(ev.response_id || 'r', ev.call_id || '', ev.name || '', ev.arguments || '{}');
+        // Im Live-Umschlag traegt dieses Ereignis weder call_id noch name —
+        // dort zaehlt allein output_item.done (Doku: „arguments-done alone is not sufficient").
+        if (!live) { werkzeugAusfuehren(ev.response_id || 'r', ev.call_id || '', ev.name || '', ev.arguments || '{}'); }
         return;
       case 'response.done': {
         var r = ev.response || {};
