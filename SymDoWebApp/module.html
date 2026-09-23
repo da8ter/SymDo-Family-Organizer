@@ -11395,6 +11395,29 @@ function mailArt(it) {
 /** Die Reihenfolge unter einer Mail: erst zu tun, dann Termine, dann zum Behalten. */
 const MAIL_SORTEN = ['task', 'event', 'homework', 'note'];
 
+/**
+ * Wo eine Zeile beim Sortieren steht (23.09.2026).
+ *
+ * Die Funde einer Mail stehen in fester Sortenfolge. Stellt jemand die Art im
+ * Auswahlfeld um, wechselt die Zeile damit die Gruppe und SPRINGT — unter dem
+ * Finger rutscht die naechste Zeile nach oben, und der Druck auf „+" galt
+ * plotzlich einem anderen Fund (gemeldet: „Hausaufgabe gewaehlt, es kam der
+ * Aufgaben-Dialog"). Deshalb merkt sich die Oberflaeche die Sorte, mit der eine
+ * Zeile EINSORTIERT wurde, und laesst sie dort stehen. Das gilt nur fuers
+ * Sortieren — Symbol, Auswahlfeld und das Uebernehmen folgen sofort der neuen
+ * Art. Der Merker lebt im Speicher: nach dem Neuladen der Seite sortiert sich
+ * alles wieder ein.
+ */
+const mailSortMerker = new Map();
+function mailSortSorte(id, it) {
+  const key = String(id) + ':' + String(it.i);
+  const da = mailSortMerker.get(key);
+  if (da) return da;
+  const sorte = mailArt(it);
+  mailSortMerker.set(key, sorte);
+  return sorte;
+}
+
 function renderMailAlle() {
   renderMailAi();
   const leer = document.getElementById('kiEmpty');
@@ -11648,7 +11671,7 @@ function renderMailAi() {
     for (const erledigt of [false, true]) {          // offene zuerst, Haken darunter
       for (const sorte of MAIL_SORTEN) {
         for (const it of roh) {
-          if ((it.taken === true) === erledigt && mailArt(it) === sorte) sortiert.push(it);
+          if ((it.taken === true) === erledigt && mailSortSorte(p.id, it) === sorte) sortiert.push(it);
         }
       }
     }
