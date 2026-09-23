@@ -564,7 +564,16 @@
             "Discard suggestions": "Vorschläge verwerfen",
             "Class page": "Klassenseite",
             "Source: %1": "Quelle: %1",
-            "Pick a subject": "Fach wählen"
+            "Pick a subject": "Fach wählen",
+            "Show original": "Original anzeigen",
+            "Save original": "Original speichern",
+            "Original message": "Originalnachricht",
+            "The original is no longer available.": "Das Original ist nicht mehr verfügbar.",
+            "The original could not be saved.": "Das Original ließ sich nicht speichern.",
+            "Shortened — the full text was not available.": "Gekürzt — der vollständige Text lag nicht mehr vor.",
+            "Not kept": "Nicht aufbewahrt",
+            "too large for a note": "zu groß für die Notiz",
+            "Loading part %1 of %2": "Lade Teil %1 von %2"
         }
     }
 }

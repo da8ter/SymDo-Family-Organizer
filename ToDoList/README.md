@@ -186,6 +186,10 @@ declare(strict_types=1);
  *  │ recurrence           │ string  │ 'none','w1','w2','w3','m1','q1','y1', │
  *  │                      │         │ 'custom' (siehe "Task erstellen")     │
  *  │ createdAt/updatedAt  │ int     │ Unix-Timestamps (angelegt/geändert)   │
+ *  │ originalId           │ string  │ nur bei Aufgaben aus einem KI-Vor-    │
+ *  │                      │         │ schlag mit „Original speichern":      │
+ *  │                      │         │ Kennung des Originals im Gateway      │
+ *  │                      │         │ (24 Hexziffern); fehlt sonst          │
  *  │ doneAt               │ int     │ Zeitpunkt der Erledigung — steht NUR  │
  *  │                      │         │ an Tasks, die über TDL_ToggleDone      │
  *  │                      │         │ erledigt wurden. Sonst fehlt das Feld │
@@ -342,6 +346,9 @@ declare(strict_types=1);
  *  │ done                 │ true = direkt als erledigt anlegen               │
  *  │ notification         │ true = Benachrichtigung bei Fälligkeit           │
  *  │                      │ (erfordert due > 0)                              │
+ *  │ originalId           │ Kennung eines Originals im SymDo-Gateway (24     │
+ *  │                      │ Hexziffern); anderes wird ignoriert. Bleibt beim │
+ *  │                      │ Aktualisieren stehen und verlässt Symcon nie     │
  *  │ notificationLeadTime │ Vorlaufzeit in Sekunden: 0, 300, 600, 1800,      │
  *  │                      │ 3600, 18000 oder 43200 (0 Min … 12 Std vorher)   │
  *  │ recurrence           │ Wiederholung (erfordert due > 0):                │

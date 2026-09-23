@@ -212,6 +212,16 @@ trait ApiRouter
                     return;
                 }
                 break;
+            case 'original':
+                /* Das Original eines KI-Vorschlags, Anhang n, Stueck k (24.09.2026).
+                   In Stuecken, weil Symcon je Antwort nur rund 1 MB ausliefert; die
+                   Web-App setzt sie zusammen. Nur mit Token im Kopf — die Datei
+                   oeffnet unser JavaScript, kein fremder Betrachter, also kein ?t=. */
+                if ($method === 'GET') {
+                    $this->HandleOriginalFile((string)($route[2] ?? ''), (int)($route[3] ?? 0), (int)($_GET['teil'] ?? 0));
+                    return;
+                }
+                break;
             case 'notes':
                 // Notizen. Ein Pfad, Aktion im Rumpf — wie Kalender und
                 // Mail-Vorschlaege, damit Browser, App und Visu-Kachel denselben

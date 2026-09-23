@@ -44,7 +44,7 @@ trait Moodle
     private const MOODLE_TEXT_MAX      = 8000;
     /* Anhaenge fuer die KI, zusammen als Base64. Groesseres schickt niemand
        durch: die Auswertung soll an einer Datei nicht scheitern. */
-    private const MOODLE_ANHANG_MAX_B64 = 8000000;
+    // Heute einstellbar: EduAttMaxTotalMB (Standard 6 MB), siehe AnhangGrenzenCalc.
 
     /** Token je Zugang, im Lauf gehalten: Schlüssel → Token. */
     private array $moodleTokenCache = [];
@@ -858,7 +858,7 @@ trait Moodle
                     continue;
                 }
                 $base64 = base64_encode($roh);
-                if ($base64 === '' || $summe + strlen($base64) > self::MOODLE_ANHANG_MAX_B64) {
+                if ($base64 === '' || $summe + strlen($base64) > (int)$this->AnhangGrenzen()['eduTotalB64']) {
                     /* Die Karte wird trotzdem ausgewertet, nur ohne diesen
                        Anhang — besser als ein halbes PDF an die KI. */
                     continue;

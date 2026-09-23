@@ -119,6 +119,9 @@ class HomeworkCalc
             return null;
         }
         $erledigt = ($roh['done'] ?? false) === true;
+        /* Das gespeicherte Original (24.09.2026): nur eine Kennung in der Form,
+           die die Ablage vergibt — ob es den Ordner gibt, prueft das Gateway. */
+        $original = trim((string)($roh['originalId'] ?? ''));
         return [
             'id'        => trim((string)($roh['id'] ?? '')),
             /* Herkunftskennung: bei einem Eintrag aus WebUntis die Nummer der
@@ -148,7 +151,7 @@ class HomeworkCalc
                 ? (string)$roh['source'] : 'app',
             'createdAt' => max(0, (int)($roh['createdAt'] ?? $jetzt)) ?: $jetzt,
             'updatedAt' => max(0, (int)($roh['updatedAt'] ?? $jetzt)) ?: $jetzt,
-        ];
+        ] + (preg_match('/^[0-9a-f]{24}$/', $original) === 1 ? ['originalId' => $original] : []);
     }
 
     /**

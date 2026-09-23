@@ -437,7 +437,7 @@ pruefe('… nur bei eingeschalteten Klassenseiten',
  * Das Abraeumen MUSS auf jedem Weg laufen: findet der letzte Auftrag nichts
  * oder scheitert er, bliebe die Meldung sonst fuer immer im Attribut liegen
  * und die Karten davor waeren stumm eingepflegt. */
-foreach (['MailAnalyseAuftrag', 'MailAuftragEinpflegen', 'MailAnhaengeNachladen',
+foreach (['MailAnalyseAuftrag', 'MailAuftragEinpflegen',
           'EduPushAuftrag', 'EduPushAuftragFertig'] as $m) {
     pruefe('Die Klasse kennt ' . $m, $k->hasMethod($m), true);
 }

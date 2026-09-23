@@ -44,6 +44,9 @@ trait CalendarBridge
     /** Obergrenzen: die Zuordnungen wachsen mit jedem angelegten Termin. */
     private const CAL_MEMBERS_MAX   = 500;
     private const CAL_REMINDERS_MAX = 300;
+    /* Termin ⇒ gespeichertes Original (24.09.2026). OpenCalendar laesst sich
+       nicht erweitern — dieselbe Nebenablage wie bei Mitgliedern und Erinnerungen. */
+    private const CAL_ORIGINALS_MAX = 500;
 
     /**
      * Hoechstzahl Einzeltermine, die aus EINER Reihe entstehen duerfen. Jeder davon
@@ -84,6 +87,7 @@ trait CalendarBridge
         $this->RegisterPropertyInteger('CalNotifyVisuID', 0);
         $this->RegisterAttributeString('CalMembers', '{}');
         $this->RegisterAttributeString('CalReminders', '{}');
+        $this->RegisterAttributeString('CalOriginals', '{}');
         $this->RegisterTimer('CalNotify', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'CalNotify\', 0);');
     }
 
@@ -127,6 +131,24 @@ trait CalendarBridge
         } catch (Throwable $e) {
             return [];
         }
+    }
+
+    /** @return array<string, string> Termin (calendarID:UID) ⇒ Kennung des Originals */
+    private function CalOriginalStore(): array
+    {
+        try {
+            $d = json_decode((string)@$this->ReadAttributeString('CalOriginals'), true);
+            return is_array($d) ? $d : [];
+        } catch (Throwable $e) {
+            return [];
+        }
+    }
+
+    /** Das Original aus der Eingabe — nur eine gueltige Kennung, deren Ordner es gibt. */
+    private function CalOriginalAusEingabe(array $daten): string
+    {
+        $id = trim((string)($daten['originalId'] ?? ''));
+        return $this->OriginalExistiert($id) ? $id : '';
     }
 
     /** Schreibt und prueft zurueck — ein Attribut, das der Kernel nicht kennt, schluckt still. */
@@ -510,8 +532,9 @@ trait CalendarBridge
         // Einmal lesen, nicht je Kalender: beides sind Attribute dieser Instanz.
         $mitglieder   = $this->CalMemberStore();
         $erinnerungen = $this->CalReminderStore();
+        $originale    = $this->CalOriginalStore();
         foreach ($ids as $id) {
-            foreach ($this->CalReadOne($id, $von, $bis, $mitglieder, $erinnerungen) as $e) {
+            foreach ($this->CalReadOne($id, $von, $bis, $mitglieder, $erinnerungen, $originale) as $e) {
                 if (count($alle) >= self::CAL_MAX_EVENTS) {
                     $gekappt = true;
                     break 2;
@@ -577,11 +600,12 @@ trait CalendarBridge
      *
      * @return list<array<string, mixed>>
      */
-    private function CalReadOne(int $id, int $von, int $bis, array $mitglieder = [], array $erinnerungen = []): array
+    private function CalReadOne(int $id, int $von, int $bis, array $mitglieder = [], array $erinnerungen = [],
+        array $originale = []): array
     {
         $raus = [];
         foreach ($this->CalRawItems($id, $von, $bis) as $e) {
-            $raus[] = $this->CalNormalize($e, $id, $mitglieder, $erinnerungen);
+            $raus[] = $this->CalNormalize($e, $id, $mitglieder, $erinnerungen, $originale);
         }
         return $raus;
     }
@@ -593,7 +617,8 @@ trait CalendarBridge
      * @param array<string, mixed> $e
      * @return array<string, mixed>
      */
-    private function CalNormalize(array $e, int $calendarID, array $mitglieder = [], array $erinnerungen = []): array
+    private function CalNormalize(array $e, int $calendarID, array $mitglieder = [], array $erinnerungen = [],
+        array $originale = []): array
     {
         $start = (int)($e['startTimestamp'] ?? 0);
         $ende  = (int)($e['endTimestamp'] ?? $start);
@@ -644,6 +669,11 @@ trait CalendarBridge
             // Wie viele Jahre dieses Vorkommen zaehlt — rechnet OpenCalendar aus
             // dem Jahr des Vorkommens gegen das Ursprungsjahr.
             $zeile['years'] = (int)($e['years'] ?? 0);
+        }
+        // Gespeichertes Original (24.09.2026) — nur wenn es eines gibt.
+        $original = (string)($originale[$calendarID . ':' . (string)($e['uid'] ?? '')] ?? '');
+        if ($original !== '') {
+            $zeile['originalId'] = $original;
         }
         return $zeile;
     }
@@ -891,6 +921,15 @@ trait CalendarBridge
             }
         } elseif ($uid === '' && ($mitglieder !== [] || $vorlauf >= 0)) {
             $this->SendDebug('Calendar', 'Keine UID zurueckgemeldet — Zuordnung und Erinnerung entfallen', 0);
+        }
+        // „Original speichern" (24.09.2026): der Termin haelt sein Original.
+        $original = $this->CalOriginalAusEingabe($daten);
+        if ($uid !== '' && $original !== '') {
+            $originale = $this->CalOriginalStore();
+            $originale[$calendarID . ':' . $uid] = $original;
+            if (!$this->CalWriteStore('CalOriginals', $originale, self::CAL_ORIGINALS_MAX)) {
+                $this->SendDebug('Calendar', 'Verweis aufs Original nicht speicherbar (Modul neu laden)', 0);
+            }
         }
 
         $this->LogMessage(sprintf(
@@ -1528,6 +1567,7 @@ trait CalendarBridge
             }
             // Serien-Vorkommen: gleiche Wache wie beim Aendern (siehe CalUpdateEvent),
             // massgeblich ist das Flag am Datensatz.
+            $nurVorkommen = false;
             if ($this->CalIsOccurrence($roh)) {
                 /* Beim Loeschen gibt es nur ZWEI Reichweiten: dieses Vorkommen oder
                    die ganze Serie. Ein „und alle folgenden" meldet der Anbieter
@@ -1556,6 +1596,7 @@ trait CalendarBridge
                     $roh = $ziel['event'];
                 }
                 $roh['writeScope'] = $scope;
+                $nurVorkommen = $scope !== 'series';
             }
             try {
                 $erfolg = IPSKAL_DeleteEvent(
@@ -1594,6 +1635,13 @@ trait CalendarBridge
             if (array_key_exists($schluessel, $erinnerungen)) {
                 unset($erinnerungen[$schluessel]);
                 $this->CalWriteStore('CalReminders', $erinnerungen, self::CAL_REMINDERS_MAX);
+            }
+            /* Das Original nur mit dem GANZEN Termin: ein geloeschtes Vorkommen laesst
+               die Serie stehen, und die haelt ihr Original weiter. */
+            $originale = $this->CalOriginalStore();
+            if (!($nurVorkommen ?? false) && array_key_exists($schluessel, $originale)) {
+                unset($originale[$schluessel]);
+                $this->CalWriteStore('CalOriginals', $originale, self::CAL_ORIGINALS_MAX);
             }
         }
 

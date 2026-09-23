@@ -33,6 +33,7 @@ require_once __DIR__ . '/../libs/AiJobs.php';
 require_once __DIR__ . '/../libs/Briefing.php';
 require_once __DIR__ . '/../libs/MailAnalyseCalc.php';
 require_once __DIR__ . '/../libs/MailScan.php';
+require_once __DIR__ . '/../libs/Originale.php';
 
 IPS\Kernel::reset();
 date_default_timezone_set('Europe/Berlin');
@@ -80,6 +81,7 @@ final class HintergrundProbe
     use AiJobs;
     use Briefing;
     use MailScan;
+    use Originale;
 
     public static ?HintergrundProbe $aktuelle = null;
 
@@ -169,6 +171,16 @@ final class HintergrundProbe
     private function MailNotifyProposal(int $a, int $t, int $n, string $u, string $q): void {}
     private function AiFetchPublicPage(string $url, int $frist = 15): array { return ['ok' => false, 'code' => 'ai_url_fetch']; }
     private function EduPushAuftragFertig(): void {}
+
+    // ── Originale ───────────────────────────────────────────────────────
+    private function OriginalVerzeichnis(): string { return $this->dir . 'originale'; }
+    private function AiPrivacyAccepted(): bool { return true; }
+    private function AiStripImage(string $b): string { return $b; }
+    private function AiScaleImage(string $b, int $k = 1600): ?string { return null; }
+    private function AnhangGrenzen(): array { return AnhangGrenzenCalc::Wirksam([]); }
+    private function ReadAttributeStringSafe(string $k, string $d): string { return $this->attrs[$k] ?? $d; }
+    private function WriteAttributeString(string $k, string $v): void { $this->attrs[$k] = $v; }
+    public function pOriginal(string $id): ?array { return $this->OriginalAblage(false)->lesen($id); }
 
     // ── Symcon ──────────────────────────────────────────────────────────
     private function Translate(string $s): string { return $s; }
@@ -300,14 +312,24 @@ $a1->pMail();
 $kopfA = $a1->pKopf($a1->pKennung());
 pruefe('Der Anhang steht in der Beschreibung des Auftrags — ohne Adresse',
     $kopfA['origin']['anhaenge'] ?? null, [['kind' => 'pdf', 'name' => 'brief.pdf']]);
+/* Seit dem 24.09.2026 liegt der Anhang im ORIGINAL, schon beim Einreihen —
+   der Fertigmelder greift nicht mehr ins Postfach, und Medienobjekte auf
+   Vorrat gibt es nicht mehr. Die Notiz nimmt ihre Anhaenge beim Uebernehmen
+   aus dem Original. */
+$originalA = (string)($kopfA['origin']['original'] ?? '');
+pruefe('Das Original liegt schon beim Einreihen — mit dem Anhang aus dem Postfach',
+    array_map(static fn($a) => [$a['name'], $a['kind']], (array)($a1->pOriginal($originalA)['atts'] ?? [])),
+    [['brief.pdf', 'pdf']]);
+pruefe('… und mit dem vollen Text', $a1->pOriginal($originalA)['text'] ?? null, 'Ausflug am Freitag, bitte 5 Euro mitgeben.');
 $a1->pAntwort($a1->pKennung(), ['ok' => true, 'text' => $notiz, 'debug' => []]);
-pruefe('Die Notiz traegt den Anhang aus dem Postfach', $a1->abgelegt, ['brief.pdf']);
-pruefe('… nachgeladen VOR dem Speichern, geloescht DANACH',
-    $a1->ereignisse,
-    ['anhaenge:42', 'anhaenge:42', 'gespeichert:ja', 'geloescht:42']);
-pruefe('… und der Vorschlag verweist auf die Ablage',
-    [(int)($a1->vorschlaege[0]['items'][0]['mediaId'] ?? 0), $a1->vorschlaege[0]['items'][0]['atts'][0]['name'] ?? null],
-    [123, 'brief.pdf']);
+pruefe('Kein zweiter Griff ins Postfach: einmal geholt, gespeichert, DANN geloescht',
+    $a1->ereignisse, ['anhaenge:42', 'gespeichert:ja', 'geloescht:42']);
+pruefe('… keine Medienobjekte auf Vorrat', $a1->abgelegt, []);
+pruefe('… der Vorschlag verweist aufs Original, die Funde tragen keine Anhaenge mehr',
+    [($a1->vorschlaege[0]['originalId'] ?? null) === $originalA, isset($a1->vorschlaege[0]['items'][0]['atts'])],
+    [true, false]);
+pruefe('… und das Original wurde vom Ergebnis NICHT durch den gekuerzten Text ersetzt',
+    [count((array)($a1->pOriginal($originalA)['atts'] ?? [])), ($a1->pOriginal($originalA)['truncated'] ?? null)], [1, false]);
 
 /* Fuer eine Aufgabe ohne Notiz braucht niemand die Datei — kein zweiter Griff
    ins Postfach. */

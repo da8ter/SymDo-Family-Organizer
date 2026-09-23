@@ -215,10 +215,12 @@ trait NotesAi
             return $this->NotesFehler('quota_exceeded');
         }
         $eintrag = null;
+        $vorschlag = null;
         foreach ($this->MailProposals() as $v) {
             if ((string)($v['id'] ?? '') !== $vid) {
                 continue;
             }
+            $vorschlag = $v;
             $items = is_array($v['items'] ?? null) ? $v['items'] : [];
             if (isset($items[$idx]) && is_array($items[$idx])) {
                 $eintrag = $items[$idx];
@@ -283,10 +285,46 @@ trait NotesAi
             // sonst alles gleichzeitig im Speicher.
             unset($roh);
         }
+        /* Anhaenge aus dem ORIGINAL des Vorschlags (24.09.2026) — seit es keine
+           Medienobjekte auf Vorrat mehr gibt, der Weg fuer neue Vorschlaege.
+           „keepOriginal" sind Nummern im Original; nachgeschlagen wird das
+           Original ueber den VORSCHLAG, nie ueber eine Kennung des Clients. Was
+           eine Notiz nicht ausliefern kann (ein PDF ueber der Ausgabegrenze),
+           bleibt draussen — es ist ueber „Original speichern" erreichbar. */
+        $originalVorschlag = (string)($vorschlag['originalId'] ?? '');
+        if (array_key_exists('keepOriginal', $body) && is_array($body['keepOriginal'])
+            && OriginalCalc::KennungGueltig($originalVorschlag)) {
+            $ablage = $this->OriginalAblage(false);
+            foreach (array_values(array_unique(array_map('intval', $body['keepOriginal']))) as $nr) {
+                if (count($att) >= self::NOTE_ATTACH_MAX) {
+                    break;
+                }
+                $datei = $ablage->dateiLesen($originalVorschlag, $nr, $this->OutputLimit());
+                if ($datei === null) {
+                    continue;
+                }
+                $abgelegt = $this->NotesSaveAttachment(base64_encode($datei['daten']), $datei['name']);
+                unset($datei);
+                if (($abgelegt['ok'] ?? false) !== true) {
+                    continue;
+                }
+                $att[] = ['id' => (int)$abgelegt['id'], 'kind' => (string)($abgelegt['kind'] ?? ''),
+                          'name' => (string)($abgelegt['name'] ?? ''), 'bytes' => (int)($abgelegt['bytes'] ?? 0)];
+            }
+        }
         $notiz = ['id' => $this->NotesNewId(), 'folderId' => $fid,
                   'title' => $titel !== '' ? $titel : mb_substr($text, 0, 40),
                   'text' => $text, 'att' => $att,
                   'createdAt' => $jetzt, 'updatedAt' => $jetzt, 'source' => 'mail'];
+        /* „Original speichern": das abgeleitete Original muss zu DIESEM Vorschlag
+           gehoeren — sonst haengte sich jede Notiz an ein beliebiges Original. */
+        $originalEintrag = trim((string)($body['originalId'] ?? ''));
+        if ($originalEintrag !== '') {
+            $satzO = $this->OriginalAblage(false)->lesen($originalEintrag);
+            if ($satzO !== null && (string)($satzO['proposalId'] ?? '') === $vid) {
+                $notiz['originalId'] = $originalEintrag;
+            }
+        }
         $store['notes'][] = $notiz;
         return $this->NotesWriteStore($store)
             ? ['ok' => true, 'rev' => (int)$store['rev'] + 1, 'note' => $this->NotesRow($notiz, true)]

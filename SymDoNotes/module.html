@@ -3411,6 +3411,23 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 #noteViewOverlay { z-index: 58; }
 #noteViewOverlay .overlay-card { max-height: 92%; }
 #noteViewOverlay #noteViewFiles { margin-top: 14px; }
+/* Original eines KI-Vorschlags (24.09.2026): ueber den Editoren (60) und der
+   Notiz-Ansicht (58) — das Auge in einem Dialog oeffnet es DARUEBER. */
+#originalOverlay { z-index: 61; }
+#originalOverlay .overlay-card { max-height: 92%; }
+#originalOverlay #originalFiles { margin-top: 14px; }
+.original-hinweis { font-size: 12px; color: var(--muted); margin: 0 2px 10px; font-style: italic; }
+.note-file.is-skipped { opacity: .55; cursor: default; }
+.note-file .orig-groesse { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+/* Der Betrachter (PDF/Bild) muss ueber dem Original-Blatt liegen. */
+#recipeImgOverlay { z-index: 62; }
+/* „Original speichern" in den Hinzufuegen-Dialogen */
+.original-wahl { display: flex; flex-direction: column; gap: 8px; }
+.original-anhaenge { display: flex; flex-direction: column; gap: 6px; padding: 0 2px; }
+.original-anhaenge.aus { opacity: .45; }
+.original-anhang { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.original-anhang span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.original-anhang small { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .note-file .nv-chev { flex: none; color: var(--muted); font-size: 13px; margin-left: auto; }
 
 /* Anhaenge im Notiz-Editor sind eine LISTE, kein Chip-Feld: eine Zeile je Datei,
@@ -4685,6 +4702,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   <div class="overlay-card">
     <div class="overlay-head">
       <span class="overlay-title" id="todoOverlayTitle"></span>
+      <button class="btn-close-overlay original-auge" id="tdOriginalAuge" style="display:none"><i class="fa-light fa-eye"></i></button>
       <button class="btn-close-overlay" data-close="todoOverlay"><i class="fa-light fa-xmark"></i></button>
     </div>
     <div class="overlay-body">
@@ -4747,6 +4765,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
           <button class="icon-btn" id="tdQtyPlus"><i class="fa-light fa-plus"></i></button>
         </span>
       </div>
+      <div id="tdOriginal" class="original-wahl" style="display:none"></div>
     </div>
     <div class="overlay-footer">
       <!-- Loeschen ganz links, nur der Muelleimer; die Beschriftung steckt in
@@ -4798,6 +4817,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   <div class="overlay-card">
     <div class="overlay-head">
       <span class="overlay-title" id="hwOverlayTitle"></span>
+      <button class="btn-close-overlay original-auge" id="hwOriginalAuge" style="display:none"><i class="fa-light fa-eye"></i></button>
       <button class="btn-close-overlay" data-close="hwOverlay"><i class="fa-light fa-xmark"></i></button>
     </div>
     <div class="overlay-body">
@@ -4813,6 +4833,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
         <div class="form-row inline"><label id="lblHwSubject"></label><select id="hwSubject"></select></div>
         <div class="form-row inline"><label id="lblHwDue"></label><input id="hwDue" type="date" /></div>
         <div class="form-row"><label id="lblHwNote"></label><textarea id="hwNote" rows="2" maxlength="500"></textarea></div>
+        <div id="hwOriginal" class="original-wahl" style="display:none"></div>
       </div>
       <div id="hwView" style="display:none">
         <div class="hw-view-kopf">
@@ -4838,6 +4859,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   <div class="overlay-card">
     <div class="overlay-head">
       <span class="overlay-title" id="calEditTitle"></span>
+      <button class="btn-close-overlay original-auge" id="ceOriginalAuge" style="display:none"><i class="fa-light fa-eye"></i></button>
       <button class="btn-close-overlay" data-close="calEditOverlay"><i class="fa-light fa-xmark"></i></button>
     </div>
     <div class="overlay-body">
@@ -4890,6 +4912,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
         <div id="ceAssignList" class="assign-list"></div></div>
       <div class="form-row"><label id="calEditLocationLabel"></label>
         <input id="ceLocation" type="text" /></div>
+      <div id="ceOriginal" class="original-wahl" style="display:none"></div>
     </div>
     <div class="overlay-footer">
       <!-- Loeschen ganz links, nur der Muelleimer — wie im Aufgaben- und
@@ -5064,6 +5087,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   <div class="overlay-card">
     <div class="overlay-head">
       <span class="overlay-title" id="noteViewTitle"></span>
+      <button class="btn-close-overlay original-auge" id="nvOriginalAuge" style="display:none"><i class="fa-light fa-eye"></i></button>
       <button class="btn-close-overlay" id="btnNoteEdit" aria-label="Bearbeiten"><i class="fa-light fa-pen"></i></button>
       <button class="btn-close-overlay" data-close="noteViewOverlay"><i class="fa-light fa-xmark"></i></button>
     </div>
@@ -5071,6 +5095,23 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       <div id="noteViewMeta" class="note-view-meta"></div>
       <div id="noteViewBody" class="note-view"></div>
       <div id="noteViewFiles" class="note-files"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Das Original eines KI-Vorschlags (24.09.2026): der Text, den die KI
+     gelesen hat, und seine Anhaenge. Nur lesen. -->
+<div class="overlay" id="originalOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="originalTitle"></span>
+      <button class="btn-close-overlay" data-close="originalOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <div id="originalMeta" class="note-view-meta"></div>
+      <div id="originalHinweis" class="original-hinweis" style="display:none"></div>
+      <div id="originalBody" class="note-view"></div>
+      <div id="originalFiles" class="note-files"></div>
     </div>
   </div>
 </div>
@@ -5097,6 +5138,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
         <div id="ntFiles" class="note-files"></div>
         <button class="ai-source-btn" id="btnNoteAttach"><i class="fa-light fa-paperclip"></i><span id="noteAttachLabel"></span></button>
       </div>
+      <div id="ntOriginal" class="original-wahl" style="display:none"></div>
       <div id="ntAiHint" class="ai-status" style="display:none;"></div>
     </div>
     <div class="overlay-footer">
@@ -6201,20 +6243,30 @@ function zeigeMedium(dataUrl, istPdf, titel, direkt) {
   const pdf = document.getElementById('recipePdf');
   const raus = document.getElementById('recipeOpenExt');
   let blobUrl = '';
+  // Seit 24.09.2026 auch ein Blob: die Anhaenge eines Originals kommen in Stuecken.
+  const istBlob = typeof Blob !== 'undefined' && dataUrl instanceof Blob;
   if (istPdf) {
     img.style.display = 'none'; img.removeAttribute('src');
     try {
       if (pdf.dataset.blob) { URL.revokeObjectURL(pdf.dataset.blob); }
-      blobUrl = URL.createObjectURL(dataUrlToBlob(dataUrl));
+      blobUrl = URL.createObjectURL(istBlob ? dataUrl : dataUrlToBlob(dataUrl));
       pdf.dataset.blob = blobUrl; pdf.src = blobUrl; pdf.style.display = '';
     } catch (e) { showToast(translate('Could not load the file.')); return; }
   } else {
     pdf.style.display = 'none'; pdf.removeAttribute('src');
-    img.src = dataUrl; img.style.display = '';
+    if (istBlob) {
+      if (img.dataset.blob) { URL.revokeObjectURL(img.dataset.blob); }
+      blobUrl = URL.createObjectURL(dataUrl);
+      img.dataset.blob = blobUrl;
+      img.src = blobUrl;
+    } else {
+      img.src = dataUrl;
+    }
+    img.style.display = '';
   }
   // Die Datei-Adresse ist die bessere Wahl: ein Blob-Verweis stirbt mit der
   // Seite, und manche Browser laden ihn im neuen Tab gar nicht.
-  const ziel = direkt || blobUrl || (istPdf ? '' : dataUrl);
+  const ziel = direkt || blobUrl || (istPdf || istBlob ? '' : dataUrl);
   if (ziel) { raus.href = ziel; raus.style.display = ''; }
   else { raus.style.display = 'none'; raus.removeAttribute('href'); }
   document.getElementById('recipeImgTitle').textContent = titel;
@@ -11787,7 +11839,9 @@ function renderMailAi() {
           ? `<span class="mail-done" title="${translate('Taken over')}" aria-label="${translate('Taken over')}"><i class="fa-light fa-check"></i></span>`
           // destructive: rot wie ueberall, wo etwas verworfen wird — und die runde
           // Flaeche nimmt die Farbe ueber currentColor mit.
-          : `<button class="row-btn destructive" data-mail="drop" aria-label="${translate('Discard')}" title="${translate('Discard')}"><i class="fa-light fa-xmark"></i></button>` +
+          // Grau (row-btn ohne Farbe), links neben dem X: das Original ansehen.
+          : (p.originalId ? `<button class="row-btn" data-mail="original" aria-label="${translate('Show original')}" title="${translate('Show original')}"><i class="fa-light fa-eye"></i></button>` : '') +
+            `<button class="row-btn destructive" data-mail="drop" aria-label="${translate('Discard')}" title="${translate('Discard')}"><i class="fa-light fa-xmark"></i></button>` +
             `<button class="row-btn accent" data-mail="add" aria-label="${translate('Add')}" title="${translate('Add')}"><i class="fa-light fa-plus"></i></button>`) +
         `</span>` +
         `</div>` +
@@ -11897,6 +11951,11 @@ function mailAiBind(area) {
     const id = zeile.getAttribute('data-id') || '';
     const i = zeile.getAttribute('data-i') || '';
     if (art === 'kind') return;   // das Auswahlfeld — erledigt der change-Hoerer oben
+    if (art === 'original') {
+      const vorschlag = mailProposals.find(v => String(v.id) === String(id));
+      if (vorschlag && vorschlag.originalId) originalZeigen(vorschlag.originalId);
+      return;
+    }
     if (art === 'drop') {
       mailDrop(id, i);
       return;
@@ -11984,7 +12043,8 @@ function mailAccept(id, i) {
   const vorschlag = mailProposals.find(p => String(p.id) === String(id));
   const eintrag = vorschlag && (vorschlag.items || []).find(it => String(it.i) === String(i));
   if (!eintrag || eintrag.taken === true) return;
-  entwurfOeffnen(eintrag, String(vorschlag.userId || ''), { id: id, i: i });
+  entwurfOeffnen(eintrag, String(vorschlag.userId || ''),
+    { id: id, i: i, originalId: String(vorschlag.originalId || '') });
 }
 
 /**
@@ -12038,6 +12098,21 @@ function entwurfOeffnen(eintrag, userId, quelle) {
         kind: a.kind || '', bytes: a.bytes || 0, an: true
       }));
       noteDateienZeichnen();
+      // „Original speichern" nimmt bei der Notiz nur den Text mit (siehe originalWahlZeigen).
+      originalWahlZeigen('ntOriginal', quelle && quelle.originalId, false);
+      /* Seit dem 24.09.2026 bringt ein Vorschlag seine Anhaenge im ORIGINAL mit,
+         nicht mehr als Medienobjekte auf Vorrat. Angehakt werden sie wie bisher;
+         Briefpapier nicht, und was fuer eine Notiz zu gross ist, gar nicht. */
+      if (roh.length === 0 && quelle && originalKennungGueltig(quelle.originalId)) {
+        const ctx = noteCtx;
+        originalHolen(quelle.originalId).then(o => {
+          if (noteCtx !== ctx || !o || o.fehler) return;
+          ctx.wahl = (Array.isArray(o.atts) ? o.atts : []).map(a => ({
+            n: a.n, oid: quelle.originalId, name: a.name || translate('Attachment'), kind: a.kind || '',
+            bytes: a.bytes || 0, gesperrt: a.notiz === false, an: a.deko !== true && a.notiz !== false }));
+          noteDateienZeichnen();
+        });
+      }
     }
     return;
   }
@@ -12073,6 +12148,257 @@ function entwurfOeffnen(eintrag, userId, quelle) {
   // eine Bearbeitung, hier ist es ein Entwurf.
   document.getElementById('todoOverlayTitle').textContent = translate('New task');
   todoCtx.proposal = quelle || null;
+  originalWahlZeigen('tdOriginal', quelle && quelle.originalId, true);
+}
+
+// ── Original eines KI-Vorschlags (24.09.2026) ─────────────────────────────
+/* Was die KI gelesen hat — der Text und seine Anhaenge —, legt das Gateway
+   beim Auswerten ab. Hier wird es gezeigt (Auge an der Vorschlagszeile und in
+   den Dialogen gespeicherter Eintraege), in Stuecken geladen (Symcon liefert je
+   Antwort nur rund 1 MB) und fuer einen Eintrag behalten („Original speichern"
+   in den Hinzufuegen-Dialogen). Angezeigt wird NUR Text, und der geht durch
+   notizTextHtml: erst maskiert, dann verlinkt. */
+const originalZwischen = {};   // Kennung → Promise<Original | {fehler}>
+function originalHolen(id) {
+  const key = String(id || '');
+  if (!originalZwischen[key]) {
+    originalZwischen[key] = aiPost('/mail/proposals', { action: 'original', id: key }).then(r => {
+      const j = r && r.json;
+      if (j && j.ok === true && j.original) return j.original;
+      // Nicht merken: ein Netzfehler soll beim naechsten Tipp noch einmal fragen.
+      delete originalZwischen[key];
+      return { fehler: (j && j.error && j.error.code) || 'unreachable' };
+    }).catch(() => { delete originalZwischen[key]; return { fehler: 'unreachable' }; });
+  }
+  return originalZwischen[key];
+}
+
+function originalKennungGueltig(id) { return /^[0-9a-f]{24}$/.test(String(id || '')); }
+function originalGroesse(bytes) {
+  const b = Number(bytes) || 0;
+  if (b >= 1048576) return (b / 1048576).toFixed(1).replace('.', ',') + ' MB';
+  return Math.max(1, Math.round(b / 1024)) + ' KB';
+}
+function originalMime(art) {
+  return art === 'pdf' ? 'application/pdf' : (art === 'png' ? 'image/png' : 'image/jpeg');
+}
+
+let originalZaehler = 0;
+/** Das Blatt mit dem Original — oeffnet sofort, der Inhalt kommt nach. */
+function originalZeigen(id) {
+  const key = String(id || '');
+  if (!originalKennungGueltig(key)) return;
+  const nr = ++originalZaehler;
+  const titel = document.getElementById('originalTitle');
+  const meta = document.getElementById('originalMeta');
+  const hinweis = document.getElementById('originalHinweis');
+  const text = document.getElementById('originalBody');
+  const dateien = document.getElementById('originalFiles');
+  titel.textContent = translate('Original message');
+  meta.textContent = '';
+  hinweis.style.display = 'none';
+  text.textContent = translate('Loading …');
+  dateien.innerHTML = '';
+  openOverlay('originalOverlay');
+  originalHolen(key).then(o => {
+    if (nr !== originalZaehler) return;       // inzwischen ein anderes geoeffnet
+    if (!o || o.fehler) {
+      text.textContent = translate(o && o.fehler === 'not_found' ? 'The original is no longer available.' : 'Action failed');
+      return;
+    }
+    const herkunft = (o.origin && typeof o.origin === 'object') ? o.origin : {};
+    titel.textContent = String(herkunft.subject || o.subject || '') || translate('Original message');
+    const teile = [];
+    const quelle = mailQuellWort({ source: o.source, id: o.proposalId });
+    if (quelle) teile.push(translate('Source: %1').replace('%1', quelle));
+    const wer = String(herkunft.name || herkunft.address || o.fromName || o.from || '');
+    if (wer) teile.push(translate('From: %1').replace('%1', wer));
+    const wann = mailWannText({ at: o.date });
+    if (wann) teile.push(wann);
+    meta.textContent = teile.join(' · ');
+    if (o.truncated === true) {
+      hinweis.textContent = translate('Shortened — the full text was not available.');
+      hinweis.style.display = '';
+    }
+    text.innerHTML = String(o.text || '').trim() !== '' ? notizTextHtml(String(o.text)) : '';
+    const atts = Array.isArray(o.atts) ? o.atts : [];
+    const uebersprungen = Array.isArray(o.skipped) ? o.skipped : [];
+    dateien.innerHTML = atts.map(a =>
+      '<div class="note-file" data-orig-n="' + escapeHtml(String(a.n)) + '">' +
+      '<i class="fa-light ' + (a.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
+      '<span>' + escapeHtml(String(a.name || translate('Attachment'))) + '</span>' +
+      '<span class="orig-groesse">' + escapeHtml(originalGroesse(a.bytes)) + '</span>' +
+      '<i class="fa-light fa-chevron-right nv-chev"></i>' +
+      '</div>').join('') +
+      uebersprungen.map(name =>
+      '<div class="note-file is-skipped">' +
+      '<i class="fa-light fa-file"></i><span>' + escapeHtml(String(name)) + '</span>' +
+      '<span class="orig-groesse">' + escapeHtml(translate('Not kept')) + '</span></div>').join('');
+    dateien.querySelectorAll('[data-orig-n]').forEach(zeile => {
+      const a = atts.find(x => String(x.n) === zeile.dataset.origN);
+      zeile.addEventListener('click', () => { if (a) originalAnhangOeffnen(key, a); });
+    });
+  });
+}
+
+/**
+ * Einen Anhang des Originals laden — in Stuecken, weil Symcon je Antwort nur
+ * rund 1 MB ausliefert. Mit Token (Web-App) ueber die REST-Route, in der
+ * Visu-Kachel ueber das Relay. Liefert einen Blob.
+ */
+function originalAnhangLaden(id, n, art, fortschritt) {
+  const basis = (window.__SYMDO__ && window.__SYMDO__.apiBase)
+    ? String(window.__SYMDO__.apiBase).replace(/\/+$/, '') : '';
+  let token = '';
+  try { token = ls.get('symdo.token') || ''; } catch (e) {}
+  const stuecke = [];
+  const holen = (teil) => {
+    if (basis && token) {
+      return fetch(basis + '/original/' + encodeURIComponent(id) + '/' + encodeURIComponent(String(n)) + '?teil=' + teil,
+        { headers: { 'Authorization': 'Bearer ' + token }, credentials: 'omit' })
+        .then(r => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const alle = parseInt(r.headers.get('X-SymDo-Teile') || '1', 10) || 1;
+          return r.arrayBuffer().then(puffer => ({ daten: new Uint8Array(puffer), teile: alle }));
+        });
+    }
+    return aiPost('/mail/proposals', { action: 'originalTeil', id: id, n: n, teil: teil }).then(r => {
+      const j = r && r.json;
+      if (!j || j.ok !== true) throw new Error('relay');
+      const bin = atob(String(j.data || ''));
+      const daten = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) daten[i] = bin.charCodeAt(i);
+      return { daten: daten, teile: parseInt(j.teile, 10) || 1 };
+    });
+  };
+  const weiter = (teil) => holen(teil).then(t => {
+    stuecke.push(t.daten);
+    if (typeof fortschritt === 'function' && t.teile > 1) fortschritt(teil + 1, t.teile);
+    // Hart gedeckelt: eine falsche Teilzahl darf keine Endlosschleife werden.
+    return (teil + 1 < t.teile && teil < 200) ? weiter(teil + 1) : null;
+  });
+  return weiter(0).then(() => new Blob(stuecke, { type: originalMime(art) }));
+}
+
+function originalAnhangOeffnen(id, a) {
+  const name = String((a && a.name) || translate('Attachment'));
+  originalAnhangLaden(id, a.n, a.kind, (fertig, alle) => {
+    showToast(translate('Loading part %1 of %2').replace('%1', String(fertig)).replace('%2', String(alle)));
+  }).then(blob => zeigeMedium(blob, a.kind === 'pdf', name, ''))
+    .catch(() => showToast(translate('Could not load the file.')));
+}
+
+/** Das Auge in einem Dialog: nur mit Original — und nur, wo der KI-Weg erreichbar ist. */
+function originalAugeSetzen(knopfId, originalId) {
+  const k = document.getElementById(knopfId);
+  if (!k) return;
+  const id = String(originalId || '');
+  const zeigen = originalKennungGueltig(id) && mailAiAvailable();
+  k.style.display = zeigen ? '' : 'none';
+  k.dataset.original = zeigen ? id : '';
+}
+
+/* „Original speichern" in einem Hinzufuegen-Dialog. Der Zustand haengt am
+   Behaelter. `mitAnhaengen` fragt jeden Anhang einzeln ab (Aufgabe, Termin,
+   Hausaufgabe); Briefpapier und Logos (deko) sind nicht vorgehakt. Die Notiz
+   waehlt ihre Anhaenge in ihrer eigenen Liste — dort nimmt „Original
+   speichern" nur den Text mit. */
+function originalWahlZuruecksetzen(behaelterId) {
+  const el = document.getElementById(behaelterId);
+  if (!el) return;
+  el._wahl = null;
+  el.innerHTML = '';
+  el.style.display = 'none';
+}
+
+function originalWahlZeigen(behaelterId, originalId, mitAnhaengen) {
+  const el = document.getElementById(behaelterId);
+  if (!el) return;
+  const id = String(originalId || '');
+  if (!originalKennungGueltig(id) || !mailAiAvailable()) { originalWahlZuruecksetzen(behaelterId); return; }
+  const w = { id: id, an: false, atts: [], mitAnhaengen: mitAnhaengen === true, warte: null };
+  el._wahl = w;
+  el.style.display = '';
+  originalWahlZeichnen(el);
+  if (!w.mitAnhaengen) return;
+  originalHolen(id).then(o => {
+    if (el._wahl !== w || !o || o.fehler) return;
+    w.atts = (Array.isArray(o.atts) ? o.atts : []).map(a =>
+      ({ n: a.n, name: a.name, kind: a.kind, bytes: a.bytes, an: a.deko !== true }));
+    if (w.warte) { originalWahlAnwenden(w, w.warte); w.warte = null; }
+    originalWahlZeichnen(el);
+  });
+}
+
+function originalWahlZeichnen(el) {
+  const w = el._wahl;
+  if (!w) { el.innerHTML = ''; return; }
+  el.innerHTML =
+    '<div class="form-row inline"><label>' + escapeHtml(translate('Save original')) + '</label>' +
+    '<span class="switch"><input type="checkbox" data-orig-an' + (w.an ? ' checked' : '') + ' /><span class="knob"></span></span></div>' +
+    (w.mitAnhaengen && w.atts.length
+      ? '<div class="original-anhaenge' + (w.an ? '' : ' aus') + '">' + w.atts.map(a =>
+          '<label class="original-anhang"><input type="checkbox" data-orig-wahl="' + escapeHtml(String(a.n)) + '"' +
+          (a.an ? ' checked' : '') + (w.an ? '' : ' disabled') + ' />' +
+          '<i class="fa-light ' + (a.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
+          '<span>' + escapeHtml(String(a.name || translate('Attachment'))) + '</span>' +
+          '<small>' + escapeHtml(originalGroesse(a.bytes)) + '</small></label>').join('') + '</div>'
+      : '');
+  const schalter = el.querySelector('[data-orig-an]');
+  if (schalter) schalter.addEventListener('change', () => { w.an = schalter.checked; originalWahlZeichnen(el); });
+  el.querySelectorAll('[data-orig-wahl]').forEach(k => k.addEventListener('change', () => {
+    const a = w.atts.find(x => String(x.n) === k.dataset.origWahl);
+    if (a) a.an = k.checked;
+  }));
+}
+
+/** Was gewaehlt ist — null, wenn „Original speichern" aus ist. */
+function originalWahlLesen(behaelterId) {
+  const el = document.getElementById(behaelterId);
+  const w = el && el._wahl;
+  if (!w || !w.an) return null;
+  return { id: w.id, nummern: w.mitAnhaengen ? w.atts.filter(a => a.an).map(a => a.n) : [] };
+}
+
+/** Der ganze Stand (auch „aus") — fuer den Neuversuch nach einem gescheiterten Speichern. */
+function originalWahlStand(behaelterId) {
+  const el = document.getElementById(behaelterId);
+  const w = el && el._wahl;
+  if (!w) return null;
+  const haken = {};
+  w.atts.forEach(a => { haken[String(a.n)] = a.an; });
+  return { an: w.an, haken: haken };
+}
+function originalWahlAnwenden(w, stand) {
+  w.an = stand.an === true;
+  w.atts.forEach(a => { if (Object.prototype.hasOwnProperty.call(stand.haken || {}, String(a.n))) a.an = stand.haken[String(a.n)] === true; });
+}
+function originalWahlSetzen(behaelterId, stand) {
+  const el = document.getElementById(behaelterId);
+  const w = el && el._wahl;
+  if (!w || !stand) return;
+  if (w.mitAnhaengen && w.atts.length === 0) { w.warte = stand; w.an = stand.an === true; }
+  else originalWahlAnwenden(w, stand);
+  originalWahlZeichnen(el);
+}
+
+/** Ein eigenes Original fuer den Eintrag anlegen lassen; liefert seine Kennung oder ''. */
+function originalBehaltenFuer(wahl) {
+  if (!wahl) return Promise.resolve('');
+  return aiPost('/mail/proposals', { action: 'originalBehalten', id: wahl.id, atts: wahl.nummern }).then(r => {
+    const j = r && r.json;
+    if (j && j.ok === true && originalKennungGueltig(j.id)) return String(j.id);
+    showToast(translate('The original could not be saved.'));
+    return '';
+  }).catch(() => { showToast(translate('The original could not be saved.')); return ''; });
+}
+
+function initOriginal() {
+  document.querySelectorAll('.original-auge').forEach(k => {
+    k.title = translate('Show original');
+    k.setAttribute('aria-label', translate('Show original'));
+    k.addEventListener('click', () => { if (k.dataset.original) originalZeigen(k.dataset.original); });
+  });
 }
 
 /**
@@ -12990,6 +13316,8 @@ function hwEditorOeffnen(bestand, vorschlag) {
   const nurLesen = !!bestand && hwAusSchule(bestand);
   hwCtx = { id: bestand ? String(bestand.id) : '', proposal: (vorschlag && vorschlag.proposal) || null,
             nurLesen: nurLesen };
+  originalAugeSetzen('hwOriginalAuge', bestand ? bestand.originalId : '');
+  originalWahlZeigen('hwOriginal', (!bestand && vorschlag && vorschlag.proposal) ? vorschlag.proposal.originalId : '', true);
   if (nurLesen) { hwAnzeigeblatt(bestand); return; }
   const kindWahl = document.getElementById('hwChild');
   const kindZeile = document.getElementById('hwChildRow');
@@ -13123,16 +13451,21 @@ function hwSpeichern() {
     ? { action: 'update', id: ctx.id, subject: fach, due: due, note: note }
     : { action: 'create', childId: kind, subject: fach, due: due, note: note, source: 'app' };
   const knopf = document.getElementById('btnHwSave');
+  // „Original speichern": JETZT lesen, das Blatt kann gleich ein anderes sein.
+  const originalWahl = ctx.id ? null : originalWahlLesen('hwOriginal');
   ctx.speichert = true;
   if (fund) hwFundInArbeit.add(fund);
   knopf.disabled = true;
-  hausaufgabenAktion(nutzlast, () => {
+  originalBehaltenFuer(originalWahl).then(originalId => {
+    if (originalId) nutzlast.originalId = originalId;
+    return hausaufgabenAktion(nutzlast, () => {
     // Aus einem KI-Vorschlag übernommen? Dann ist ER jetzt erledigt — auch beim
     // Server, und auch dann, wenn inzwischen ein anderes Blatt offen ist.
     if (ctx.proposal) mailErledigt(ctx.proposal.id, ctx.proposal.i);
     hwBlattSchliessen(ctx);
     // Derselbe Vorschlag inzwischen noch einmal offen? Der ist jetzt uebernommen.
     if (fund && hwCtx && hwFundSchluessel(hwCtx.proposal) === fund) hwBlattSchliessen(hwCtx);
+    });
   }).then(() => {
     ctx.speichert = false;
     if (fund) hwFundInArbeit.delete(fund);
@@ -14202,6 +14535,8 @@ function openCalEditor(entwurf, vorschlag, bestand) {
   };
   const e = bestand || entwurf || {};
   const ganztags = e.allDay === true;
+  originalWahlZeigen('ceOriginal', (!bestand && vorschlag) ? vorschlag.originalId : '', true);
+  originalAugeSetzen('ceOriginalAuge', bestand ? bestand.originalId : '');
 
   document.getElementById('calEditTitle').textContent =
     translate(bestand ? 'Edit appointment' : 'New appointment');
@@ -14371,7 +14706,8 @@ function calFormularStand() {
     allDay: an('ceAllDay'), start: wert('ceStart'), end: wert('ceEnd'),
     annual: an('ceAnnual'), annualType: wert('ceAnnualType'), annualDate: wert('ceAnnualDate'),
     calendar: wert('ceCalendar'), notify: an('ceNotify'), lead: wert('ceLeadTime'),
-    members: Array.isArray(ceAssigned) ? ceAssigned.slice() : []
+    members: Array.isArray(ceAssigned) ? ceAssigned.slice() : [],
+    original: originalWahlStand('ceOriginal')
   };
 }
 
@@ -14391,6 +14727,7 @@ function calFormularSetzen(s) {
   renderAssignList('ceAssignList', ceAssigned);
   calSyncNotify();
   calSyncAnnual();
+  originalWahlSetzen('ceOriginal', s.original);
 }
 
 function saveCalEditor() {
@@ -14467,6 +14804,8 @@ function saveCalEditor() {
 function calSpeichernSenden(bestand, kalenderID, ereignis, knopf) {
   const stand = calFormularStand();
   const ctx   = calCtx;
+  // Vor dem Schliessen lesen — danach ist der Dialog weg.
+  const originalWahl = bestand ? null : originalWahlLesen('ceOriginal');
   const jahrestag = String(ereignis.anniversaryType || '') !== '';
   const langsam = jahrestag || !!(ereignis.recurrence) || (bestand && bestand.recurring === true);
 
@@ -14487,10 +14826,13 @@ function calSpeichernSenden(bestand, kalenderID, ereignis, knopf) {
     calFormularSetzen(stand);
   };
 
-  aiPost('/calendar', {
-    action: bestand ? 'update' : 'create',
-    calendarID: bestand ? bestand.calendarID : kalenderID,
-    event: ereignis
+  originalBehaltenFuer(originalWahl).then(originalId => {
+    if (originalId) ereignis.originalId = originalId;
+    return aiPost('/calendar', {
+      action: bestand ? 'update' : 'create',
+      calendarID: bestand ? bestand.calendarID : kalenderID,
+      event: ereignis
+    });
   }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true) {
@@ -16964,6 +17306,7 @@ let noteAnsicht = null;
 
 function noteAnsichtOeffnen(notiz) {
   noteAnsicht = notiz;
+  originalAugeSetzen('nvOriginalAuge', notiz.originalId);
   document.getElementById('noteViewTitle').textContent = notiz.title || translate('Note');
   const ordner = notesOrdner(notiz.folderId);
   const teile = [];
@@ -17062,6 +17405,8 @@ function notizTextHtml(text, ohnePaare) {
 }
 
 function noteEditorOeffnen(notiz) {
+  // Nur aus einem Vorschlag heraus gibt es ein Original (siehe entwurfOeffnen).
+  originalWahlZuruecksetzen('ntOriginal');
   noteCtx = {
     folderId: notiz.folderId || notesOrdnerId || notesErsterOrdner(),
     noteId: notiz.id || null,
@@ -17129,8 +17474,16 @@ function noteDateienZeichnen() {
     // <label> mehr: sonst schaltete jeder Tipper auf die Zeile den Haken um, und
     // die Zeile soll die Datei oeffnen, genau wie im Edit-Dialog. Weder
     // Groessenangabe noch Auge-Knopf, die gibt es dort auch nicht.
-    wahl.map(a =>
-      '<div class="note-file is-choice" data-media="' + escapeHtml(String(a.id)) + '">' +
+    wahl.map(a => a.n
+      /* Aus dem ORIGINAL (seit 24.09.2026): Nummer statt Medien-Kennung. Was fuer
+         eine Notiz zu gross ist, steht da, laesst sich aber nicht anhaken — es
+         bleibt ueber „Original speichern" erreichbar. */
+      ? '<div class="note-file is-choice" data-orig-wahl="' + escapeHtml(String(a.n)) + '">' +
+        '<i class="fa-light ' + (a.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
+        '<span>' + escapeHtml(a.name) + (a.gesperrt ? ' <small>(' + escapeHtml(translate('too large for a note')) + ')</small>' : '') + '</span>' +
+        '<input type="checkbox" data-wahl-n="' + escapeHtml(String(a.n)) + '"' + (a.an ? ' checked' : '') + (a.gesperrt ? ' disabled' : '') + '>' +
+        '</div>'
+      : '<div class="note-file is-choice" data-media="' + escapeHtml(String(a.id)) + '">' +
       '<i class="fa-light ' + (a.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
       '<span>' + escapeHtml(a.name) + '</span>' +
       '<input type="checkbox" data-wahl="' + escapeHtml(String(a.id)) + '"' + (a.an ? ' checked' : '') + '>' +
@@ -17153,9 +17506,22 @@ function noteDateienZeichnen() {
     // Der Klick darf nicht zur Zeile durchlaufen — die oeffnet die Datei.
     kasten.addEventListener('click', (e) => e.stopPropagation());
   });
-  el.querySelectorAll('.note-file.is-choice').forEach(zeile => {
+  el.querySelectorAll('.note-file.is-choice[data-media]').forEach(zeile => {
     zeile.addEventListener('click', () => {
       noteAnhangOeffnen(parseInt(zeile.dataset.media, 10), true);
+    });
+  });
+  el.querySelectorAll('[data-wahl-n]').forEach(kasten => {
+    kasten.addEventListener('change', () => {
+      const eintrag = wahl.find(a => a.n && String(a.n) === String(kasten.dataset.wahlN));
+      if (eintrag) eintrag.an = kasten.checked;
+    });
+    kasten.addEventListener('click', (e) => e.stopPropagation());
+  });
+  el.querySelectorAll('.note-file.is-choice[data-orig-wahl]').forEach(zeile => {
+    zeile.addEventListener('click', () => {
+      const eintrag = wahl.find(a => a.n && String(a.n) === String(zeile.dataset.origWahl));
+      if (eintrag) originalAnhangOeffnen(eintrag.oid, eintrag);
     });
   });
   const scanKasten = el.querySelector('[data-scan]');
@@ -17398,8 +17764,14 @@ function noteSpeichern() {
         // Nur die angehakten Anhaenge. Die Kennungen sind kein Freibrief: die
         // Gegenseite prueft sie gegen die Liste des Vorschlags. Eine leere Liste
         // heisst ausdruecklich „keinen" — deshalb immer mitschicken, auch leer.
-        keep: (noteCtx.wahl || []).filter(a => a.an).map(a => a.id) }
+        keep: (noteCtx.wahl || []).filter(a => a.an && a.id).map(a => a.id),
+        // Die Anhaenge aus dem Original: Nummern — der Server schlaegt sie im Original DES VORSCHLAGS nach.
+        keepOriginal: (noteCtx.wahl || []).filter(a => a.an && a.n && !a.gesperrt).map(a => a.n) }
     : { action: 'noteCreate', folderId: fid, title: titel, text: text };
+  // „Original speichern" (nur der Text): JETZT lesen, dann erst anlegen.
+  const originalWahl = noteCtx.proposal ? originalWahlLesen('ntOriginal') : null;
+  originalBehaltenFuer(originalWahl).then(originalId => {
+  if (originalId) anlegen.originalId = originalId;
   notizenAktion(anlegen, (j) => {
     const neueId = (j && j.note && j.note.id) ? j.note.id : null;
     if (!neueId || warten.length === 0) { fertig(); return; }
@@ -17415,6 +17787,7 @@ function noteSpeichern() {
       ladeNotizen();
       fertig();
     });
+  });
   });
 }
 
@@ -17717,6 +18090,8 @@ function toLocalInputValue(d, dateOnly) {
 
 function openTodoEditor(instanceID, item) {
   todoCtx = { instanceID, itemId: item ? item.id : null };
+  originalWahlZuruecksetzen('tdOriginal');
+  originalAugeSetzen('tdOriginalAuge', (item && item.id) ? item.originalId : '');
   document.getElementById('todoOverlayTitle').textContent = item ? translate('Edit') : translate('New task');
   /* Zielliste: waehlbar beim Anlegen, fest beim Bearbeiten.
      Die Wahl steht IM Dialog statt als Menue davor — ein Zwischenschritt vor
@@ -17942,7 +18317,18 @@ function saveTodoEditor() {
     // Fuer das naechste Anlegen merken (siehe openTodoEditor): mehrere Aufgaben
     // hintereinander gehen meist in dieselbe Liste.
     ls.set('symdo.todoZielListe', String(ziel));
-    sdCall(ziel, 'AddItem', fields);
+    /* „Original speichern" (24.09.2026): erst das eigene Original des Eintrags,
+       dann die Aufgabe mit seiner Kennung. Die Wahl wird JETZT gelesen — der
+       Dialog schliesst gleich. */
+    const vorschlag = todoCtx.proposal;
+    originalBehaltenFuer(originalWahlLesen('tdOriginal')).then(originalId => {
+      if (originalId) fields.originalId = originalId;
+      sdCall(ziel, 'AddItem', fields);
+      if (vorschlag) mailErledigt(vorschlag.id, vorschlag.i);
+    });
+    closeOverlay('todoOverlay');
+    todoCtx = null;
+    return;
   }
   // Kam die Aufgabe aus einem Mail-Vorschlag, ist der jetzt erledigt — erst JETZT,
   // nach dem Speichern. Beim Abbrechen bleibt er stehen.
@@ -19520,6 +19906,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const todoScanInput = document.getElementById('todoScanInput');
   applyAiEnabled();
   initMailAi();
+  initOriginal();
   initCalendar();
   initCalEditor();
   // Bereiche gleich beim Start anwenden: der gespeicherte symdo.tab kann auf einen

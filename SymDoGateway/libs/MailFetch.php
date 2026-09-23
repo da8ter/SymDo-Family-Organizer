@@ -41,7 +41,7 @@ trait MailFetch
      * traegt gleichzeitig Puffer, bereinigte Kopie und JSON-Rumpf — deshalb hebt
      * MailAnalyse fuer diese Strecke zusaetzlich das memory_limit an.
      */
-    private const MAIL_ATTACH_MAX_B64 = 8 * 1024 * 1024;
+    // Heute einstellbar: AttMaxFileMB (Standard 6 MB = 8 MiB base64), siehe AnhangGrenzenCalc.
 
     /**
      * Wie viele Anhaenge eine Mail hoechstens beisteuert.
@@ -50,10 +50,10 @@ trait MailFetch
      * Ablegen gleichzeitig kodiert und dekodiert vor (etwa 2,3x der Dateigroesse).
      * Fuenf passt zu NOTE_ATTACH_MAX — mehr koennte eine Notiz ohnehin nicht tragen.
      */
-    private const MAIL_ATTACH_MAX_N = 5;
+    // Heute einstellbar: AttMaxCount (Standard 5).
 
-    /** Und wie viele Bytes base64 insgesamt, ueber alle Anhaenge einer Mail. */
-    private const MAIL_ATTACH_TOTAL_B64 = 12 * 1024 * 1024;
+    /* Und wie viele Bytes base64 insgesamt, ueber alle Anhaenge einer Mail —
+       heute einstellbar: AttMaxTotalMB (Standard 9 MB = 12 MiB base64). */
 
     /**
      * Untergrenze fuer BILDER. Ein Logo aus einer Signatur wiegt 2 bis 30 kB; eine
@@ -62,13 +62,14 @@ trait MailFetch
      * kann kein lesbarer Brief stecken, also gar nicht erst laden.
      * PDFs haben bewusst KEINE Untergrenze — in Signaturen stehen keine PDFs.
      */
-    private const MAIL_IMAGE_MIN_BYTES = 40 * 1024;
+    // Heute einstellbar: AttImageMinKB (Standard 40).
 
-    /** Kleinste Kantenlaenge, in der Fliesstext noch lesbar ist (nach dem Laden geprueft). */
-    private const MAIL_IMAGE_MIN_PIXEL = 600;
+    /* Kleinste Kantenlaenge, in der Fliesstext noch lesbar ist (nach dem Laden
+       geprueft) — heute einstellbar: AttImageMinPixel (Standard 600). */
 
-    /** Dateinamen, die Absender ihren Layout- und Signaturbildern geben. */
-    private const MAIL_DECO_NAMES = ['image00', 'logo', 'signatur', 'signature', 'icon', 'spacer', 'footer', 'unnamed', 'banner'];
+    /* Dateinamen, die Absender ihren Layout- und Signaturbildern geben — heute
+       einstellbar: AttDecoNames (Standard: image00, logo, signatur, signature,
+       icon, spacer, footer, unnamed, banner). */
 
     /** Kleine Literale (Dateinamen) werden in die Struktur eingesetzt, grosse ausgelagert. */
     private const MAIL_LITERAL_INLINE_MAX = 1024;
@@ -191,7 +192,7 @@ trait MailFetch
                 }
                 // Gesamtdeckel: fuenf Anhaenge duerfen zusammen nicht den Speicher
                 // sprengen, den ein einzelner noch haette haben duerfen.
-                if ($summe + strlen($base64) > self::MAIL_ATTACH_TOTAL_B64) {
+                if ($summe + strlen($base64) > (int)$this->AnhangGrenzen()['maxTotalB64']) {
                     $this->SendDebug('MailFetch', sprintf(
                         'Anhang %s uebersprungen: Gesamtdeckel erreicht (%d kB)',
                         $wahl['name'] !== '' ? $wahl['name'] : $wahl['part'], (int)round($summe / 1024)
@@ -322,7 +323,7 @@ trait MailFetch
             if (preg_match('/\{(\d+)\}\r?\n$/', $zeile, $m) === 1) {
                 $daten .= substr($zeile, 0, -strlen($m[0]));
                 $laenge = (int)$m[1];
-                if ($laenge > self::MAIL_ATTACH_MAX_B64) {
+                if ($laenge > (int)$this->AnhangGrenzen()['maxFileB64']) {
                     return ['ok' => false, 'daten' => '', 'status' => 'literal ' . $laenge . ' zu gross', 'literale' => []];
                 }
                 $puffer = '';
@@ -549,6 +550,7 @@ trait MailFetch
      */
     private function MailRankAttachments(array $teile): array
     {
+        $g = $this->AnhangGrenzen();
         $kandidaten = [];
         foreach ($teile as $t) {
             $kind = null;
@@ -570,7 +572,7 @@ trait MailFetch
                 continue;
             }
             $bezeichnung = $t['name'] !== '' ? $t['name'] : $t['part'];
-            if ($t['size'] > self::MAIL_ATTACH_MAX_B64) {
+            if ($t['size'] > (int)$g['maxFileB64']) {
                 $this->SendDebug('MailFetch', sprintf(
                     'Anhang %s uebersprungen: %d kB ueberschreiten das Limit',
                     $bezeichnung, (int)round($t['size'] / 1024)
@@ -589,7 +591,7 @@ trait MailFetch
                     $this->SendDebug('MailFetch', sprintf('Bild %s uebersprungen: im Text eingebettet (Content-ID)', $bezeichnung), 0);
                     continue;
                 }
-                if ($t['size'] < self::MAIL_IMAGE_MIN_BYTES) {
+                if ($t['size'] < (int)$g['imageMinBytes']) {
                     $this->SendDebug('MailFetch', sprintf(
                         'Bild %s uebersprungen: nur %d kB, dafuer zu klein',
                         $bezeichnung, (int)round($t['size'] / 1024)
@@ -597,7 +599,7 @@ trait MailFetch
                     continue;
                 }
             }
-            $kandidaten[] = $t + ['kind' => $kind, 'deko' => $kind === 'image' && $this->MailLooksDecorative($t['name'])];
+            $kandidaten[] = $t + ['kind' => $kind, 'deko' => $kind === 'image' && $this->MailLooksDecorative($t['name'], (array)$g['decoNames'])];
         }
         // PDF gewinnt gegen Bild; Bilder mit typischem Layout-Namen („image001",
         // „logo") rutschen dahinter — aber sie fliegen nicht raus, denn ein Scan
@@ -607,18 +609,18 @@ trait MailFetch
             $rang = static fn(array $x): int => $x['kind'] === 'pdf' ? 0 : ($x['deko'] ? 2 : 1);
             return [$rang($a), -$a['size']] <=> [$rang($b), -$b['size']];
         });
-        return array_slice($kandidaten, 0, self::MAIL_ATTACH_MAX_N);
+        return array_slice($kandidaten, 0, (int)$g['maxCount']);
     }
 
     /** Traegt der Dateiname eines Bildes die Handschrift eines Layout- oder Signaturbildes? */
-    private function MailLooksDecorative(string $name): bool
+    private function MailLooksDecorative(string $name, array $namen): bool
     {
-        $klein = strtolower(trim($name));
+        $klein = mb_strtolower(trim($name));
         if ($klein === '') {
             return true; // namenlose Bilder sind fast immer eingebettete Grafiken
         }
-        foreach (self::MAIL_DECO_NAMES as $muster) {
-            if (str_contains($klein, $muster)) {
+        foreach ($namen as $muster) {
+            if ($muster !== '' && str_contains($klein, (string)$muster)) {
                 return true;
             }
         }
@@ -628,7 +630,7 @@ trait MailFetch
     /**
      * Traegt ein Bild ueberhaupt lesbaren Fliesstext?
      *
-     * Ein Bild unter MAIL_IMAGE_MIN_PIXEL kann keinen Brief zeigen, egal wie schwer
+     * Ein Bild unter der Mindestkante (AttImageMinPixel) kann keinen Brief zeigen, egal wie schwer
      * die Datei ist — ein grosses, aber wenig komprimiertes Emblem faellt erst hier
      * auf. Herausgeloest, damit beide Eingaenge dieselbe Wache nutzen: der
      * IMAP-Abruf und der Webhook.
@@ -638,7 +640,7 @@ trait MailFetch
         $roh = base64_decode($base64, true);
         $masse = is_string($roh) ? @getimagesizefromstring($roh) : false;
         unset($roh);
-        if (is_array($masse) && min((int)$masse[0], (int)$masse[1]) < self::MAIL_IMAGE_MIN_PIXEL) {
+        if (is_array($masse) && min((int)$masse[0], (int)$masse[1]) < (int)$this->AnhangGrenzen()['imageMinPixel']) {
             $this->SendDebug('MailFetch', sprintf(
                 'Bild %s verworfen: %dx%d Pixel, dafuer zu klein',
                 $bezeichnung, (int)$masse[0], (int)$masse[1]

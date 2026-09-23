@@ -1004,6 +1004,12 @@ trait MailScan
            Megabyte. Ohne Adresse bleibt der Anhang trotzdem in der Liste —
            sonst wuesste der Fertigmelder nicht, dass er im Postfach nachsehen
            muss. */
+        /* Das Original JETZT ablegen (24.09.2026): hier liegen der volle Text und
+           die Anhaenge noch vor — beim Ergebnis sind es nur noch die ersten 4000
+           Zeichen, und die Nutzlast ist dann laengst geloescht. Die Kennung
+           reist im Auftragskopf mit. */
+        $originalId = $this->OriginalSichern($vorschlagsId, $kopf, $text, $anhaenge, $quelle);
+
         $beschreibung = [];
         foreach ($anhaenge as $a) {
             $eintrag = ['kind' => (string)$a['kind'], 'name' => (string)($a['name'] ?? '')];
@@ -1034,6 +1040,7 @@ trait MailScan
                 'quelle'    => $quelle,
                 'text'      => mb_substr($text, 0, self::MAIL_ORIGIN_TEXT_MAX),
                 'anhaenge'  => $beschreibung,
+                'original'  => $originalId,
                 /* Woran der Aufrufer erkennt, welche Karte das war — er nimmt
                    seinen Merker zurueck, wenn der Auftrag scheitert. */
                 'merker'    => $merker,
@@ -1184,39 +1191,14 @@ trait MailScan
             return;
         }
 
-        /* Die Anhaenge erst JETZT holen, und nur wenn eine Notiz dabei ist: die
-           Nutzlast des Auftrags ist laengst geloescht, und fuer eine Aufgabe
-           oder einen Termin braucht niemand die Datei. Der synchrone Weg holt
-           sie frueher — dafuer bei JEDER Karte. */
-        if ($zahlen['notizen'] <= 0) {
-            $gespeichert = $this->MailVorschlagEinpflegen((string)($h['vorschlag'] ?? ''), $mkopf,
-                (string)($h['text'] ?? ''), [], (string)($h['userId'] ?? ''), $quelle,
-                ['aufgaben' => $aufgaben, 'zahlen' => $zahlen, 'summary' => $zusammen]);
-            $this->MailAuftragAbschliessen($h, $gespeichert);
-            return;
-        }
-
-        /* Das erhoehte Limit umschliesst HOLEN UND ABLEGEN. Genau davor warnt
-           der synchrone Weg: `IPS_SetMediaContent` dekodiert das base64
-           intern, die Spitze liegt bei etwa 2,3x der Dateigroesse. Wer das
-           Limit nach dem Holen zuruecksetzt und erst danach ablegt, faengt sich
-           mitten im Einpflegen ein „Allowed memory size exhausted" — und ein
-           Fatal laesst sich nicht fangen: der Auftrag stuende schon als FERTIG
-           auf der Platte, der Vorschlag waere nie entstanden. */
-        $speicherVorher = (string)@ini_get('memory_limit');
-        @ini_set('memory_limit', '192M');
-        $gespeichert = false;
-        try {
-            $anhaenge = $this->MailAnhaengeNachladen((array)($h['anhaenge'] ?? []),
-                is_array($h['merker'] ?? null) ? $h['merker'] : []);
-            $gespeichert = $this->MailVorschlagEinpflegen((string)($h['vorschlag'] ?? ''), $mkopf,
-                (string)($h['text'] ?? ''), $anhaenge, (string)($h['userId'] ?? ''), $quelle,
-                ['aufgaben' => $aufgaben, 'zahlen' => $zahlen, 'summary' => $zusammen]);
-        } finally {
-            if ($speicherVorher !== '') {
-                @ini_set('memory_limit', $speicherVorher);
-            }
-        }
+        /* Die Anhaenge liegen seit dem Einreihen im Original (24.09.2026) — das
+           Nachladen aus dem Postfach fuer Notizen entfaellt, und mit ihm die
+           Medienobjekte auf Vorrat. Die Notiz nimmt ihre Anhaenge beim
+           Uebernehmen aus dem Original. */
+        $gespeichert = $this->MailVorschlagEinpflegen((string)($h['vorschlag'] ?? ''), $mkopf,
+            (string)($h['text'] ?? ''), [], (string)($h['userId'] ?? ''), $quelle,
+            ['aufgaben' => $aufgaben, 'zahlen' => $zahlen, 'originalId' => (string)($h['original'] ?? ''),
+             'ausAuftrag' => true, 'summary' => $zusammen]);
         $this->MailAuftragAbschliessen($h, $gespeichert);
     }
 
@@ -1251,61 +1233,6 @@ trait MailScan
     }
 
     /**
-     * Die Anhaenge eines Auftrags neu holen — ueber ihre Adresse, oder aus dem
-     * Postfach.
-     *
-     * Zwei Wege, weil es zwei Arten von Anhang gibt: der einer Klassenseite
-     * oder einer Webhook-Mail hat eine Adresse; der einer IMAP-Mail steckt in
-     * der Mail und nirgends sonst. Fuer ihn ist der Merker des Auftrags der
-     * Weg zurueck (IMAP-Kennung und UID) — die Mail liegt noch dort, denn
-     * geloescht wird erst nach dem Speichern (MailAuftragAbschliessen). Hat
-     * der Nutzer sie inzwischen selbst weggeraeumt, kommt die Notiz ohne
-     * Anhang an; mehr als eine Debug-Zeile bleibt dann nicht.
-     *
-     * Aus dem Postfach wird EINMAL geholt, nicht je Anhang: MailFetchAttachments
-     * liefert ohnehin alle brauchbaren Teile der Mail.
-     *
-     * @param list<array{kind:string,name:string,url?:string}> $beschreibung
-     * @param array<string,mixed>                              $merker der Merker des Auftrags
-     * @return list<array{kind:string,name:string,base64:string}>
-     */
-    private function MailAnhaengeNachladen(array $beschreibung, array $merker = []): array
-    {
-        /* Das erhoehte Speicherlimit haelt der AUFRUFER: es muss auch noch
-           stehen, wenn die Datei abgelegt wird. */
-        $raus = [];
-        $ausPostfach = false;
-        foreach ($beschreibung as $a) {
-            $url = trim((string)($a['url'] ?? ''));
-            if ($url === '') {
-                $ausPostfach = true;
-                continue;
-            }
-            $antwort = $this->AiFetchPublicPage($url);
-            if (($antwort['ok'] ?? false) !== true) {
-                $this->SendDebug('MailScan', 'Anhang nicht nachladbar: '
-                    . (string)($a['name'] ?? '?'), 0);
-                continue;
-            }
-            $raus[] = ['kind' => (string)($a['kind'] ?? ''), 'name' => (string)($a['name'] ?? ''),
-                       'base64' => base64_encode((string)($antwort['body'] ?? ''))];
-        }
-        if ($ausPostfach && (string)($merker['quelle'] ?? '') === 'mail') {
-            $imapID = (int)($merker['topf'] ?? 0);
-            $uid    = trim((string)($merker['schluessel'] ?? ''));
-            $geholt = ($imapID > 0 && $uid !== '') ? $this->MailFetchAttachments($imapID, $uid) : [];
-            if ($geholt === []) {
-                $this->SendDebug('MailScan', 'Anhaenge aus dem Postfach nicht nachladbar (UID '
-                    . $uid . ')', 0);
-            }
-            foreach ($geholt as $g) {
-                $raus[] = $g;
-            }
-        }
-        return $raus;
-    }
-
-    /**
      * Die SCHREIBENDE Haelfte: Anhaenge ablegen, Vorschlag speichern, melden.
      *
      * Muss beim Gateway bleiben, auch wenn das Rechnen auswandert. Der Grund ist
@@ -1326,36 +1253,14 @@ trait MailScan
         $zahlen   = $erg['zahlen'];
         $betreff  = trim((string)($kopf['Subject'] ?? ''));
 
-        /* Anhang dauerhaft ablegen, damit die Notiz ihn spaeter tragen kann.
-           Nur die Medien-Kennung reist im Vorschlag mit, NIEMALS das base64 —
-           der Vorschlagsbestand ist ein Attribut mit bis zu 50 Datensaetzen. */
-        if ($zahlen['notizen'] > 0 && $anhaenge !== []
-            && (bool)$this->PushProp('MailNoteAttachments', false)) {
-            $abgelegt = [];
-            foreach ($anhaenge as $a) {
-                $ablage = $this->NotesSaveAttachment((string)$a['base64'], (string)($a['name'] ?? ''));
-                if (($ablage['ok'] ?? false) !== true) {
-                    /* Kein Abbruch: die Notiz ohne diesen Anhang ist besser als
-                       keine, und die uebrigen koennen trotzdem ankommen. */
-                    $this->SendDebug('MailScan', 'Anhang „' . (string)($a['name'] ?? '?') . '" nicht ablegbar: '
-                        . (string)($ablage['error']['code'] ?? '?'), 0);
-                    continue;
-                }
-                /* Art und Groesse aus der ABLAGE, nicht aus der Mail-Deklaration:
-                   NotesSaveAttachment skaliert Bilder und normalisiert sie auf
-                   JPEG. Aus der Mail gerechnet stand in der Auswahlliste die
-                   Groesse des Originals — bei einem Handyfoto leicht das
-                   Zehnfache — und bei einer als „.pdf" benannten JPEG die
-                   falsche Art. */
-                $abgelegt[] = [
-                    'id'    => (int)$ablage['id'],
-                    'name'  => (string)($a['name'] ?? '') !== '' ? (string)$a['name'] : (string)($ablage['kind'] ?? ''),
-                    'kind'  => (string)($ablage['kind'] ?? $a['kind']),
-                    'bytes' => (int)($ablage['bytes'] ?? (strlen((string)$a['base64']) * 3 / 4)),
-                ];
-            }
-            $aufgaben = MailAnalyseCalc::AnhaengeEinhaengen($aufgaben, $abgelegt);
-        }
+        /* Das Original — Text und Anhaenge, so wie die KI sie gelesen hat
+           (24.09.2026). Auf dem geraden Weg voll; aus einem Auftrag nur, wenn es
+           beim Einreihen nicht schon abgelegt wurde (dann gekuerzt, ohne
+           Anhaenge). Die Medienobjekte auf Vorrat fuer Notizen (Schalter
+           MailNoteAttachments) gibt es nicht mehr: die Notiz nimmt ihre Anhaenge
+           beim Uebernehmen aus dem Original. */
+        $originalId = $this->OriginalSichern($vorschlagsId, $kopf, $text, $anhaenge, $quelle,
+            (string)($erg['originalId'] ?? ''), ($erg['ausAuftrag'] ?? false) === true);
 
         $gespeichert = $this->MailStoreProposal(
             MailAnalyseCalc::Satz($vorschlagsId, $kopf, $betreff, $userId,
@@ -1368,7 +1273,7 @@ trait MailScan
                war danach nirgends zu sehen. Gestempelt wird beim SCHREIBEN,
                nicht beim Rechnen: sonst zaehlte bei einem ausgelagerten Lauf die
                Wartezeit in der Schlange mit. */
-            + ['created' => time()]
+            + ['created' => time()] + ($originalId !== '' ? ['originalId' => $originalId] : [])
         );
         /* Nicht gespeichert heisst NICHT erledigt. Sonst merkt MailRemember die
            Mail als abgearbeitet und „nach Auswertung loeschen" wirft sie aus dem
@@ -1890,7 +1795,7 @@ trait MailScan
             if ($wahl['kind'] === 'image' && !$this->MailImageUsable($base64, $wahl['name'])) {
                 continue;
             }
-            if ($summe + strlen($base64) > self::MAIL_ATTACH_TOTAL_B64) {
+            if ($summe + strlen($base64) > (int)$this->AnhangGrenzen()['maxTotalB64']) {
                 $this->SendDebug('MailHook', 'Anhang ' . $wahl['name'] . ' uebersprungen: Gesamtdeckel erreicht', 0);
                 continue;
             }
@@ -2113,7 +2018,7 @@ trait MailScan
                 if ($base64 === null) {
                     continue;
                 }
-                if ($summe + strlen($base64) > self::MAIL_ATTACH_TOTAL_B64) {
+                if ($summe + strlen($base64) > (int)$this->AnhangGrenzen()['maxTotalB64']) {
                     $this->SendDebug('MailHook', 'Anhang „' . (string)$besch['name']
                         . '" uebersprungen: Gesamtgrenze der Anhaenge erreicht', 0);
                     continue;
@@ -2200,7 +2105,7 @@ trait MailScan
             CURLOPT_TIMEOUT        => 30,
             CURLOPT_CONNECTTIMEOUT => 6,
             CURLOPT_FOLLOWLOCATION => false,
-            CURLOPT_MAXFILESIZE    => (int)(self::MAIL_ATTACH_MAX_B64 * 3 / 4),
+            CURLOPT_MAXFILESIZE    => (int)((int)$this->AnhangGrenzen()['maxFileB64'] * 3 / 4),
         ]);
         $roh = curl_exec($ch);
         $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -2468,6 +2373,10 @@ trait MailScan
                 continue;
             }
             $p['items'] = $offen;
+            // Kein Auge fuer ein Original, das es nicht mehr gibt (Deckel, Widerruf, Schreibfehler).
+            if (isset($p['originalId']) && !$this->OriginalExistiert((string)$p['originalId'])) {
+                unset($p['originalId']);
+            }
             $raus[] = $p;
         }
         /* Zuletzt EINGETROFFENES oben (22.09.2026). Sortiert wurde bis dahin nach
@@ -2507,6 +2416,15 @@ trait MailScan
                 // Die Art umstellen (Aufgabe/Termin/Hausaufgabe/Notiz), wie beim
                 // Dokumentenscan — der Nutzer weiss es besser als das Modell.
                 return ['ok' => $id !== '' && $this->MailSetKind($id, (int)($body['i'] ?? -1), (string)($body['kind'] ?? ''))];
+            /* Das Original (24.09.2026): ansehen, in Stuecken holen (Visu-Kachel
+               ohne Token), fuer einen Eintrag behalten. `id` ist hier die
+               Kennung des ORIGINALS, nicht des Vorschlags. */
+            case 'original':
+                return $this->OriginalAbrufen($id);
+            case 'originalteil':
+                return $this->OriginalTeilRelay($id, (int)($body['n'] ?? 0), (int)($body['teil'] ?? 0));
+            case 'originalbehalten':
+                return $this->OriginalBehalten($id, is_array($body['atts'] ?? null) ? array_values($body['atts']) : []);
         }
         return ['ok' => false, 'error' => ['code' => 'invalid_payload', 'message' => $this->Translate('Unknown action.')]];
     }
@@ -2564,17 +2482,25 @@ trait MailScan
 
     private function MailDismiss(string $id): bool
     {
-        $weg = $this->MailWithProposalLock(function () use ($id): bool {
+        $originalId = '';
+        $weg = $this->MailWithProposalLock(function () use ($id, &$originalId): bool {
             $alle = $this->MailProposals();
             $neu  = array_values(array_filter($alle, static fn(array $p): bool => (string)($p['id'] ?? '') !== $id));
             if (count($neu) === count($alle)) {
                 return false;
+            }
+            foreach ($alle as $p) {
+                if ((string)($p['id'] ?? '') === $id) {
+                    $originalId = (string)($p['originalId'] ?? '');
+                }
             }
             return $this->MailWriteProposals($neu);
         }, false);
         if (!$weg) {
             return false;
         }
+        // Wer einen Vorschlag loescht, loescht sein Original mit — ausser ein Eintrag haelt es.
+        $this->OriginalVerworfenMerken($originalId);
         /* Gemerkt, damit derselbe Vorschlag nicht wiederkommt (22.09.2026) — und
            der Merker der Karte auf ihren HEUTIGEN Stand gezogen, damit auch eine
            belanglose Aenderung zwischen Auswertung und Loeschen sie nicht

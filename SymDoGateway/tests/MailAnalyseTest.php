@@ -188,18 +188,11 @@ pruefe('Die Signatur verlangt ein Array, keinen Text',
 pruefe('Ohne Datum im Kopf gilt die gereichte Uhr',
     MailAnalyseCalc::Satz('v1', [], '', '', [], [], 1757999999)['at'], 1757999999);
 
-// ── Anhaenge einhaengen ────────────────────────────────────────────────────
-$abgelegt = [['id' => 42, 'name' => 'brief.pdf', 'kind' => 'pdf', 'bytes' => 9]];
-$mit = MailAnalyseCalc::AnhaengeEinhaengen(
-    [['kind' => 'task'], ['kind' => 'note'], ['kind' => 'note']], $abgelegt);
-pruefe('Anhaenge haengen NUR an Notizen',
-    [isset($mit[0]['atts']), isset($mit[1]['atts']), isset($mit[2]['atts'])],
-    [false, true, true]);
-/* `mediaId` bleibt neben `atts` stehen, damit Vorschlaege aus der Zeit davor
-   weiter uebernommen werden koennen — NotesAdopt liest beides. */
-pruefe('mediaId steht weiter daneben', $mit[1]['mediaId'], 42);
-pruefe('Ohne abgelegte Anhaenge bleibt alles unberuehrt',
-    MailAnalyseCalc::AnhaengeEinhaengen([['kind' => 'note']], []), [['kind' => 'note']]);
+// ── Anhaenge haengen nicht mehr am Vorschlag ────────────────────────────
+/* Seit dem 24.09.2026 liegen die Anhaenge im ORIGINAL des Vorschlags; die
+   Notiz nimmt sie beim Uebernehmen von dort. Die Medienobjekte auf Vorrat und
+   ihr Einhaengen in die Notiz-Funde gibt es nicht mehr. */
+pruefe('Das Einhaengen in die Funde ist weg', method_exists(MailAnalyseCalc::class, 'AnhaengeEinhaengen'), false);
 
 // ══ Die rechnende Haelfte, wirklich gefahren ═════════════════════════════
 IPS\Kernel::reset();

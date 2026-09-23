@@ -25,10 +25,28 @@ require_once __DIR__ . '/../libs/MailAnalyseCalc.php';
 require_once __DIR__ . '/../libs/HomeworkCalc.php';
 require_once __DIR__ . '/../../libs/AiJobStore.php';
 require_once __DIR__ . '/../libs/MailScan.php';
+require_once __DIR__ . '/../libs/Originale.php';
 
 final class VorschlagProbe extends IPSModuleStrict
 {
     use MailScan;
+    use Originale;
+
+    public string $originalDir = '';
+    private function OriginalVerzeichnis(): string
+    {
+        if ($this->originalDir === '') {
+            $this->originalDir = rtrim(sys_get_temp_dir(), '/\\') . '/symdo_vorschlag_' . bin2hex(random_bytes(4));
+        }
+        return $this->originalDir;
+    }
+    public bool $einwilligung = true;
+    private function AiPrivacyAccepted(): bool { return $this->einwilligung; }
+    private function AiStripImage(string $b): string { return $b; }
+    private function AiScaleImage(string $b, int $k = 1600): ?string { return null; }
+    private function AnhangGrenzen(): array { return AnhangGrenzenCalc::Wirksam([]); }
+    private function ReadAttributeStringSafe(string $k, string $d): string { return (string)($this->attr[$k] ?? $d); }
+    protected function RegisterOnceTimer(string $Ident, string $ScriptText): bool { return true; }
 
     public array $attr = [];
     protected function ReadAttributeString(string $Name): string { return (string)($this->attr[$Name] ?? ''); }
@@ -233,7 +251,7 @@ pruefe('Zeile: Art-Wahl als Auswahlfeld an offenen Zeilen, change setzt sie hier
     [true, true, true, true, true, true]);
 $php = $lesen('SymDoGateway/libs/MailScan.php') . $lesen('SymDoGateway/libs/AiJobs.php') . $lesen('SymDoGateway/libs/AiExtract.php');
 pruefe('Server: die Zusammenfassung reist auf BEIDEN Wegen (synchron und Auftrag) und der Prompt bittet darum',
-    [substr_count($php, 'MailAnalyseCalc::Zusammenfassung(') >= 2, substr_count($php, "'summary' => \$zusammen]") === 2,
+    [substr_count($php, 'MailAnalyseCalc::Zusammenfassung(') >= 2, substr_count($php, "'summary' => \$zusammen]") === 1,
      substr_count($php, '$this->AiSummaryRule()') === 3],
     [true, true, true]);
 pruefe('Fusszeile: „Löschen" rechts, links die Quelle — mit Rueckfall auf die Kennung, sonst gar nichts',

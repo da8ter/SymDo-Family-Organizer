@@ -255,31 +255,6 @@ final class MailAnalyseCalc
     }
 
     /**
-     * Die abgelegten Anhaenge in die NOTIZEN des Vorschlags einhaengen.
-     *
-     * @param list<array<string,mixed>> $aufgaben
-     * @param list<array<string,mixed>> $abgelegt was wirklich abgelegt wurde
-     * @return list<array<string,mixed>>
-     */
-    public static function AnhaengeEinhaengen(array $aufgaben, array $abgelegt): array
-    {
-        if ($abgelegt === []) {
-            return $aufgaben;
-        }
-        foreach ($aufgaben as $k => $a) {
-            if (!is_array($a) || (string)($a['kind'] ?? '') !== 'note') {
-                continue;
-            }
-            /* Die Liste ist das Neue; „mediaId" bleibt daneben stehen, damit
-               Vorschlaege aus der Zeit davor weiter uebernommen werden koennen —
-               NotesAdopt liest beides. */
-            $aufgaben[$k]['atts']    = $abgelegt;
-            $aufgaben[$k]['mediaId'] = (int)$abgelegt[0]['id'];
-        }
-        return $aufgaben;
-    }
-
-    /**
      * Der erste nicht leere Text unter mehreren Feldern eines Fundes — z. B.
      * note, info, text: eine Notiz traegt ihren Inhalt in `text`, eine Aufgabe
      * in `info`, eine erkannte Hausaufgabe in `note`.

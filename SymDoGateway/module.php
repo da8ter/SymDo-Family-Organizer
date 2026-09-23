@@ -12,6 +12,7 @@ require_once __DIR__ . '/libs/AiJobs.php';
 require_once __DIR__ . '/libs/MailAnalyseCalc.php';
 require_once __DIR__ . '/libs/MailScan.php';
 require_once __DIR__ . '/libs/MailFetch.php';
+require_once __DIR__ . '/libs/Originale.php';
 require_once __DIR__ . '/libs/CalendarBridge.php';
 require_once __DIR__ . '/libs/Briefing.php';
 require_once __DIR__ . '/libs/WebPush.php';
@@ -66,6 +67,7 @@ class SymDoGateway extends IPSModuleStrict
     use AiJobs;
     use MailScan;
     use MailFetch;
+    use Originale;
     use CalendarBridge;
     use Briefing;
     use WebPush;
@@ -187,6 +189,8 @@ class SymDoGateway extends IPSModuleStrict
         // Notizen: Ablage und die Kategorie der Anhaenge
         $this->NotesCreate();
         $this->HomeworkCreate();
+        // Originale der KI-Vorschlaege und die Experteneinstellungen fuer Anhaenge
+        $this->OriginaleCreate();
         // KI-Gerichtsbilder der Rezept-Favoritenlisten: Schalter, Warteschlange
         // und ihr Timer
         $this->DishCreate();
@@ -230,6 +234,7 @@ class SymDoGateway extends IPSModuleStrict
             // Zuletzt: zieht Mitglieder-Ordner nach und braucht dafuer die
             // Kennungen, die AppApplyChanges ueber EnsureUserIDs vergibt.
             $this->NotesApplyChanges();
+            $this->OriginaleApplyChanges();
             $this->DishApplyChanges();
             $this->VoiceApplyChanges();
         $this->DokuApplyChanges();
@@ -283,6 +288,9 @@ class SymDoGateway extends IPSModuleStrict
             return;
         }
         if ($this->MailRequestAction($Ident, $Value)) {
+            return;
+        }
+        if ($this->OriginaleRequestAction($Ident, $Value)) {
             return;
         }
         if ($this->EduRequestAction($Ident, $Value)) {
@@ -458,6 +466,7 @@ class SymDoGateway extends IPSModuleStrict
             // Tagesdeckel gehorcht.
             $this->AppendFormItem($elements, 'AiPanel', $this->GetBriefingPanel());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetMailFormElements());
+            $this->AppendFormItem($elements, 'AiPanel', $this->GetExpertenPanel());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetPushPanel());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetDishPanel());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetVoicePanel());

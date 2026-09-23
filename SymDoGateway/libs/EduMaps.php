@@ -36,7 +36,7 @@ trait EduMaps
     private const EDU_TEXT_MAX = 8000;
 
     /** Gesamtgroesse der Anhaenge je Karte, base64 (wie beim Webhook-Weg). */
-    private const EDU_ANHANG_MAX_B64 = 8000000;
+    // Heute einstellbar: EduAttMaxTotalMB (Standard 6 MB), siehe AnhangGrenzenCalc.
 
     /** Wie oft nachgesehen wird, wenn die Property noch nicht existiert. */
     private const EDU_INTERVALL_STD = 6;
@@ -1441,7 +1441,7 @@ trait EduMaps
                     continue;
                 }
                 $base64 = base64_encode((string)($antwort['body'] ?? ''));
-                if ($base64 === '' || $summe + strlen($base64) > self::EDU_ANHANG_MAX_B64) {
+                if ($base64 === '' || $summe + strlen($base64) > (int)$this->AnhangGrenzen()['eduTotalB64']) {
                     continue;
                 }
                 $summe += strlen($base64);

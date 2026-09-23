@@ -150,10 +150,38 @@ Siehe Kapitel 8. Felder: Briefing aktivieren (`BriefingEnabled`), *Geschrieben f
 
 Die KI liest eingehende Mails und macht daraus Vorschläge — Aufgabe, Termin oder Notiz — die im **KI-Bereich** der App zum Übernehmen bereitliegen. Zwei Wege, einzeln oder kombiniert:
 
-1. **Mails aus IMAP-Postfächern abrufen** — eine gemeinsame `E-Mail, Empfangen (IMAP)`-Instanz (`MailBoxGeneral`) und/oder je Mitglied ein eigenes Postfach (`MailBoxes`). Anhänge werden auf Wunsch mitgelesen (`MailReadAttachments`) und bei Notiz-Vorschlägen dauerhaft abgelegt (`MailNoteAttachments`, Standard: aus). Verarbeitete Mails lassen sich löschen (`MailDeleteAfter`).
+1. **Mails aus IMAP-Postfächern abrufen** — eine gemeinsame `E-Mail, Empfangen (IMAP)`-Instanz (`MailBoxGeneral`) und/oder je Mitglied ein eigenes Postfach (`MailBoxes`). Anhänge werden auf Wunsch mitgelesen (`MailReadAttachments`) und landen mit dem Text im **Original** des Vorschlags (siehe unten). Verarbeitete Mails lassen sich löschen (`MailDeleteAfter`).
 2. **Mails an Symcon weiterleiten** (`MailHookEnabled`) — ein WebHook nimmt weitergeleitete Mails an; abgesichert über Secret, Signaturschlüssel und Größenlimit (`MailHookSecret`, `MailHookSigningKey`, `MailHookBase`, `MailHookMaxKB`, `MailHookApiKey`).
 
 Zuordnung und Filter: `MailAddresses` ordnet Absender-Adressen den Mitgliedern zu (der Vorschlag landet beim richtigen Mitglied), `MailSenderAllow` beschränkt die Auswertung auf erlaubte Absender.
+
+### Das Original eines Vorschlags
+
+Was die KI gelesen hat, bleibt erhalten: der Text der Mail, der Klassenseite oder des LOGINEO-Eintrags und die Anhänge (PDF, JPEG, PNG), die durch die Auswertung liefen. Abgelegt wird es in einem eigenen Ordner je Original (`symdo_originale/<Instanz>/` im Symcon-Datenordner, Rechte 0700/0600), **nicht** als Medienobjekt und nicht in den Instanzeinstellungen: die Tagessicherung von Symcon kopiert ohnehin nur die `settings.json`, und Text und Anhänge teilen eine Lebensdauer.
+
+- **Ansehen:** In der Web-App trägt jede offene Vorschlagszeile ein graues Auge links neben ✕. Es öffnet ein Blatt mit Betreff, Absender, Datum, dem Text (nur Text, maskiert) und den Anhängen. Große Anhänge kommen in Stücken, weil Symcon je Antwort nur rund 1 MB ausliefert.
+- **Original speichern:** Im Hinzufügen-Dialog (Aufgabe, Termin, Hausaufgabe, Notiz) steht der Schalter „Original speichern", standardmäßig aus. Darunter wird jeder Anhang einzeln abgefragt; Layout-Bilder und wiederkehrendes Briefpapier sind nicht vorgehakt. Gespeichert wird ein eigenes Original **für diesen Eintrag** (die Dateien hart verlinkt, nicht doppelt), das so lange lebt wie der Eintrag. Der Dialog des gespeicherten Eintrags zeigt dann ebenfalls ein Auge.
+- **Notizen** übernehmen ihre Anhänge beim Anlegen aus dem Original; Medienobjekte auf Vorrat entstehen nicht mehr (der frühere Schalter `MailNoteAttachments` ist ohne Wirkung).
+- **Aufräumen:** Das Original eines Vorschlags fällt mit dem Vorschlag (höchstens 21 Tage, sofort beim Löschen). Was kein Eintrag mehr hält, räumt das Gateway alle 6 Stunden und nach jedem Start auf; ist eine Quelle gerade nicht lesbar, wird nichts gelöscht. Originale, die nur an einem Vorschlag hängen, dürfen zusammen höchstens `OrigCapMB` belegen. Der Widerruf der KI-Einwilligung löscht die Originale der Vorschläge; mit einem Eintrag gespeicherte bleiben.
+- **Schnittstelle:** `POST /v1/mail/proposals` mit `{"action":"original","id":…}` (Kopf, Text, Anhangsliste), `{"action":"originalBehalten","id":…,"atts":[n…]}` (eigenes Original für einen Eintrag, liefert die neue Kennung) und `{"action":"originalTeil","id":…,"n":…,"teil":…}` (Stück als Base64, für die Visu-Kachel); `GET /v1/original/<id>/<n>?teil=<k>` liefert die rohen Bytes eines Stücks mit `X-SymDo-Teile`. Die Einträge tragen die Kennung als `originalId` (Aufgabe: im ToDo-Eintrag, Termin: in einer Nebenablage des Gateways, Hausaufgabe und Notiz: im Bestand).
+
+### Experteneinstellungen
+
+Im KI-Bereich, eingeklappt. Die Standardwerte sind die bis dahin festen Werte; nur ändern, wenn Anhänge fehlen oder Logos durchrutschen.
+
+| Eigenschaft | Bedeutung | Standard | Bereich |
+|---|---|---|---|
+| `AttImageMinKB` | Mail-Bilder unter dieser Größe werden gar nicht erst geladen (Signaturlogos wiegen 2–30 KB) | 40 KB | 0–1000 |
+| `AttImageMinPixel` | Mail-Bilder mit einer kürzeren Kante fallen nach dem Laden weg | 600 px | 0–4000 |
+| `AttDecoNames` | Layout-Namen (Kommaliste); solche Bilder rutschen nach hinten und sind nicht vorgehakt | image00, logo, signatur, signature, icon, spacer, footer, unnamed, banner | ≤ 30 Einträge |
+| `AttMaxCount` | Anhänge je Mail | 5 | 1–10 |
+| `AttMaxFileMB` | Größe je Mail-Anhang | 6 MB | 1–20 |
+| `AttMaxTotalMB` | Summe der Anhänge je Mail | 9 MB | 1–50 |
+| `EduAttMaxTotalMB` | Summe der Anhänge je Klassenseiten-/LOGINEO-Karte | 6 MB | 1–50 |
+| `OrigDecoRepeat` | ein Bild gilt ab dem n-ten Auftreten als Briefpapier (nicht vorgehakt); 0 = aus | 2 | 0–10 |
+| `OrigCapMB` | Platz für Originale, die nur an einem Vorschlag hängen; die ältesten fallen zuerst | 250 MB | 50–5000 |
+
+Der Knopf „Standardwerte" setzt die Felder zurück (übernommen wird mit „Übernehmen"). Jeder Wert wird im Gateway auf seinen Bereich begrenzt.
 
 ### Benachrichtigungen
 

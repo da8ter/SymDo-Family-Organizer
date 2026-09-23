@@ -770,6 +770,14 @@ trait AppCore
                 if ($weg > 0) {
                     $this->LogMessage(sprintf('SymDo: %d wartende KI-Auftrag/Auftraege nach Einwilligungs-Widerruf verworfen', $weg), KL_NOTIFY);
                 }
+                /* Und die Originale der Vorschlaege (24.09.2026). Ohne Einwilligung
+                   zaehlen beim Aufraeumen nur noch die Eintraege, fuer die jemand
+                   „Original speichern" gewaehlt hat. Ist eine Quelle gerade nicht
+                   lesbar, holt der naechste Lauf es nach. */
+                $originale = $this->OriginaleAufraeumen();
+                if ($originale > 0) {
+                    $this->LogMessage(sprintf('SymDo: %d Original(e) von KI-Vorschlaegen nach Einwilligungs-Widerruf geloescht', $originale), KL_NOTIFY);
+                }
             }
             $this->UpdateFormField('AiEnabled', 'enabled', $accepted);
             if (!$accepted) {

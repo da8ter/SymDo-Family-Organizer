@@ -37,6 +37,7 @@ den Zeilen erscheinen.
 - **Haken im KI-Eingang** — ein übernommener Vorschlag verschwindet nicht, er bleibt sieben Tage mit grünem Haken stehen (durchgestrichen, ohne Knöpfe); verworfene verschwinden. Das Abzeichen am Tab zählt nur die offenen. Die iOS-App sieht weiterhin nur die offenen
 - **Art umstellen im KI-Eingang** — jede offene Zeile trägt die Wahl Aufgabe / Termin / Hausaufgabe / Notiz (wie beim Dokumentenscan); angeboten wird, was die Oberfläche anlegen kann. Die Wahl wird gespeichert und bestimmt, welcher Dialog sich beim Übernehmen öffnet
 - **Kopf eines Vorschlags** — Betreff, Absender und darunter in ein, zwei Sätzen, worum es geht (von wem, was): die KI liefert die Zusammenfassung mit der Auswertung; ältere Vorschläge zeigen nur Betreff und Absender
+- **Original ansehen und speichern** — ein graues Auge links neben ✕ öffnet das Original (Text und Anhänge, große PDFs in Stücken geladen). Im Hinzufügen-Dialog speichert „Original speichern" (standardmäßig aus) das Original samt den einzeln gewählten Anhängen mit dem Eintrag; Logos und Briefpapier sind nicht vorgehakt. Der Dialog des gespeicherten Eintrags zeigt dann ebenfalls ein Auge. Einzelheiten im README des Gateways
 - **Stundenplan der Kinder** — welche Stundenplan-Instanzen auf der Übersicht erscheinen
 - **Farben der Visualisierung** — die Kachel meldet die Farben des Skins zurück; App und Web-App übernehmen sie, damit alles gleich aussieht
 - **Briefing abspielen** — `SDWA_PlayBriefing()` gibt das Briefing in einer offenen Kachel als Sprachausgabe wieder

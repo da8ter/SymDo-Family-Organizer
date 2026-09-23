@@ -386,6 +386,10 @@ trait Notes
             'updatedAt' => (int)($n['updatedAt'] ?? 0),
             'source'    => (string)($n['source'] ?? 'manual'),
         ];
+        // Gespeichertes Original (24.09.2026) — nur wenn es eines gibt.
+        if (preg_match('/^[0-9a-f]{24}$/', (string)($n['originalId'] ?? '')) === 1) {
+            $row['originalId'] = (string)$n['originalId'];
+        }
         /* Was hier NICHT mehr steht: Abschnitt, Lage, formatiertes HTML, Farben,
            Buchungslage, Quelladresse und der Archiv-Stempel. Das waren die
            Felder der gespiegelten Klassenseiten-Karten; sie stehen jetzt in

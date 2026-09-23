@@ -273,6 +273,10 @@ trait Homework
             $satz['id'] = bin2hex(random_bytes(4));
             $satz['createdAt'] = $jetzt;
             $satz['updatedAt'] = $jetzt;
+            // Ein Verweis auf ein Original, das es nicht (mehr) gibt, faellt weg.
+            if (isset($satz['originalId']) && !$this->OriginalExistiert((string)$satz['originalId'])) {
+                unset($satz['originalId']);
+            }
             $store['items'][] = $satz;
             if (!$this->HomeworkWriteStore($store)) {
                 return $this->HomeworkFehler('store_unwritable');
@@ -400,6 +404,8 @@ trait Homework
             }
             $r['childId'] = $kind;
             $r['source'] = $quelle;
+            // Fremde Zeilen tragen kein Original — die Kennung vergibt nur die eigene Ablage.
+            unset($r['originalId']);
             /* Ein Haekchen, das mit dem Abruf HEREINKOMMT, gehoert der Schule.
                Ohne diese Zeile gaelte es beim ersten Abruf als hier gesetzt
                (Normalisieren nimmt „hier" als Rueckfall), und die Oberflaeche

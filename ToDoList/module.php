@@ -854,6 +854,15 @@ class SymDoToDoList extends IPSModuleStrict
             'caldavEtag' => '',
             'caldavSynced' => 0
         ];
+        /* „Original speichern" aus einem KI-Vorschlag (24.09.2026): die Aufgabe
+           haelt die Kennung eines Originals im SymDo-Gateway. Nur die Form wird
+           hier geprueft — den Ordner kennt nur das Gateway. Die Kennung verlaesst
+           Symcon nie: die Abgleiche (MS To Do, Google, CalDAV) schreiben nur
+           benannte Felder. UpdateItem fasst sie nicht an. */
+        $originalId = $this->NormalizeOriginalId($Data['originalId'] ?? '');
+        if ($originalId !== '') {
+            $newItem['originalId'] = $originalId;
+        }
 
         array_unshift($items, $newItem);
         $this->SaveItems($items);
@@ -861,6 +870,13 @@ class SymDoToDoList extends IPSModuleStrict
         $this->NotifyAssignedUsers($newItem['assignedTo'], $title, (string)($Data['actorUserId'] ?? ''));
 
         return $id;
+    }
+
+    /** Eine Original-Kennung, wie das Gateway sie vergibt (24 Hexziffern) — sonst leer. */
+    private function NormalizeOriginalId(mixed $roh): string
+    {
+        $id = is_string($roh) ? trim($roh) : '';
+        return preg_match('/^[0-9a-f]{24}$/', $id) === 1 ? $id : '';
     }
 
     public function UpdateItem(mixed $Data): void
