@@ -605,5 +605,35 @@ pruefe('Der Stundenplan holt weiter erst ab heute',
 pruefe('… und beide Haelften fragen dieselbe Stelle',
     substr_count($untis, '$this->UntisFenster()'), 2);
 
+
+// ── Hausaufgabe aus einem KI-Fund (23.09.2026) ─────────────────────────────
+/* Dieselben Goldwerte stehen in SymDoWebApp/tools/homework-parity.mjs: die
+   Web-App rechnet beim Oeffnen des Blatts, das Gateway beim Erkennen und beim
+   Umstellen — beide muessen dasselbe herausbekommen. */
+pruefe("Notiz: Aufgabe plus Herkunft", HomeworkCalc::NotizAusFund("Arbeitsheft S. 4 und 5", "Lernzeitplan der GGS Knittkuhl, Klasse 1."), "Arbeitsheft S. 4 und 5 — Lernzeitplan der GGS Knittkuhl, Klasse 1.");
+pruefe("Notiz: KI-Hausaufgabe mit Hinweis", HomeworkCalc::NotizAusFund("Mathetrainer für jeden Tag bearbeiten", "Siehe Rückseite des Lernzeitplans."), "Mathetrainer für jeden Tag bearbeiten — Siehe Rückseite des Lernzeitplans.");
+pruefe("Notiz: Text nennt die Aufgabe schon: der ausfuehrlichere bleibt", HomeworkCalc::NotizAusFund("Leseteppich üben", "Täglich den Leseteppich üben."), "Täglich den Leseteppich üben.");
+pruefe("Notiz: … auch ohne Gross/klein", HomeworkCalc::NotizAusFund("leseteppich ÜBEN", "Täglich den Leseteppich üben."), "Täglich den Leseteppich üben.");
+pruefe("Notiz: allgemeiner Titel, Aufgabe im Text", HomeworkCalc::NotizAusFund("Hausaufgabe", "Hausaufgabe: Buchstabenheft S. 16"), "Hausaufgabe: Buchstabenheft S. 16");
+pruefe("Notiz: Titel enthaelt den Text", HomeworkCalc::NotizAusFund("Arbeitsheft S. 4 und 5 bearbeiten", "Arbeitsheft S. 4"), "Arbeitsheft S. 4 und 5 bearbeiten");
+pruefe("Notiz: schon zusammengesetzt bleibt, wie es ist", HomeworkCalc::NotizAusFund("Arbeitsheft S. 4 und 5", "Arbeitsheft S. 4 und 5 — Lernzeitplan der GGS Knittkuhl, Klasse 1."), "Arbeitsheft S. 4 und 5 — Lernzeitplan der GGS Knittkuhl, Klasse 1.");
+pruefe("Notiz: nur Text", HomeworkCalc::NotizAusFund("", "Nur Text"), "Nur Text");
+pruefe("Notiz: nur Titel", HomeworkCalc::NotizAusFund("Nur Titel", ""), "Nur Titel");
+pruefe("Notiz: Leerraum ist nichts", HomeworkCalc::NotizAusFund("  ", "  "), "");
+$lang = HomeworkCalc::NotizAusFund('S. 42', str_repeat('x', 600));
+pruefe('Notiz: gekappt auf NOTE_MAX', mb_strlen($lang), HomeworkCalc::NOTE_MAX);
+pruefe('Notiz: die Aufgabe ueberlebt das Kappen, hinten steht das Auslassungszeichen',
+    [mb_substr($lang, 0, 8), mb_substr($lang, -1)], ['S. 42 — ', '…']);
+pruefe('Notiz: ein ueberlanger Titel allein wird ebenso gekappt',
+    HomeworkCalc::NotizAusFund(str_repeat('y', 600), ''), str_repeat('y', HomeworkCalc::NOTE_MAX - 1) . '…');
+pruefe('Kind: Quelle gehoert einem Kind: das gilt', HomeworkCalc::KindFuerFund('k2', 'k1', [], ['k1', 'k2']), 'k2');
+pruefe('Kind: Quelle eines Erwachsenen: das erkannte Kind', HomeworkCalc::KindFuerFund('a1', 'k1', [], ['k1', 'k2']), 'k1');
+pruefe('Kind: sonst das erste zugewiesene Kind', HomeworkCalc::KindFuerFund('a1', '', ['a1', 'k2'], ['k1', 'k2']), 'k2');
+pruefe('Kind: … auch vor weiteren Kindern', HomeworkCalc::KindFuerFund('a1', '', ['k1', 'k2'], ['k1', 'k2']), 'k1');
+pruefe('Kind: veraltete Kennung zaehlt nicht', HomeworkCalc::KindFuerFund('a1', 'weg', [], ['k1', 'k2']), '');
+pruefe('Kind: nichts bekannt: leer, der Dialog waehlt', HomeworkCalc::KindFuerFund('', '', [], ['k1', 'k2']), '');
+pruefe('Kind: Zahlen und Unsinn in der Zuweisung stoeren nicht',
+    HomeworkCalc::KindFuerFund('', '', [null, ['k1'], 'k2'], ['k1', 'k2']), 'k2');
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

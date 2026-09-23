@@ -2622,7 +2622,9 @@ trait MailScan
         if (!in_array($kind, ['task', 'event', 'homework', 'note'], true)) {
             return false;
         }
-        return $this->MailWithProposalLock(function () use ($id, $index, $kind): bool {
+        // Die Kinder VOR der Sperre: sie kommen aus der Mitgliederliste, nicht aus dem Bestand.
+        $kinder = $kind === 'homework' ? $this->HomeworkKinder() : [];
+        return $this->MailWithProposalLock(function () use ($id, $index, $kind, $kinder): bool {
             $alle = $this->MailProposals();
             $treffer = false;
             foreach ($alle as &$p) {
@@ -2631,6 +2633,19 @@ trait MailScan
                 }
                 if (isset($p['items'][$index]) && is_array($p['items'][$index]) && ($p['items'][$index]['taken'] ?? false) !== true) {
                     $p['items'][$index]['kind'] = $kind;
+                    if ($kind === 'homework') {
+                        /* Umgestellt auf Hausaufgabe (23.09.2026): was die Erkennung
+                           bei einer Hausaufgabe selbst setzt, fehlt einem umgestellten
+                           Fund — die Notiz und das Kind. Beides nach derselben Regel
+                           wie dort; die Web-App rechnet es beim Oeffnen noch einmal
+                           gleich aus (sie hat den neuen Stand erst nach dem Neuladen). */
+                        $it = $p['items'][$index];
+                        $p['items'][$index]['note'] = HomeworkCalc::NotizAusFund(
+                            (string)($it['title'] ?? ''), MailAnalyseCalc::ErsterText($it, ['note', 'info', 'text']));
+                        $p['items'][$index]['childId'] = HomeworkCalc::KindFuerFund(
+                            (string)($p['userId'] ?? ''), (string)($it['childId'] ?? ''),
+                            (array)($it['assignedTo'] ?? []), $kinder);
+                    }
                     $treffer = true;
                 }
             }

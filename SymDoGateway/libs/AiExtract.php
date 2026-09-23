@@ -1583,8 +1583,11 @@ trait AiExtract
                    ohnehin umstellen. */
                 $eintrag['subject'] = HomeworkCalc::FachAufloesen(
                     $this->AiRowStr($row, 'subject'), $this->HomeworkFaecher());
-                $eintrag['note'] = mb_substr(trim($this->AiRowText(
-                    $row['info'] ?? null, HomeworkCalc::NOTE_MAX)), 0, HomeworkCalc::NOTE_MAX);
+                /* Die Aufgabe steht im TITEL, info ist Herkunft oder Erlaeuterung —
+                   beides in die Notiz (23.09.2026). Bis dahin stand hier nur info,
+                   und das Blatt zeigte „Siehe Rueckseite des Lernzeitplans." statt
+                   „Mathetrainer fuer jeden Tag bearbeiten". */
+                $eintrag['note'] = HomeworkCalc::NotizAusFund($title, (string)($info ?? ''));
                 /* Nur KINDER: ein „Papa" im Text darf keine Hausaufgabe erben.
                    assignedTo bleibt leer, damit der ToDo-Weg sie nicht
                    versehentlich als Aufgabe anlegt. */

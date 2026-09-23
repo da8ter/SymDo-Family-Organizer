@@ -32,13 +32,18 @@ function schneide(name) {
 }
 const NAMEN = ['hwFachTreffer', 'hwFachInfo', 'hwAusSchule', 'hwWartetAufSchule',
     'hwOffene', 'hwErledigte', 'hwGruppen', 'hwFuerSlot', 'hwFaecherFuerKind',
-    'hwErledigtText'];
+    'hwErledigtText', 'hwNotizAusFund', 'hwKindFuerFund'];
+/* Die Notizgrenze steht als Konstante in module.html; sie wird von dort
+   gelesen, nicht hier behauptet — sonst pruefte der Stand eine Zahl, die die
+   Web-App gar nicht benutzt. */
+const NOTIZ_MAX = Number((/const HW_NOTIZ_MAX = (\d+);/.exec(html) || [])[1] || NaN);
 /* hwErledigtText greift nach zwei Nachbarn: der Uebersetzung und dem
    Faelligkeitstext. Beide werden hier ersetzt — geprueft wird diese Funktion,
    nicht ihre Umgebung. */
 const UMGEBUNG = `
 function translate(k) { return k === 'done %s' ? 'erledigt %s' : k; }
 function hwFaelligText(d) { return 'faellig:' + String(d || ''); }
+const HW_NOTIZ_MAX = ${NOTIZ_MAX};
 `;
 const F = new Function(UMGEBUNG + NAMEN.map(schneide).join('\n') + '\nreturn {' + NAMEN.join(', ') + '};')();
 
@@ -214,6 +219,35 @@ pruefe('ohne Zeitpunkt bleibt die Faelligkeit',
     F.hwErledigtText({ done: true, doneAt: 0, due: '2026-09-11' }), 'faellig:2026-09-11');
 pruefe('kaputter Zeitpunkt faellt ebenfalls zurueck',
     F.hwErledigtText({ done: true, doneAt: 'morgen', due: '2026-09-11' }), 'faellig:2026-09-11');
+
+
+// ── Hausaufgabe aus einem KI-Fund (23.09.2026) ─────────────────────────────
+/* Dieselben Goldwerte wie in SymDoGateway/tests/HomeworkTest.php. */
+pruefe('Notizgrenze = HomeworkCalc::NOTE_MAX', NOTIZ_MAX, 500);
+pruefe("Notiz: Aufgabe plus Herkunft", F.hwNotizAusFund("Arbeitsheft S. 4 und 5", "Lernzeitplan der GGS Knittkuhl, Klasse 1."), "Arbeitsheft S. 4 und 5 — Lernzeitplan der GGS Knittkuhl, Klasse 1.");
+pruefe("Notiz: KI-Hausaufgabe mit Hinweis", F.hwNotizAusFund("Mathetrainer für jeden Tag bearbeiten", "Siehe Rückseite des Lernzeitplans."), "Mathetrainer für jeden Tag bearbeiten — Siehe Rückseite des Lernzeitplans.");
+pruefe("Notiz: Text nennt die Aufgabe schon: der ausfuehrlichere bleibt", F.hwNotizAusFund("Leseteppich üben", "Täglich den Leseteppich üben."), "Täglich den Leseteppich üben.");
+pruefe("Notiz: … auch ohne Gross/klein", F.hwNotizAusFund("leseteppich ÜBEN", "Täglich den Leseteppich üben."), "Täglich den Leseteppich üben.");
+pruefe("Notiz: allgemeiner Titel, Aufgabe im Text", F.hwNotizAusFund("Hausaufgabe", "Hausaufgabe: Buchstabenheft S. 16"), "Hausaufgabe: Buchstabenheft S. 16");
+pruefe("Notiz: Titel enthaelt den Text", F.hwNotizAusFund("Arbeitsheft S. 4 und 5 bearbeiten", "Arbeitsheft S. 4"), "Arbeitsheft S. 4 und 5 bearbeiten");
+pruefe("Notiz: schon zusammengesetzt bleibt, wie es ist", F.hwNotizAusFund("Arbeitsheft S. 4 und 5", "Arbeitsheft S. 4 und 5 — Lernzeitplan der GGS Knittkuhl, Klasse 1."), "Arbeitsheft S. 4 und 5 — Lernzeitplan der GGS Knittkuhl, Klasse 1.");
+pruefe("Notiz: nur Text", F.hwNotizAusFund("", "Nur Text"), "Nur Text");
+pruefe("Notiz: nur Titel", F.hwNotizAusFund("Nur Titel", ""), "Nur Titel");
+pruefe("Notiz: Leerraum ist nichts", F.hwNotizAusFund("  ", "  "), "");
+const lang = F.hwNotizAusFund('S. 42', 'x'.repeat(600));
+pruefe('Notiz: gekappt auf NOTE_MAX', lang.length, 500);
+pruefe('Notiz: die Aufgabe ueberlebt das Kappen, hinten steht das Auslassungszeichen',
+    [lang.slice(0, 8), lang.slice(-1)], ['S. 42 — ', '…']);
+pruefe('Notiz: ein ueberlanger Titel allein wird ebenso gekappt',
+    F.hwNotizAusFund('y'.repeat(600), ''), 'y'.repeat(499) + '…');
+pruefe("Kind: Quelle gehoert einem Kind: das gilt", F.hwKindFuerFund("k2", "k1", [], ['k1', 'k2']), "k2");
+pruefe("Kind: Quelle eines Erwachsenen: das erkannte Kind", F.hwKindFuerFund("a1", "k1", [], ['k1', 'k2']), "k1");
+pruefe("Kind: sonst das erste zugewiesene Kind", F.hwKindFuerFund("a1", "", ["a1", "k2"], ['k1', 'k2']), "k2");
+pruefe("Kind: … auch vor weiteren Kindern", F.hwKindFuerFund("a1", "", ["k1", "k2"], ['k1', 'k2']), "k1");
+pruefe("Kind: veraltete Kennung zaehlt nicht", F.hwKindFuerFund("a1", "weg", [], ['k1', 'k2']), "");
+pruefe("Kind: nichts bekannt: leer, der Dialog waehlt", F.hwKindFuerFund("", "", [], ['k1', 'k2']), "");
+pruefe('Kind: Zahlen und Unsinn in der Zuweisung stoeren nicht',
+    F.hwKindFuerFund('', '', [null, ['k1'], 'k2'], ['k1', 'k2']), 'k2');
 
 console.log(`\n${anzahl} Zusicherungen, ${fehler} Abweichung(en).`);
 process.exit(fehler === 0 ? 0 : 1);

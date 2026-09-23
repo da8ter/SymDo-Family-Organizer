@@ -418,7 +418,7 @@ Notizen.
 | Kachel **SymDo - Hausaufgaben** | Dieselbe Liste als eigene Kachel, im Aufbau der Aufgabenliste: Avatar-Leiste, drei Zahlen (offen, überfällig, heute fällig), die Liste, eine Eingabezeile. Für ein Tablett, das nur diese eine Frage beantworten soll |
 | Stundenplan-Kachel | An der Stunde ein Abzeichen mit der Zahl (Wochenraster) bzw. ein Punkt am Balken (Zeitachse). Was zu keiner Stunde des Tages passt, steht als Fußzeile unter der Spalte |
 | Sprachassistent | „Was hat Tim für morgen auf?", „Tim hat in Mathe Seite 42 bis Donnerstag auf", „Hak bei Mia Deutsch ab" |
-| KI-Auswertung | Ein Foto des Hausaufgabenhefts und die Klassenseite liefern Hausaufgaben als vierte Vorschlagsart neben Aufgabe, Termin und Notiz |
+| KI-Auswertung | Ein Foto des Hausaufgabenhefts und die Klassenseite liefern Hausaufgaben als vierte Vorschlagsart neben Aufgabe, Termin und Notiz. Auch ein als Aufgabe erkannter Fund lässt sich im Auswahlfeld umstellen. Beim Übernehmen steht in der Notiz die Aufgabe selbst samt Herkunft („Arbeitsheft S. 4 und 5 — Lernzeitplan …“); das Kind ist das, dem die Quelle gehört (Klassenseite, LOGINEO, Postfach des Kindes), sonst das erkannte oder zugewiesene. Nennt der Fund kein Fach, bleibt die Fachwahl leer, statt still das erste des Stundenplans zu nehmen |
 | Push | Abends eine Meldung, wenn für morgen noch etwas offen ist (Kapitel 12) |
 
 **Das Fach** kommt aus dem Fachkatalog des Stundenplans, mit Symbol und Farbe.
@@ -472,7 +472,10 @@ Die Statuszeile im Formular nennt nach jedem Durchlauf, wie viele Aufgaben
 kamen, wie viele neu und wie viele zurückgezogen waren.
 
 **Grenzen**: Hausaufgaben hängen an Mitgliedern mit der Rolle *Kind* und
-brauchen deren Kennung. Sie erscheinen **nicht** in der Geräte-Erkundung der
+brauchen deren Kennung. Die Notiz fasst höchstens 500 Zeichen: alle
+Hausaufgaben liegen zusammen in einem Attribut von höchstens 256 KB, und 300
+Einträge mit voller Notiz müssen hineinpassen — sonst lehnte der Bestand jede
+weitere Hausaufgabe ab. Sie erscheinen **nicht** in der Geräte-Erkundung der
 App — dieselbe Rücksicht wie bei den Notizen, deren Listenart die
 ausgelieferte iOS-App nicht kennt.
 

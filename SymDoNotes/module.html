@@ -11503,12 +11503,8 @@ function aiUebernahmeWeiter() {
     /* Wie bei der Notiz: NICHT direkt anlegen, sondern den Dialog vorbelegt
        oeffnen. Das Kind kommt aus der Erkennung, sonst waehlt der Dialog. */
     aiUebernahmeWartet = 'hwOverlay';
-    hwEditorOeffnen(null, {
-      childId: String(e.t.childId || ''),
-      subject: String(e.t.subject || ''),
-      due: String(e.t.due || ''),
-      note: String(e.t.note || e.t.info || '')
-    });
+    // Derselbe Weg wie im KI-Eingang; ein Scan gehoert keinem Mitglied.
+    hwEditorOeffnen(null, hwEntwurfAusFund(e.t, ''));
     return;
   }
   if (e.art === 'event') {
@@ -12046,21 +12042,11 @@ function entwurfOeffnen(eintrag, userId, quelle) {
     return;
   }
   if (eintrag.kind === 'homework') {
-    /* Das Kind kommt aus der Erkennung; bei einer Klassenseite ist das fast
-       immer schon das richtige, denn die Karte gehoert einem Kind. Kennt der
-       Fund keines, gilt das Mitglied der Quelle — dieselbe Zuordnung wie bei
-       Aufgaben und Terminen. Erst danach faellt der Editor auf das erste Kind
-       zurueck; das war bisher der EINZIGE Weg und trug eine Hausaufgabe der
-       Erstklaesslerin beim grossen Bruder ein. */
-    const wessen = String(eintrag.childId || '')
-      || (istKind(String(userId || '')) ? String(userId) : '');
-    hwEditorOeffnen(null, {
-      childId: wessen,
-      subject: String(eintrag.subject || ''),
-      due: String(eintrag.due || ''),
-      note: hwNotizAusFund(eintrag),
-      proposal: quelle || null
-    });
+    /* Wessen Hausaufgabe es ist und was in der Notiz steht, rechnet
+       hwEntwurfAusFund — dieselbe Regel wie beim Scan und im Gateway. Vorher
+       fiel ein Fund ohne Kind auf das erste Kind der Liste und trug eine
+       Hausaufgabe der Erstklaesslerin beim grossen Bruder ein. */
+    hwEditorOeffnen(null, Object.assign(hwEntwurfAusFund(eintrag, userId), { proposal: quelle || null }));
     return;
   }
   if (eintrag.kind === 'event') {
@@ -12968,30 +12954,25 @@ function hwKarteHtml() {
 /* ── Hausaufgabe anlegen und ändern ──────────────────────────────────────── */
 let hwCtx = null;
 
-/** Ist das Mitglied ein Kind? Fuer die Zuordnung von Hausaufgaben. */
-function istKind(id) {
-  if (!id) return false;
-  return (store.users || []).some(u => String(u.id) === String(id) && String(u.persona || '') === 'child');
-}
-
 /**
- * Die Notiz einer Hausaufgabe aus einem KI-Fund (23.09.2026).
+ * Das Hausaufgaben-Blatt aus einem KI-Fund vorbelegen (23.09.2026) — EIN Weg
+ * fuer den KI-Eingang und den Scan. Vorher hatte jeder seine eigene Abbildung,
+ * und der Scan behielt den Fehler, den der Eingang schon los war. Die Regeln
+ * selbst (Notiz, Kind) stehen DOM-frei weiter unten und im Gateway.
  *
- * Eine Hausaufgabe hat Kind, Fach, Frist und Notiz — KEINEN Titel. Die Aufgabe
- * selbst steht im Fund aber im `title` („Arbeitsheft S. 4 und 5"), und `info`
- * ist nur die Herkunft („Lernzeitplan der GGS Knittkuhl, Klasse 1."). Bisher
- * wurde die Notiz allein aus `info` gefuellt: die Aufgabe verschwand, und im
- * Blatt stand nur noch, woher sie kam — man erkannte seine eigene Hausaufgabe
- * nicht wieder.
+ * @param besitzer Mitglied, dem die Quelle gehoert (Postfach, Klassenseite,
+ *                 LOGINEO); leer beim Scan.
  */
-function hwNotizAusFund(it) {
-  const fertig = String((it && it.note) || '').trim();
-  if (fertig) return fertig;
-  const titel = String((it && it.title) || '').trim();
-  const info = String((it && it.info) || '').trim();
-  if (!titel) return info;
-  if (!info || titel.includes(info) || info.includes(titel)) return titel;
-  return titel + ' — ' + info;
+function hwEntwurfAusFund(it, besitzer) {
+  const kinder = (store.users || []).filter(u => String(u.persona || '') === 'child').map(u => String(u.id));
+  const text = [it && it.note, it && it.info, it && it.text].map(v => String(v || '').trim()).find(v => v) || '';
+  return {
+    childId: hwKindFuerFund(String(besitzer || ''), String((it && it.childId) || ''), it && it.assignedTo, kinder),
+    subject: String((it && it.subject) || ''),
+    due: String((it && it.due) || ''),
+    note: hwNotizAusFund(it && it.title, text),
+    ausFund: true
+  };
 }
 
 function hwEditorOeffnen(bestand, vorschlag) {
@@ -13036,12 +13017,14 @@ function hwEditorOeffnen(bestand, vorschlag) {
      auf dem ersten Fach der Liste zu landen. Die KI laesst `subject` mit Absicht
      leer, wenn der Lernzeitplan nur das Heft nennt — und ein still
      vorausgewaehltes „Informatik" bei einer Erstklaesslerin ist schlimmer als
-     eine Frage. Speichern verlangt ohnehin ein Fach. */
-    const offenLassen = !bestand && !!vorschlag && gewaehlt === '';
+     eine Frage. Speichern verlangt ohnehin ein Fach. Nur beim FUND
+     (hwEntwurfAusFund setzt ausFund): „+ Neu" und das Schnellfeld behalten die
+     Vorwahl — dort steht der Mensch, der das Fach kennt, vor dem Feld. Die
+     Platzhalter-Zeile ist die erste und damit ohne Weiteres gewaehlt. */
+  const offenLassen = !bestand && !!vorschlag && vorschlag.ausFund === true && gewaehlt === '';
   fachWahl.innerHTML = (offenLassen ? `<option value="">${escapeHtml(translate('Pick a subject'))}</option>` : '') +
     liste.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
   if (gewaehlt) fachWahl.value = liste.find(n => hwFachTreffer(n, gewaehlt)) || gewaehlt;
-  else if (offenLassen) fachWahl.value = '';
 
   document.getElementById('hwDue').value = bestand ? String(bestand.due || '')
     : String((vorschlag && vorschlag.due) || '');
@@ -13126,6 +13109,42 @@ function hwSpeichern() {
    Wie bei der Wochenansicht steht jede Funktion dieses Blocks als
    Top-Level-function da und greift auf nichts ausser den Parametern zu:
    tools/homework-parity.mjs schneidet sie woertlich aus dieser Datei. */
+
+/** = HomeworkCalc::NOTE_MAX; die Paritaetspruefung liest die Zahl hier aus. */
+const HW_NOTIZ_MAX = 500;
+
+/**
+ * Die Notiz einer Hausaufgabe aus einem KI-Fund (23.09.2026): die Aufgabe (der
+ * Titel) plus Herkunft oder Erlaeuterung, ohne Doppelung — nennt der Text die
+ * Aufgabe schon, steht er allein, er ist der ausfuehrlichere. Hinten gekappt,
+ * damit die Aufgabe ueberlebt. Dieselbe Regel und dieselben Goldwerte wie
+ * HomeworkCalc::NotizAusFund.
+ */
+function hwNotizAusFund(titel, text) {
+  const t = String(titel || '').trim();
+  const x = String(text || '').trim();
+  const kappen = v => (v.length <= HW_NOTIZ_MAX ? v : v.slice(0, HW_NOTIZ_MAX - 1).trimEnd() + '…');
+  if (!t || !x) return kappen(t || x);
+  const tk = t.toLowerCase(), xk = x.toLowerCase();
+  if (xk.includes(tk)) return kappen(x);
+  if (tk.includes(xk)) return kappen(t);
+  return kappen(t + ' — ' + x);
+}
+
+/**
+ * Wessen Hausaufgabe ist ein Fund? Das Kind, dem die Quelle gehoert, sonst das
+ * erkannte, sonst das erste zugewiesene — nur Kinder, die es noch gibt; leer
+ * heisst „der Dialog waehlt". Dieselbe Regel wie HomeworkCalc::KindFuerFund.
+ */
+function hwKindFuerFund(besitzer, erkannt, zugewiesen, kinder) {
+  const liste = [besitzer, erkannt].concat(Array.isArray(zugewiesen) ? zugewiesen : []);
+  for (const id of liste) {
+    // Nur Text und Zahl — wie is_scalar im Gateway; ein verschachteltes ['k1'] ist kein Kind.
+    const k = (typeof id === 'string' || typeof id === 'number') ? String(id).trim() : '';
+    if (k && kinder.includes(k)) return k;
+  }
+  return '';
+}
 
 /** Zwei Fachnamen vergleichen — Kurzform trifft den Anfang („Mathe" trifft
     „Mathematik"), ab drei Buchstaben. Dieselbe Regel wie im Gateway; sie steht
@@ -19980,7 +19999,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // kann Termin oder Aufgabe sein (hingehen? Zettel zurueckgeben?), das
       // entscheidet, wer das Blatt vor sich hat.
       row.__kind = (kannEinkauf && it.kind === 'shopping') ? 'shopping'
-        : (kannHausaufgabe && it.kind === 'homework' && it.subject) ? 'homework'
+        // Ohne Fach bleibt es eine Hausaufgabe (so erkennt das Gateway sie seit
+        // dem 22.09.2026) — das Fach fragt das Blatt beim Uebernehmen ab.
+        : (kannHausaufgabe && it.kind === 'homework') ? 'homework'
         : (kannTermin && it.kind === 'event' && it.due) ? 'event' : 'task';
       const dueChip = it.due ? '<span class="badge due-badge">' + escapeHtml(String(it.due) + (it.time ? ' ' + String(it.time) : '')) + '</span>' : '';
       /* „2" ist eine Stueckzahl und liest sich als „x2"; „5 kg" oder

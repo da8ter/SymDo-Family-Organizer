@@ -429,4 +429,73 @@ class HomeworkCalc
         }
         return $raus;
     }
+
+    /**
+     * Die Notiz einer Hausaufgabe aus einem KI-Fund (23.09.2026).
+     *
+     * Eine Hausaufgabe hat Kind, Fach, Frist und Notiz — keinen Titel. Im Fund
+     * steht die Aufgabe aber im Titel („Arbeitsheft S. 4 und 5"), der Text
+     * daneben ist Herkunft oder Erlaeuterung („Lernzeitplan der GGS Knittkuhl,
+     * Klasse 1."). Beides gehoert in die Notiz, ohne Doppelung: nennt der Text
+     * die Aufgabe schon („Taeglich den Leseteppich ueben."), steht er allein —
+     * er ist der ausfuehrlichere. Gekappt wird hinten, damit die Aufgabe selbst
+     * immer ueberlebt; das Auslassungszeichen sagt, dass etwas fehlt.
+     *
+     * Bis heute stand in der Notiz nur der Text: im Blatt las man, WOHER die
+     * Hausaufgabe kam, aber nicht, WELCHE es war.
+     *
+     * Dieselbe Regel steht als hwNotizAusFund in der Web-App. Beide pruefen
+     * dieselben Goldwerte: tests/HomeworkTest.php und
+     * SymDoWebApp/tools/homework-parity.mjs.
+     */
+    public static function NotizAusFund(string $titel, string $text): string
+    {
+        $titel = trim($titel);
+        $text = trim($text);
+        if ($titel === '' || $text === '') {
+            return self::NotizKappen($titel !== '' ? $titel : $text);
+        }
+        $t = mb_strtolower($titel);
+        $x = mb_strtolower($text);
+        if (str_contains($x, $t)) {
+            return self::NotizKappen($text);
+        }
+        if (str_contains($t, $x)) {
+            return self::NotizKappen($titel);
+        }
+        return self::NotizKappen($titel . ' — ' . $text);
+    }
+
+    private static function NotizKappen(string $s): string
+    {
+        return mb_strlen($s) <= self::NOTE_MAX ? $s : rtrim(mb_substr($s, 0, self::NOTE_MAX - 1)) . '…';
+    }
+
+    /**
+     * Wessen Hausaufgabe ist ein Fund? (23.09.2026)
+     *
+     * 1. Gehoert die Quelle einem Kind — seine Klassenseite, sein LOGINEO, sein
+     *    Postfach —, ist es dessen Hausaufgabe. Das ist Wissen ueber die Quelle;
+     *    ein Vorname im Text ist nur ein Treffer, und eine Mitschuelerin „Mia"
+     *    auf Tims Seite machte sonst die Schwester zustaendig.
+     * 2. Sonst das Kind, das die Erkennung genannt hat,
+     * 3. sonst das erste Kind unter den Zugewiesenen: dort steht die Person bei
+     *    einem Fund, der als Aufgabe erkannt und erst danach umgestellt wurde.
+     *
+     * Nur Kinder zaehlen, und nur solche, die es noch gibt. Leer heisst: der
+     * Dialog waehlt. Dieselbe Regel steht als hwKindFuerFund in der Web-App.
+     *
+     * @param list<mixed>  $zugewiesen
+     * @param list<string> $kinder
+     */
+    public static function KindFuerFund(string $besitzer, string $erkannt, array $zugewiesen, array $kinder): string
+    {
+        foreach (array_merge([$besitzer, $erkannt], array_values($zugewiesen)) as $id) {
+            $id = is_scalar($id) ? trim((string)$id) : '';
+            if ($id !== '' && in_array($id, $kinder, true)) {
+                return $id;
+            }
+        }
+        return '';
+    }
 }

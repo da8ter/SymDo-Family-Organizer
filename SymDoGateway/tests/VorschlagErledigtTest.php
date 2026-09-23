@@ -22,6 +22,7 @@ if (!is_file($stubs . '/autoload.php')) {
 }
 require_once $stubs . '/autoload.php';
 require_once __DIR__ . '/../libs/MailAnalyseCalc.php';
+require_once __DIR__ . '/../libs/HomeworkCalc.php';
 require_once __DIR__ . '/../../libs/AiJobStore.php';
 require_once __DIR__ . '/../libs/MailScan.php';
 
@@ -51,7 +52,8 @@ final class VorschlagProbe extends IPSModuleStrict
     private function AiMailSystemPrompt(string $heute, bool $mitAnhang = false, string $quelle = 'IMAP'): string { return 'S'; }
     private function AiParseTodos(string $t, array $arten = []): array { return [['title' => 'Neu', 'kind' => 'task']]; }
     private function MailDetectOrigin(string $text): array { return []; }
-    private function HomeworkKinder(): array { return []; }
+    public array $kinder = [];
+    private function HomeworkKinder(): array { return $this->kinder; }
     public array $eduPushSammlung = [];
     private function AiJobMoeglich(): bool { return false; }
     private function MailPushSenden(string $titel, string $text, string $userId): void {}
@@ -249,6 +251,47 @@ pruefe('Alle fuenf Kachel-Kopien tragen den Haken',
 pruefe('„Taken over" heisst ueberall „Uebernommen"',
     array_map(static fn($k) => json_decode($lesen("$k/locale.json"), true)['translations']['de']['Taken over'] ?? null,
         array_merge(['SymDoWebApp'], $kopien)), array_fill(0, 6, 'Übernommen'));
+
+
+// ── Umstellen auf Hausaufgabe traegt Notiz und Kind nach (23.09.2026) ───────
+/* Ein als Aufgabe erkannter Fund hat weder `note` noch `childId` — die setzt die
+   Erkennung nur bei Hausaufgaben. Wer ihn umstellt, bekam deshalb ein Blatt mit
+   der Herkunft statt der Aufgabe und dem ersten Kind der Liste. */
+$m->kinder = ['k1', 'k2'];
+$m->pSetzen([
+    ['id' => 'lzp', 'at' => $jetzt, 'created' => $jetzt, 'userId' => 'k2', 'items' => [
+        ['title' => 'Arbeitsheft S. 4 und 5', 'info' => 'Lernzeitplan der GGS Knittkuhl, Klasse 1.', 'kind' => 'task', 'assignedTo' => []],
+        ['title' => 'Leseteppich üben', 'info' => 'Täglich den Leseteppich üben.', 'kind' => 'task'],
+        ['title' => 'Schon erledigt', 'info' => 'x', 'kind' => 'task', 'taken' => true],
+    ]],
+    ['id' => 'mail', 'at' => $jetzt, 'created' => $jetzt, 'userId' => 'a1', 'items' => [
+        ['title' => 'Buchstabenheft S. 16', 'info' => null, 'kind' => 'task', 'assignedTo' => ['a1', 'k1']],
+        ['title' => 'Elternabend', 'info' => 'Mittwoch 19 Uhr', 'kind' => 'task', 'assignedTo' => ['a1']],
+    ]],
+]);
+pruefe('Umstellen antwortet ok', $m->pAktion(['action' => 'kind', 'id' => 'lzp', 'i' => 0, 'kind' => 'homework'])['ok'] ?? null, true);
+$roh = $m->pRoh();
+pruefe('… die Notiz nennt die Aufgabe und die Herkunft',
+    $roh[0]['items'][0]['note'] ?? null, 'Arbeitsheft S. 4 und 5 — Lernzeitplan der GGS Knittkuhl, Klasse 1.');
+pruefe('… das Kind ist das der Quelle (Klassenseite/LOGINEO des Kindes)', $roh[0]['items'][0]['childId'] ?? null, 'k2');
+$m->pAktion(['action' => 'kind', 'id' => 'lzp', 'i' => 1, 'kind' => 'homework']);
+pruefe('Nennt der Text die Aufgabe schon, bleibt der ausfuehrlichere allein',
+    $m->pRoh()[0]['items'][1]['note'] ?? null, 'Täglich den Leseteppich üben.');
+pruefe('Ein uebernommener Fund wird nicht umgestellt',
+    $m->pAktion(['action' => 'kind', 'id' => 'lzp', 'i' => 2, 'kind' => 'homework'])['ok'] ?? null, false);
+pruefe('… und bekommt auch keine Notiz', array_key_exists('note', $m->pRoh()[0]['items'][2]), false);
+$m->pAktion(['action' => 'kind', 'id' => 'mail', 'i' => 0, 'kind' => 'homework']);
+$roh = $m->pRoh();
+pruefe('Postfach eines Erwachsenen: das zugewiesene KIND, nicht der Erwachsene', $roh[1]['items'][0]['childId'] ?? null, 'k1');
+pruefe('… ohne Text bleibt der Titel die Notiz', $roh[1]['items'][0]['note'] ?? null, 'Buchstabenheft S. 16');
+$m->pAktion(['action' => 'kind', 'id' => 'mail', 'i' => 1, 'kind' => 'homework']);
+pruefe('Kein Kind erkennbar: leer, das Blatt waehlt', $m->pRoh()[1]['items'][1]['childId'] ?? null, '');
+// Zurueck zur Aufgabe und wieder hin: nichts verdoppelt sich.
+$m->pAktion(['action' => 'kind', 'id' => 'lzp', 'i' => 0, 'kind' => 'task']);
+$m->pAktion(['action' => 'kind', 'id' => 'lzp', 'i' => 0, 'kind' => 'homework']);
+pruefe('Hin und her umgestellt: die Notiz bleibt dieselbe',
+    $m->pRoh()[0]['items'][0]['note'] ?? null, 'Arbeitsheft S. 4 und 5 — Lernzeitplan der GGS Knittkuhl, Klasse 1.');
+pruefe('… und es ist wieder eine Hausaufgabe', $m->pRoh()[0]['items'][0]['kind'] ?? null, 'homework');
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

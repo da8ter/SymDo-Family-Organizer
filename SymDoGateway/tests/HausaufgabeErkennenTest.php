@@ -121,5 +121,20 @@ pruefe('Der Prompt trennt im Lernzeitplan die Kindsachen von Terminen und Eltern
      str_contains($prompt, 'Fototermin')],
     [true, true, true]);
 
+
+// ── Die Notiz nennt die Aufgabe (23.09.2026) ───────────────────────────────
+/* Die Aufgabe steht im Titel, info ist Herkunft oder Hinweis. Bis heute kam die
+   Notiz allein aus info — im Blatt stand „Siehe Rueckseite des Lernzeitplans."
+   statt „Mathetrainer fuer jeden Tag bearbeiten". */
+$z = $m->pPruefen([['kind' => 'homework', 'title' => 'Mathetrainer für jeden Tag bearbeiten',
+                    'info' => 'Siehe Rückseite des Lernzeitplans.', 'subject' => 'Mathe']]);
+pruefe('KI-Hausaufgabe: Notiz = Aufgabe + Hinweis', $z[0]['note'] ?? null,
+    'Mathetrainer für jeden Tag bearbeiten — Siehe Rückseite des Lernzeitplans.');
+$z = $m->pPruefen([['kind' => 'homework', 'title' => 'Buchstabenheft S. 16', 'subject' => '']]);
+pruefe('KI-Hausaufgabe ohne info: der Titel ist die Notiz', $z[0]['note'] ?? null, 'Buchstabenheft S. 16');
+$z = $m->pPruefen([['kind' => 'homework', 'title' => 'S. 42', 'info' => str_repeat('x', 900), 'subject' => 'Mathe']]);
+pruefe('Lange Hinweise: gekappt auf NOTE_MAX, die Aufgabe vorne', [mb_strlen($z[0]['note'] ?? ''), mb_substr($z[0]['note'] ?? '', 0, 5)],
+    [HomeworkCalc::NOTE_MAX, 'S. 42']);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

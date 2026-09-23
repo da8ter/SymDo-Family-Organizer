@@ -278,4 +278,23 @@ final class MailAnalyseCalc
         }
         return $aufgaben;
     }
+
+    /**
+     * Der erste nicht leere Text unter mehreren Feldern eines Fundes — z. B.
+     * note, info, text: eine Notiz traegt ihren Inhalt in `text`, eine Aufgabe
+     * in `info`, eine erkannte Hausaufgabe in `note`.
+     *
+     * @param array<string,mixed> $fund
+     * @param list<string>        $felder
+     */
+    public static function ErsterText(array $fund, array $felder): string
+    {
+        foreach ($felder as $f) {
+            $v = $fund[$f] ?? null;
+            if (is_scalar($v) && trim((string)$v) !== '') {
+                return trim((string)$v);
+            }
+        }
+        return '';
+    }
 }
