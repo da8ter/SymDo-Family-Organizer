@@ -108,10 +108,9 @@ trait MailScan
         // das Kernmodul liefert sie nicht. Abschaltbar, weil es eine zweite
         // Verbindung ins Postfach aufbaut.
         $this->RegisterPropertyBoolean('MailReadAttachments', true);
-        // Vorgabe AUS: Anhaenge dauerhaft abzulegen ist das ueberraschende Verhalten,
-        // und der Datenschutzhinweis sagt bisher das Gegenteil. Wer es will, schaltet
-        // es ein. Gelesen wird die Eigenschaft ueber PushProp, damit sie vor dem
-        // naechsten Kernel-Neustart nicht warnt.
+        // Ohne Wirkung seit 24.09.2026 (die Notiz nimmt ihre Anhaenge aus dem
+        // Original) und nicht mehr im Formular. Bleibt registriert, damit
+        // Bestandskonfigurationen, die den Schlüssel tragen, nicht brechen.
         $this->RegisterPropertyBoolean('MailNoteAttachments', false);
 
         // ── Zweiter Eingang: Mail per Webhook (Mailgun) ──────────────────
