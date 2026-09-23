@@ -12099,12 +12099,18 @@ function entwurfOeffnen(eintrag, userId, quelle) {
   }
   if (eintrag.kind === 'homework') {
     /* Das Kind kommt aus der Erkennung; bei einer Klassenseite ist das fast
-       immer schon das richtige, denn die Karte gehoert einem Kind. */
+       immer schon das richtige, denn die Karte gehoert einem Kind. Kennt der
+       Fund keines, gilt das Mitglied der Quelle — dieselbe Zuordnung wie bei
+       Aufgaben und Terminen. Erst danach faellt der Editor auf das erste Kind
+       zurueck; das war bisher der EINZIGE Weg und trug eine Hausaufgabe der
+       Erstklaesslerin beim grossen Bruder ein. */
+    const wessen = String(eintrag.childId || '')
+      || (istKind(String(userId || '')) ? String(userId) : '');
     hwEditorOeffnen(null, {
-      childId: String(eintrag.childId || ''),
+      childId: wessen,
       subject: String(eintrag.subject || ''),
       due: String(eintrag.due || ''),
-      note: String(eintrag.note || eintrag.info || ''),
+      note: hwNotizAusFund(eintrag),
       proposal: quelle || null
     });
     return;
@@ -13014,6 +13020,32 @@ function hwKarteHtml() {
 /* ── Hausaufgabe anlegen und ändern ──────────────────────────────────────── */
 let hwCtx = null;
 
+/** Ist das Mitglied ein Kind? Fuer die Zuordnung von Hausaufgaben. */
+function istKind(id) {
+  if (!id) return false;
+  return (store.users || []).some(u => String(u.id) === String(id) && String(u.persona || '') === 'child');
+}
+
+/**
+ * Die Notiz einer Hausaufgabe aus einem KI-Fund (23.09.2026).
+ *
+ * Eine Hausaufgabe hat Kind, Fach, Frist und Notiz — KEINEN Titel. Die Aufgabe
+ * selbst steht im Fund aber im `title` („Arbeitsheft S. 4 und 5"), und `info`
+ * ist nur die Herkunft („Lernzeitplan der GGS Knittkuhl, Klasse 1."). Bisher
+ * wurde die Notiz allein aus `info` gefuellt: die Aufgabe verschwand, und im
+ * Blatt stand nur noch, woher sie kam — man erkannte seine eigene Hausaufgabe
+ * nicht wieder.
+ */
+function hwNotizAusFund(it) {
+  const fertig = String((it && it.note) || '').trim();
+  if (fertig) return fertig;
+  const titel = String((it && it.title) || '').trim();
+  const info = String((it && it.info) || '').trim();
+  if (!titel) return info;
+  if (!info || titel.includes(info) || info.includes(titel)) return titel;
+  return titel + ' — ' + info;
+}
+
 function hwEditorOeffnen(bestand, vorschlag) {
   const kinder = (store.users || []).filter(u => String(u.persona || '') === 'child');
   if (kinder.length === 0) { showToast(hwFehlertext({ error: { code: 'no_child' } })); return; }
@@ -13052,9 +13084,16 @@ function hwEditorOeffnen(bestand, vorschlag) {
   const gewaehlt = bestand ? String(bestand.subject) : String((vorschlag && vorschlag.subject) || '');
   const liste = faecher.slice();
   if (gewaehlt && !liste.some(n => hwFachTreffer(n, gewaehlt))) liste.unshift(gewaehlt);
-  fachWahl.innerHTML = liste.map(n =>
-    `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  /* Kommt die Hausaufgabe aus einem Fund OHNE Fach, bleibt die Wahl LEER statt
+     auf dem ersten Fach der Liste zu landen. Die KI laesst `subject` mit Absicht
+     leer, wenn der Lernzeitplan nur das Heft nennt — und ein still
+     vorausgewaehltes „Informatik" bei einer Erstklaesslerin ist schlimmer als
+     eine Frage. Speichern verlangt ohnehin ein Fach. */
+    const offenLassen = !bestand && !!vorschlag && gewaehlt === '';
+  fachWahl.innerHTML = (offenLassen ? `<option value="">${escapeHtml(translate('Pick a subject'))}</option>` : '') +
+    liste.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
   if (gewaehlt) fachWahl.value = liste.find(n => hwFachTreffer(n, gewaehlt)) || gewaehlt;
+  else if (offenLassen) fachWahl.value = '';
 
   document.getElementById('hwDue').value = bestand ? String(bestand.due || '')
     : String((vorschlag && vorschlag.due) || '');

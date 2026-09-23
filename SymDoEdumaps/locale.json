@@ -563,6 +563,7 @@
       "Discard suggestions": "Vorschläge verwerfen",
       "Class page": "Klassenseite",
       "Source: %1": "Quelle: %1",
+      "Pick a subject": "Fach wählen",
       "SymDo Edumaps": "SymDo - Klassenseiten",
       "Shows the class pages of the school as a tile — the same cards, the same view as in the app. There is nothing to set up here: the pages are entered in the SymDo Gateway.": "Zeigt die Klassenseiten der Schule als Kachel — dieselben Karten, dieselbe Ansicht wie in der App. Einzurichten ist hier nichts: die Quellen (Edumaps und LOGINEO NRW LMS) werden im SymDo Gateway eingetragen.",
       "Read only: the cards are a mirror of the class page. Renaming a page and deleting it (which blocks it) work; writing does not.": "Nur lesend: die Karten sind ein Spiegel der Schulseite — ob sie von Edumaps oder aus LOGINEO kommt. Eine Seite umbenennen und loeschen (womit sie gesperrt wird) geht, schreiben nicht.",

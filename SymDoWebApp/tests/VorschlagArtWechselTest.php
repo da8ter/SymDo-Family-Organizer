@@ -43,11 +43,23 @@ pruefe(substr_count($html, 'mailSortSorte(') === 2, 'mailSortSorte nur definiert
 pruefe(str_contains($html, 'const sorte = mailArt(it);'), 'Symbol und Auswahlfeld folgen weiter der aktuellen Art');
 pruefe(str_contains($html, "if (eintrag.kind === 'homework')"), 'Übernahme kennt den Hausaufgaben-Zweig');
 
+/* Was der Hausaufgaben-Zweig aus einem Fund macht (23.09.2026, gemeldet:
+   „anderes Kind, falsches Fach, die Aufgabe selbst fehlt"). */
+pruefe(str_contains($html, 'function hwNotizAusFund(it)'), 'eigene Funktion für die Notiz aus dem Fund');
+pruefe(str_contains($html, 'note: hwNotizAusFund(eintrag)'), 'die Notiz kommt aus dem Fund, nicht mehr nur aus info');
+pruefe(str_contains($html, "istKind(String(userId || '')) ? String(userId) : ''"), 'ohne eigenes Kind gilt das Mitglied der Quelle');
+pruefe(str_contains($html, 'function istKind(id)'), 'Prüfung auf Kind vorhanden');
+pruefe(str_contains($html, "const offenLassen = !bestand && !!vorschlag && gewaehlt === '';"), 'Fachwahl bleibt offen, wenn der Fund keines nennt');
+pruefe(str_contains($html, "translate('Pick a subject')"), 'die leere Fachwahl ist beschriftet');
+$locale = json_decode((string)file_get_contents(__DIR__ . '/../locale.json'), true)['translations']['de'] ?? [];
+pruefe(($locale['Pick a subject'] ?? '') === 'Fach wählen', 'locale de: Pick a subject');
+
 // Alle fünf Kopien müssen den Merker haben — sonst springt die Zeile in der Kachel weiter.
 foreach (['ToDoList', 'ShoppingList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'] as $kopie) {
     $datei = __DIR__ . '/../../' . $kopie . '/module.html';
-    pruefe(is_file($datei) && str_contains((string)file_get_contents($datei), 'function mailSortSorte(id, it)'),
-        "Kopie $kopie hat den Merker");
+    $kHtml = is_file($datei) ? (string)file_get_contents($datei) : '';
+    pruefe(str_contains($kHtml, 'function mailSortSorte(id, it)'), "Kopie $kopie hat den Merker");
+    pruefe(str_contains($kHtml, 'function hwNotizAusFund(it)'), "Kopie $kopie füllt die Notiz aus dem Fund");
 }
 
 // ── Teil 2: die echte Oberfläche ────────────────────────────────────────────
@@ -108,9 +120,13 @@ $treiber = <<<'JS'
       var art = jetzt ? (jetzt.querySelector('select.mail-kind-select') || {}).value : '';
       var knopf = jetzt && jetzt.querySelector('[data-mail="add"]');
       if (!knopf) { fertig({ fehler: 'kein +-Knopf', gleich: kennungJetzt === kennung }); return; }
+      var titel = (jetzt.querySelector('.mail-row-title') || {}).textContent || '';
+      var frist = (jetzt.querySelector('.due-text') || {}).textContent || '';
       knopf.click();
       setTimeout(function(){
-        fertig({ gleich: kennungJetzt === kennung, art: art, overlays: offen() });
+        var w = function(id){ var e = document.getElementById(id); return e ? String(e.value || '') : null; };
+        fertig({ gleich: kennungJetzt === kennung, art: art, overlays: offen(), titel: titel.trim(), frist: frist.trim(),
+                 blatt: { kind: w('hwChild'), fach: w('hwSubject'), due: w('hwDue'), note: w('hwNote') } });
       }, 1200);
     }, 1500);
   }, 6000);
@@ -139,6 +155,23 @@ if (!is_array($titel)) {
     pruefe(($titel['art'] ?? '') === 'homework', 'an dieser Stelle steht jetzt „Hausaufgabe"');
     pruefe(in_array('hwOverlay', (array)($titel['overlays'] ?? []), true), 'der +-Knopf öffnet das Hausaufgaben-Blatt');
     pruefe(!in_array('todoOverlay', (array)($titel['overlays'] ?? []), true), 'und NICHT den Aufgaben-Dialog');
+    // Und im Blatt steht die Hausaufgabe, die angeklickt wurde.
+    $blatt = (array)($titel['blatt'] ?? []);
+    $aufgabe = (string)($titel['titel'] ?? '');
+    pruefe($aufgabe !== '' && str_contains((string)($blatt['note'] ?? ''), $aufgabe),
+        'die Notiz nennt die angeklickte Aufgabe: ' . json_encode($blatt, JSON_UNESCAPED_UNICODE));
+    pruefe(($blatt['fach'] ?? 'x') === '', 'ohne Fach im Fund bleibt die Fachwahl leer');
+    /* Die Frist nur dann, wenn der Fund ueberhaupt eine nennt — auf dem
+       Prüfsystem liegen auch Funde ohne Datum, und die duerfen den Lauf nicht
+       zufaellig rot faerben. Steht eine da, muss sie im Blatt stehen. */
+    $frist = trim((string)($titel['frist'] ?? ''));
+    if ($frist !== '') {
+        $tag = preg_match('~(\d{2})\.(\d{2})\.(\d{4})~', $frist, $t) ? $t[3] . '-' . $t[2] . '-' . $t[1] : '';
+        pruefe($tag !== '' && (string)($blatt['due'] ?? '') === $tag,
+            'die Frist ist übernommen (' . $frist . ' → ' . (string)($blatt['due'] ?? '–') . ')');
+    } else {
+        pruefe(($blatt['due'] ?? null) !== null, 'ohne Frist im Fund bleibt das Datumsfeld leer, aber vorhanden');
+    }
 }
 
 echo $fehler === 0 ? "OK — $zahl Prüfungen bestanden\n" : "FEHLER — $fehler von $zahl Prüfungen gefallen\n";
