@@ -10640,8 +10640,9 @@ function renderDashboard() {
      heute", der im Kindmodus sonst leer blieb (Einkauf gehoert den Eltern). */
   if (vis.includes('homework') && homeworkMoeglich()) {
     const wahl = (zeigeMitglieder && memberFilterIds.size > 0) ? memberFilterIds : null;
+    // Wie im Kasten darunter: nur, was noch keinen Haken hat.
     const hwGruppe = hwGruppen(hwOffene(hausaufgaben.items, '')
-      .filter(i => !wahl || wahl.has(String(i.childId))), localDayStr(new Date()));
+      .filter(i => i.done !== true && (!wahl || wahl.has(String(i.childId)))), localDayStr(new Date()));
     const hwOffen = ['ueberfaellig', 'heute', 'morgen', 'spaeter', 'offen']
       .reduce((n, k) => n + hwGruppe[k].length, 0);
     const hwZeile = (bez, wert) =>
@@ -13499,8 +13500,11 @@ function hwKarteHtml() {
      ist. Ist ein Erwachsener gewaehlt, bleibt der Kasten leer — und das ist
      richtig, denn er hat keine Hausaufgaben. */
   const wahl = (mitgliederLeisteSichtbar() && memberFilterIds.size > 0) ? memberFilterIds : null;
+  /* Nur wirklich OFFENE (Wunsch 24.09.2026): eine vom Kind abgehakte
+     Schulaufgabe, die auf die Bestaetigung der Schule wartet, bleibt in der
+     Liste stehen — auf der Uebersicht zaehlt sie nicht mehr. */
   const offen = hwOffene(hausaufgaben.items, '')
-    .filter(i => !wahl || wahl.has(String(i.childId)));
+    .filter(i => i.done !== true && (!wahl || wahl.has(String(i.childId))));
   if (!homeworkMoeglich() || offen.length === 0) return '';
   const subjects = (stundenplan && stundenplan.subjects) || [];
   const heute = localDayStr(new Date());
