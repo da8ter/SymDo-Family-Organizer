@@ -1056,6 +1056,12 @@ trait VoiceTools
             } else {
                 $faecher[] = trim($beginn . ' ' . $fach);
             }
+            // Die Notiz der Lehrkraft haengt an der Stunde (24.09.2026).
+            $notiz = trim((string)($s['notes'] ?? ''));
+            if ($notiz !== '') {
+                $faecher[count($faecher) - 1] .= ' — ' . sprintf($this->Translate('note: %s'),
+                    UntisPruefungCalc::NotizKurz($notiz));
+            }
             $stattfindend[] = $s;
         }
         if ($stattfindend === []) {

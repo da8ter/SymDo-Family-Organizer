@@ -1962,6 +1962,8 @@ class SymDoGateway extends IPSModuleStrict
                    Erinnerung (Bereich Benachrichtigungen). */
                 ['type' => 'CheckBox', 'name' => 'UntisExamPush',
                  'caption' => $this->Translate('Push on exams: new in the plan, moved, cancelled — and the evening before')],
+                ['type' => 'CheckBox', 'name' => 'UntisNotePush',
+                 'caption' => $this->Translate('Push on a new lesson note from the teacher (e.g. "vocabulary test")')],
                 ['type' => 'NumberSpinner', 'name' => 'UntisExamStudyDays', 'minimum' => 0,
                  'maximum' => 30, 'suffix' => ' ' . $this->Translate('days'),
                  'caption' => $this->Translate('Study reminder as homework, days before the exam (0 = off)')],

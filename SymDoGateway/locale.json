@@ -1029,7 +1029,10 @@
             "Study reminder as homework, days before the exam (0 = off)": "Lern-Erinnerung als Hausaufgabe, Tage vor der Prüfung (0 = aus)",
             "Exams are read eight weeks ahead and shown above the homework, marked in the timetable and mentioned in the briefing. The study reminder is an ordinary homework entry of the child, due the day before — it follows the exam when it is moved and disappears when it is cancelled, as long as it is still open. Nothing is reported on the first fetch.": "Prüfungen werden acht Wochen im Voraus gelesen, über den Hausaufgaben gezeigt, im Stundenplan markiert und im Briefing genannt. Die Lern-Erinnerung ist eine gewöhnliche Hausaufgabe des Kindes, fällig am Vortag — sie zieht mit, wenn die Prüfung verlegt wird, und verschwindet, wenn sie entfällt, solange sie noch offen ist. Beim ersten Abruf wird nichts gemeldet.",
             "%1$s %2$s (exam cancelled)": "%1$s %2$s (Prüfung entfällt)",
-            "%1$s %2$s (exam)": "%1$s %2$s (Prüfung)"
+            "%1$s %2$s (exam)": "%1$s %2$s (Prüfung)",
+            "Note from school — %s": "Hinweis der Schule — %s",
+            "Push on a new lesson note from the teacher (e.g. \"vocabulary test\")": "Push bei einer neuen Notiz der Lehrkraft zur Stunde (z. B. „Vokabeltest“)",
+            "note: %s": "Hinweis: %s"
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

@@ -369,6 +369,7 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 | Kurswahl | `UntisCourses` | **eine Zeile je Überschneidung**: Wochentag, Uhrzeit, die gleichzeitig stehenden Kurse — und ein Dropdown, aus dem der besuchte gewählt wird. Die Zeilen entstehen aus dem, was der letzte Abruf gefunden hat |
 | Push bei Änderungen | `UntisPush` | meldet neue Vertretungen und Entfälle aufs Handy |
 | Hausaufgaben mitholen | `UntisHomework` | übernimmt die Hausaufgaben, die die Schule eingetragen hat (Kapitel 15) |
+| Push bei Stunden-Notizen | `UntisNotePush` | meldet eine neue Notiz der Lehrkraft zu einer Stunde ab heute („Vokabeltest …"), je Notiz einmal; der erste Abruf merkt nur (Vorgabe: an) |
 | Push bei Prüfungen | `UntisExamPush` | meldet Prüfungen, die im Plan erscheinen, verlegt werden oder entfallen, und erinnert am Vorabend (Vorgabe: an) |
 | Lern-Erinnerung | `UntisExamStudyDays` | so viele Tage vor einer Prüfung erscheint eine Hausaufgabe „Für die Prüfung lernen", fällig am Vortag (0–30, Vorgabe 7, 0 = aus) |
 
@@ -431,6 +432,10 @@ wie bisher — das Konto oder das Kind, dessen Name zum Familienmitglied passt.
 **Testverbindung** meldet das Schuljahr und nennt die Kinder des Kontos. Das Kind muss im Stundenplan-Modul als Familienmitglied verknüpft sein, sonst weiß niemand, wohin die Stunden gehören. Nach wiederholt fehlgeschlagener Anmeldung pausiert der Abruf, damit das Konto nicht gesperrt wird; die Testverbindung startet ihn wieder.
 
 Was daraus wird: Der Stundenplan zeigt **datierte Tage** mit Datum im Spaltenkopf und blättert durch beide Wochen; entfallene Stunden erscheinen als gestrichelte Kapsel, Vertretungen mit Kante; freie Tage nennen den Grund. Das **Briefing** nennt, was ausfällt und was dafür läuft. Der **Sprachdialog** beantwortet „Was hat Tim am Dienstag?" und „Fällt bei Mia etwas aus?". Eigene Zulieferer können denselben Weg nutzen: `STPL_ImportSlots()` im Stundenplan-Modul.
+
+### Stunden-Notizen und Fachfarben
+
+WebUntis liefert je Stunde die **Notiz der Lehrkraft** (`notesAll`, etwa „Vokabeltest Unit 1 Station 1" oder „Heute Filmdreh! … Materialien denken") und die **Fachfarbe** der Untis-App. Die Notiz gilt dem einen Tag: sie steht nur an den datierten Tagen, nie in der Wochenvorlage. Web-App und Stundenplan-Kachel zeigen sie unter dem Tagesbalken des Kindes und in der Wochenansicht, das Briefing hängt sie an die Schulzeile („Hinweis zu Englisch: …"), der Sprachdialog nennt sie bei der Stunde. Eine neue oder geänderte Notiz meldet ein Push (`UntisNotePush`); Notizen entfallener Stunden zählen nicht. Die Fachfarben übernimmt das Stundenplan-Modul mit dem Schalter „Farben aus UNTIS".
 
 ### Prüfungen
 

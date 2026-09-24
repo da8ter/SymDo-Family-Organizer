@@ -29,6 +29,45 @@ class UntisPruefungCalc
     public const TITEL_MAX = 80;
     /** Das Thema einer Klassenarbeit (exam.description). */
     public const THEMA_MAX = 300;
+    /** Stunden-Notiz der Lehrkraft (notesAll), gespeichert. */
+    public const NOTIZ_MAX = 500;
+    /** Dieselbe Notiz in einer Zeile: Push, Briefing, Sprachdialog. */
+    public const NOTIZ_KURZ = 140;
+
+    /**
+     * Die Notiz einer Stunde, wie sie abgelegt wird: Zeilenenden vereinheitlicht,
+     * Leerzeichen am Zeilenende und Leerzeilen-Stapel weg, gekappt. Die Absätze
+     * bleiben — „An ALLE Englischmaterialien denken! - Schoolbook - workbook"
+     * ist eine Liste.
+     */
+    public static function NotizSauber(string $roh): string
+    {
+        $t = str_replace(["\r\n", "\r"], "\n", $roh);
+        $t = preg_replace('/[ \t]+\n/u', "\n", $t) ?? $t;
+        $t = preg_replace('/\n{3,}/u', "\n\n", $t) ?? $t;
+        $t = trim($t);
+        return mb_strlen($t) > self::NOTIZ_MAX ? rtrim(mb_substr($t, 0, self::NOTIZ_MAX - 1)) . '…' : $t;
+    }
+
+    /** Die Notiz in EINER Zeile: Absätze zu „ · ", gekappt auf NOTIZ_KURZ. */
+    public static function NotizKurz(string $notiz): string
+    {
+        $zeilen = array_values(array_filter(array_map(
+            static fn(string $z): string => trim(ltrim(trim($z), '-•*')),
+            explode("\n", $notiz)), static fn(string $z): bool => $z !== ''));
+        $t = '';
+        foreach ($zeilen as $z) {
+            // Nach einem Doppelpunkt geht der Satz weiter („Achtung: Heute …").
+            $t .= $t === '' ? $z : (str_ends_with($t, ':') ? ' ' : ' · ') . $z;
+        }
+        return mb_strlen($t) > self::NOTIZ_KURZ ? rtrim(mb_substr($t, 0, self::NOTIZ_KURZ - 1)) . '…' : $t;
+    }
+
+    /** Wiedererkennung einer Notiz über Abrufe: Tag, Beginn, Fach und Wortlaut. */
+    public static function NotizSchluessel(string $datum, string $start, string $fach, string $notiz): string
+    {
+        return $datum . '|' . $start . '|' . mb_strtolower(trim($fach)) . '|' . substr(md5($notiz), 0, 12);
+    }
     /** So weit schaut das Briefing voraus (Tage nach dem Briefingtag). */
     public const BRIEFING_TAGE = 7;
     /** Mehr Zeilen verträgt die Ansage nicht. */

@@ -282,7 +282,9 @@ bis 6 = Samstag, `status` ist `normal`, `vertretung`, `entfall` oder `termin`
 (eine Veranstaltung). `insteadOf` nennt bei einer Vertretung die ersetzte
 Lehrkraft. Eine **Klassenarbeit** trägt `"exam": true` und ihren Titel in
 `examTitle` (höchstens 80 Zeichen) — ein Merkmal neben dem Status, denn auch
-eine Prüfung kann entfallen. `color` (`#RRGGBB`) ist die Fachfarbe aus WebUntis;
+eine Prüfung kann entfallen. `notes` ist die Notiz der Lehrkraft zu dieser Stunde (höchstens 500 Zeichen,
+Zeilen bleiben); Kachel und App zeigen sie unter dem Tagesbalken und in der
+Wochenansicht. `color` (`#RRGGBB`) ist die Fachfarbe aus WebUntis;
 sie wird je Fach gemerkt, nicht an der Stunde (Veranstaltungen und Prüfungen
 zählen nicht mit). Kachel und App zeigen sie mit eigenem Zeichen,
 hellem Rahmen und Titel; eine geänderte Prüfung erscheint als Prüfung, nicht

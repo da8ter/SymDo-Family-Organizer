@@ -258,6 +258,17 @@ pruefe('Fachfarbe aus WebUntis: „ff5757" wird #FF5757', $z['color'], '#FF5757'
 $kaputt = $gemessen;
 $kaputt['color'] = 'rot';
 pruefe('Unbrauchbare Farbe bleibt leer', $lp->pEintrag($kaputt)['color'], '');
+$mitNotiz = $gemessen;
+$mitNotiz['notesAll'] = "Achtung: \r\nHeute Filmdreh!  \n\n\n\n- Schoolbook\n- workbook ";
+pruefe('Stunden-Notiz aus notesAll: Zeilen vereinheitlicht, Leerzeilen-Stapel weg',
+    $lp->pEintrag($mitNotiz)['notes'], "Achtung:\nHeute Filmdreh!\n\n- Schoolbook\n- workbook");
+$nurTexte = $gemessen;
+$nurTexte['texts'] = [['type' => 'NOTES_FOR_ALL', 'text' => 'Vokabeltest Unit 1 Station 1'], ['type' => 'OTHER', 'text' => 'x']];
+pruefe('Ohne notesAll: die Notiz aus texts (nur NOTES_FOR_ALL)', $lp->pEintrag($nurTexte)['notes'], 'Vokabeltest Unit 1 Station 1');
+pruefe('Ohne Notiz: leer', $z['notes'], '');
+pruefe('Kurzform fuer Push und Briefing: eine Zeile, nach Doppelpunkt ohne Trenner',
+    UntisPruefungCalc::NotizKurz("Achtung:\nHeute Filmdreh!\n\n- Schoolbook\n- workbook"),
+    'Achtung: Heute Filmdreh! · Schoolbook · workbook');
 
 /* Der feste Abruf: 60 Tage, Mo–Fr Mathe 08:00, Deutsch 09:30, und um 13:05 zwei
    Religionskurse nebeneinander (Klassenplan). Dazu die Pruefungen:
@@ -327,6 +338,26 @@ pruefe('Thema, Name und Art aus der Detailansicht (v2), wo es eines gibt',
     array_map(static fn($x) => [$x['title'], $x['topic'], $x['examType']], $weit['pruefungen']),
     [['1. KA Deutsch', 'Diktat: Wörter mit ie', 'Klassenarbeit'], ['KA 2', '', ''], ['KA Aufsatz', '', '']]);
 pruefe('… je Pruefung ein Detailabruf', count(array_filter($lp->details, static fn($d) => str_contains($d, 'calendar-entry/detail'))), 3 + 1);
+$lp->roh = array_map(static function (array $e): array {
+    if (($e['position1'][0]['current']['shortName'] ?? '') === 'M') {
+        $e['notesAll'] = 'Vokabeltest';
+    }
+    return $e;
+}, $bau(14));
+$notizLauf = $lp->pErnten($kind);
+$vorlageNotiz = false;
+foreach ($notizLauf['tage'] as $slots) {
+    foreach ($slots as $s) {
+        $vorlageNotiz = $vorlageNotiz || ($s['notes'] ?? '') !== '';
+    }
+}
+$datiertNotiz = 0;
+foreach ($notizLauf['datiert'] as $slots) {
+    foreach ($slots as $s) {
+        $datiertNotiz += ($s['notes'] ?? '') === 'Vokabeltest' ? 1 : 0;
+    }
+}
+pruefe('Notiz: nur an den datierten Tagen, nie in der Wochenvorlage', [$vorlageNotiz, $datiertNotiz > 0], [false, true]);
 pruefe('Im engen Abruf fehlen sie nicht — dort sind es nur die im Fenster',
     array_column($eng['pruefungen'], 'date'), [$E1]);
 $lp->weitKaputt = true;
@@ -402,6 +433,10 @@ final class PflegeProbe extends IPSModuleStrict
     {
         $this->gesendet[] = [$titel, $text, $userId];
         return ['sent' => 1, 'failed' => 0, 'dropped' => 0, 'stale' => 0, 'blocked' => 0];
+    }
+    public function SendPush(string $Title, string $Text, string $UserID = '', string $Tab = ''): int
+    {
+        return (int)$this->PushBroadcast($Title, $Text, $UserID, $Tab)['sent'];
     }
     public function pEinpflegen(array $kind, array $pruef): string
     {
@@ -616,6 +651,35 @@ pruefe('… und eine entfallene Pruefung nicht als „Deutsch entfällt"',
     $sp->pZeile(['slots' => [$slot([]), $slot(['name' => 'Deutsch', 'start' => '10:35', 'end' => '11:35', 'from' => 635, 'to' => 695,
         'exam' => true, 'status' => 'entfall'])]]),
     'Joshua: Schule von 08:00 bis 09:00, die Prüfung in Deutsch entfällt');
+
+pruefe('Schulzeile haengt die Notiz der Lehrkraft an — nicht die einer entfallenen Stunde',
+    $sp->pZeile(['slots' => [$slot(['notes' => "Vokabeltest\nUnit 1"]),
+        $slot(['name' => 'Kunst', 'start' => '09:30', 'end' => '10:30', 'from' => 570, 'to' => 630,
+               'status' => 'entfall', 'notes' => 'Farbkasten'])]]),
+    'Joshua: Schule von 08:00 bis 09:00, es entfällt Kunst 09:30. Hinweis zu Mathe: „Vokabeltest · Unit 1“');
+
+// Push bei neuer Notiz: erster Lauf still, dann genau einmal, geaendert = neu.
+$np = new PflegeProbe(4010);
+$nKind = ['name' => 'Joshua', 'userId' => 'k1', 'stpl' => 7];
+$nMelden = static fn(array $datiert) => (new ReflectionMethod(PflegeProbe::class, 'UntisNotizenMelden'))->invoke($np, $nKind, $datiert);
+$nSlot = static fn(string $notiz, string $status = 'normal'): array
+    => ['subject' => 'Englisch', 'start' => '12:00', 'end' => '13:00', 'status' => $status, 'notes' => $notiz];
+$morgen = date('Y-m-d', strtotime('+1 day'));
+$gestern = date('Y-m-d', strtotime('-1 day'));
+$nMelden([$morgen => [$nSlot('Vokabeltest')]]);
+pruefe('Notiz-Push: der erste Lauf merkt nur', count($np->gesendet), 0);
+$nMelden([$morgen => [$nSlot('Vokabeltest')]]);
+pruefe('Notiz-Push: dieselbe Notiz wieder — nichts', count($np->gesendet), 0);
+$nMelden([$morgen => [$nSlot('Vokabeltest Unit 1')], $gestern => [$nSlot('Alt')]]);
+pruefe('Notiz-Push: geaenderte Notiz meldet einmal, Gestriges nicht',
+    [count($np->gesendet), $np->gesendet[0][0] ?? '', str_contains($np->gesendet[0][1] ?? '', 'Englisch: Vokabeltest Unit 1'),
+     str_contains($np->gesendet[0][1] ?? '', 'Alt'), $np->gesendet[0][2] ?? ''],
+    [1, 'Note from school — Joshua', true, false, 'k1']);
+$nMelden([$morgen => [$nSlot('Vokabeltest Unit 1'), $nSlot('Farbkasten', 'entfall')]]);
+pruefe('Notiz-Push: Notiz einer entfallenen Stunde meldet nichts', count($np->gesendet), 1);
+$np->cfg['UntisNotePush'] = false;
+$nMelden([$morgen => [$nSlot('Neu')]]);
+pruefe('Notiz-Push: Schalter aus — nichts, aber gemerkt', [count($np->gesendet), count(json_decode($np->attr['UntisNotes'], true)['k7:Joshua'])], [1, 1]);
 
 final class BriefingProbe
 {

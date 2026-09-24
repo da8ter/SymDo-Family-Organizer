@@ -608,6 +608,21 @@
     font: inherit; cursor: pointer; padding: 2px 4px;
   }
   .faecher { display: flex; flex-wrap: wrap; gap: 6px; }
+  /* Notizen der Lehrkraefte unter dem Balken — Zwilling der Web-App
+     (.plan-notizen, 24.09.2026). */
+  .notizen { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 2px; }
+  .notiz {
+    display: flex; gap: 8px; align-items: flex-start; font-size: 12px; line-height: 1.35;
+    padding: 6px 10px; border-radius: 10px;
+    background: color-mix(in srgb, var(--content-color) 6%, transparent);
+  }
+  .notiz > i, .notiz > svg { flex: 0 0 auto; width: 13px; height: 13px; margin-top: 2px; }
+  .notiz b { font-weight: 600; }
+  .notiz .text { white-space: pre-line; min-width: 0; overflow-wrap: anywhere; }
+  .notiz .zeit { color: var(--muted); font-weight: 500; }
+  .stunde .wo.notiz-kurz { display: flex; gap: 4px; align-items: flex-start; }
+  .stunde .wo.notiz-kurz span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stunde .wo.notiz-kurz > i, .stunde .wo.notiz-kurz > svg { flex: 0 0 auto; width: 10px; height: 10px; margin-top: 1px; }
   /* AN .faecher GEBUNDEN. Die Klasse `fach` traegt im Wochenraster auch den
      Fachtitel einer Stunde. Ungebunden vererbte diese Regel ihm Anzeigeart,
      Polsterung, Rundung und Hintergrund der Pille mit — sichtbar als blasse
@@ -822,6 +837,20 @@
     const v = parseInt(m[1], 16);
     const l = 0.2126 * ((v >> 16) & 255) + 0.7152 * ((v >> 8) & 255) + 0.0722 * (v & 255);
     return l >= 190 ? ';color:#1c1c1e' : '';
+  }
+
+  /* Die Notizen der Lehrkraefte eines Tages unter dem Balken. Zwilling von
+     stundenplanNotizenHtml in der Web-App (beide Stellen synchron halten). */
+  function notizenHtml(slots) {
+    const mit = (slots || []).filter(function (s) {
+      return String(s.notes || '').trim() !== '' && s.status !== 'entfall';
+    });
+    if (!mit.length) { return ''; }
+    return '<div class="notizen">' + mit.map(function (s) {
+      return '<div class="notiz">' + symbol('fa-circle-info')
+        + '<span class="text"><b>' + esc(s.name || '') + '</b> <span class="zeit">' + esc(s.start || '')
+        + '</span> — ' + esc(String(s.notes).trim()) + '</span></div>';
+    }).join('') + '</div>';
   }
 
   function esc(t) {
@@ -1766,6 +1795,8 @@
                 : (lage === 'termin' ? 'Termin' : '')));
           const pruefTitel = pruefung && s.examTitle
             && String(s.examTitle).toLowerCase() !== String(s.name || '').toLowerCase() ? s.examTitle : '';
+          // Notiz der Lehrkraft (24.09.2026), nur bei Stunden, die stattfinden.
+          const notiz = lage !== 'entfall' ? String(s.notes || '').trim() : '';
           /* Zusammen brauchen sie 8 (Innenabstand) + 22 (Fachsymbol)
              + 3 (Ueberstand des roten Punktes) + 16 (Hausaufgaben-Symbol)
              + 8 (Innenabstand) = 57px. Die kuerzeste Karte ist 45 Minuten
@@ -1778,7 +1809,8 @@
             + (s.care ? ' betreuung' : '') + lagen
             + (engeKarte ? ' hw-eng' : '') + '" title="'
             + esc(s.name + ', ' + s.start + ' – ' + s.end + (wo ? ', ' + wo : '')
-                  + (marke ? ' — ' + marke : '') + (pruefTitel ? ': ' + pruefTitel : ''))
+                  + (marke ? ' — ' + marke : '') + (pruefTitel ? ': ' + pruefTitel : '')
+                  + (notiz ? '\n' + notiz : ''))
             + '" style="background:' + esc(s.color) + tinte(s.color)
             + ';top:' + y(s.from) + 'px;height:' + h + 'px">'
             + (s.icon ? '<span class="sym">' + symbol(s.icon) + '</span>' : '')
@@ -1786,6 +1818,7 @@
             + '<div class="zeit">' + esc(s.start) + ' – ' + esc(s.end) + '</div>'
             + (marke ? '<div class="wo zustand">' + esc(marke) + '</div>' : '')
             + (pruefTitel ? '<div class="wo">' + esc(pruefTitel) + '</div>' : '')
+            + (notiz ? '<div class="wo notiz-kurz">' + symbol('fa-circle-info') + '<span>' + esc(notiz) + '</span></div>' : '')
             + (wo ? '<div class="wo">' + esc(wo) + '</div>' : '')
             + '</div>'
             /* Offene Hausaufgaben zu dieser Stunde. Die Zahl kommt vom Modul
@@ -2191,7 +2224,7 @@
         + '"><div class="balken">' + stuecke + marker
         + jetztStrichHtml(!!tag.today, von, spanne) + '</div>'
         + '<div class="ticks">' + ticks + '</div>'
-        + '<div class="zeiten">' + zeiten + '</div></div></div>';
+        + '<div class="zeiten">' + zeiten + '</div></div>' + notizenHtml(slots) + '</div>';
     });
     return html + legendeHtml();
   }

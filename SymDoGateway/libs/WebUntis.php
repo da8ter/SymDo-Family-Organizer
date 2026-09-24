@@ -75,6 +75,8 @@ trait WebUntis
            wer Vertretungen stumm haben will, will die Klassenarbeit trotzdem
            wissen. */
         $this->RegisterPropertyBoolean('UntisExamPush', true);
+        // Push bei einer neuen Stunden-Notiz der Lehrkraft (24.09.2026).
+        $this->RegisterPropertyBoolean('UntisNotePush', true);
         /* So viele Tage vor einer Pruefung erscheint eine Lern-Erinnerung in den
            Hausaufgaben des Kindes, faellig am Vortag. 0 = aus. */
         $this->RegisterPropertyInteger('UntisExamStudyDays', self::UNTIS_LERN_TAGE_STD);
@@ -107,6 +109,8 @@ trait WebUntis
            Nummer. Die Schuelerliste der Schule kommt hier nie hinein. */
         $this->RegisterAttributeString('UntisAccountStudents', '[]');
         $this->RegisterAttributeString('UntisLast', '{}');    // letzter Stand je Kind
+        // Schon gesehene Stunden-Notizen je Kind (NotizSchluessel), nur das Planfenster.
+        $this->RegisterAttributeString('UntisNotes', '{}');
         $this->RegisterAttributeString('UntisStatus', '{}');  // Statuszeile im Formular
         $this->RegisterAttributeInteger('UntisFails', 0);
         // Wann der Riegel zufiel — er oeffnet sich nach einer Frist von selbst
@@ -689,6 +693,7 @@ trait WebUntis
            „wie sieht ein Dienstag aus" und „was ist am Dienstag". */
         $datierteTage = ((int)$kind['stpl'] > 0 && $datiert !== []) ? $this->UntisEinspielen($kind, $datiert) : 0;
         $neu = $this->UntisAenderungenMelden($kind, $auffaellig);
+        $this->UntisNotizenMelden($kind, $datiert);
 
         $hausaufgaben = '';
         $zeilen = $ernte['hausaufgaben'] ?? null;
@@ -1180,6 +1185,74 @@ trait WebUntis
             }
         }
         return $raus;
+    }
+
+    /**
+     * Neue Stunden-Notizen melden — je Notiz genau einmal.
+     *
+     * Merker wie bei UntisAenderungenMelden, Schluessel aus Tag, Beginn, Fach
+     * und Wortlaut: eine geaenderte Notiz ist eine neue. Gemeldet wird nur ab
+     * heute. Der ERSTE Lauf eines Kindes schweigt und merkt nur — sonst kaemen
+     * beim Einschalten alle Notizen der zwei Wochen auf einmal.
+     *
+     * @param array<string, list<array<string,mixed>>> $datiert JJJJ-MM-TT => Stunden
+     */
+    private function UntisNotizenMelden(array $kind, array $datiert): void
+    {
+        $karte = json_decode((string)@$this->ReadAttributeString('UntisNotes'), true);
+        $karte = is_array($karte) ? $karte : [];
+        $topf  = 'k' . (int)$kind['stpl'] . ':' . $kind['name'];
+        $ersterLauf = !isset($karte[$topf]);
+        $alt   = array_map('strval', (array)($karte[$topf] ?? []));
+        $heute = date('Y-m-d');
+        $jetzt = [];
+        $neu   = [];
+        foreach ($datiert as $datum => $slots) {
+            if ((string)$datum < $heute) {
+                continue;
+            }
+            foreach ((array)$slots as $s) {
+                $notiz = trim((string)($s['notes'] ?? ''));
+                if ($notiz === '' || (string)($s['status'] ?? '') === 'entfall') {
+                    continue;
+                }
+                $k = UntisPruefungCalc::NotizSchluessel((string)$datum, (string)($s['start'] ?? ''),
+                    (string)($s['subject'] ?? ''), $notiz);
+                if (in_array($k, $jetzt, true)) {
+                    continue;
+                }
+                $jetzt[] = $k;
+                if (!in_array($k, $alt, true)) {
+                    $neu[] = ['datum' => (string)$datum, 'start' => (string)($s['start'] ?? ''),
+                              'subject' => (string)($s['subject'] ?? ''), 'notes' => $notiz];
+                }
+            }
+        }
+        $karte[$topf] = $jetzt;
+        @$this->WriteAttributeString('UntisNotes', (string)json_encode($karte, JSON_UNESCAPED_UNICODE));
+        if ($ersterLauf || $neu === [] || !(bool)$this->UntisProp('UntisNotePush', true)) {
+            return;
+        }
+        $zeilen = [];
+        foreach (array_slice($neu, 0, 3) as $n) {
+            $tag = strtotime($n['datum']);
+            $zeilen[] = sprintf('%s %s, %s: %s',
+                $tag ? UntisPruefungCalc::Wochentag($n['datum']) . ' ' . date('d.m.', $tag) : '',
+                $n['start'], $n['subject'], UntisPruefungCalc::NotizKurz($n['notes']));
+        }
+        if (count($neu) > 3) {
+            $zeilen[] = sprintf($this->Translate('and %d more'), count($neu) - 3);
+        }
+        try {
+            $this->SendPush(
+                sprintf($this->Translate('Note from school — %s'), $kind['name']),
+                implode("\n", $zeilen),
+                (string)($kind['userId'] ?? ''),
+                ''
+            );
+        } catch (\Throwable $e) {
+            $this->SendDebug('WebUntis', 'Push warf: ' . $e->getMessage(), 0);
+        }
     }
 
     private function UntisPushen(array $kind, array $neu): void

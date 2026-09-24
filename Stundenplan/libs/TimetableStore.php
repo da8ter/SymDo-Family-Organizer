@@ -298,6 +298,8 @@ trait TimetableStore
                         // Klassenarbeit (nur aus dem Import, 24.09.2026).
                         'exam'      => ($zeile['exam'] ?? false) === true,
                         'examTitle' => trim((string)($zeile['examTitle'] ?? '')),
+                        // Notiz der Lehrkraft (nur aus dem Import, 24.09.2026).
+                        'notes'     => trim((string)($zeile['notes'] ?? '')),
                         // Keine Farbe je Stunde mehr — sie kommt vom Fach.
                         'color'     => null,
                     ];
@@ -460,6 +462,8 @@ trait TimetableStore
                         'insteadOf' => trim((string)($zeile['insteadOf'] ?? '')),
                         'exam'      => ($zeile['exam'] ?? false) === true,
                         'examTitle' => trim((string)($zeile['examTitle'] ?? '')),
+                        // Notiz der Lehrkraft (nur aus dem Import, 24.09.2026).
+                        'notes'     => trim((string)($zeile['notes'] ?? '')),
                         'color'     => null,
                         // Damit die Kachel sagen kann, woher die Stunde kommt.
                         'dated'     => $datum,
@@ -761,6 +765,7 @@ trait TimetableStore
                            Karte ist die Ausgabe fuer Kachel, Gateway und App. */
                         'exam'      => ($s['exam'] ?? false) === true,
                         'examTitle' => (string)($s['examTitle'] ?? ''),
+                        'notes'     => (string)($s['notes'] ?? ''),
                         'from'   => $beginn,
                         'to'     => TimetableCalc::Minuten((string)$s['end']),
                         'gap'    => TimetableCalc::LueckeHoehe($vorher, $beginn),

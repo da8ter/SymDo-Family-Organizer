@@ -144,6 +144,8 @@ trait TimetableBridge
                    Zeilen sähe sie in der App aus wie eine gewöhnliche Stunde. */
                 'exam'      => ($s['exam'] ?? false) === true,
                 'examTitle' => (string)($s['examTitle'] ?? ''),
+                // Notiz der Lehrkraft zur Stunde („Vokabeltest"), 24.09.2026.
+                'notes'     => (string)($s['notes'] ?? ''),
             ];
             /* Die Termin-Marker setzt das GATEWAY ein, nicht der Stundenplan.
                Der holt sie sich sonst mit TGW_GetEventsForTile zurueck — und
@@ -662,6 +664,22 @@ trait TimetableBridge
                 }
             }
             $zeile .= ($deckt ? ', dafür ' : ', vertreten wird ') . $this->TimetableUnd($ersatz);
+        }
+        /* Die NOTIZEN der Lehrkraefte ganz hinten (24.09.2026): „Hinweis zu
+           Englisch: Vokabeltest Unit 1 Station 1". Nur fuer Stunden, die
+           stattfinden — die Notiz einer entfallenen Stunde hat sich erledigt.
+           Hoechstens drei, jede in einer Zeile gekappt. */
+        $hinweise = [];
+        foreach ($stunden as $s) {
+            $notiz = trim((string)($s['notes'] ?? ''));
+            if ($notiz === '' || (string)($s['status'] ?? '') === 'entfall' || count($hinweise) >= 3) {
+                continue;
+            }
+            $hinweise[] = 'zu ' . trim((string)($s['name'] ?? '')) . ': „'
+                . UntisPruefungCalc::NotizKurz($notiz) . '“';
+        }
+        if ($hinweise !== []) {
+            $zeile .= (count($hinweise) === 1 ? '. Hinweis ' : '. Hinweise ') . implode('; ', $hinweise);
         }
         return $zeile;
     }

@@ -660,7 +660,8 @@ class SymDoTimetable extends IPSModuleStrict
      * Klassenarbeit, „examTitle" ihr Titel (hoechstens 80 Zeichen) — ein
      * Merkmal neben dem Status, denn auch eine Pruefung kann entfallen.
      * „color" (#RRGGBB) ist die Fachfarbe aus WebUntis — gemerkt je Fach im
-     * Attribut UntisColors, nicht an der Stunde.
+     * Attribut UntisColors, nicht an der Stunde. „notes" ist die Notiz der
+     * Lehrkraft zu dieser Stunde (hoechstens 500 Zeichen, Zeilen bleiben).
      *
      * Geprueft wird ALLES vor dem ersten Schreiben. Ein halber Plan darf einen
      * guten nie ueberschreiben — lieber gar nichts und eine ehrliche Antwort.
@@ -785,6 +786,7 @@ class SymDoTimetable extends IPSModuleStrict
                 /* Die Fachfarbe bleibt NICHT an der Stunde (siehe unten), sie
                    wird je Fach gemerkt. Veranstaltungen und Pruefungen tragen
                    in WebUntis eigene Farben, die gehoeren nicht zum Fach. */
+                $notiz = is_string($z['notes'] ?? null) ? mb_substr(trim($z['notes']), 0, 500) : '';
                 $farbe = TimetableSubjects::FarbeHex($text($z['color'] ?? ''));
                 if ($farbe !== null && $status !== 'termin' && !$pruefung) {
                     $farben[$fach] = $farbe;
@@ -805,7 +807,10 @@ class SymDoTimetable extends IPSModuleStrict
                    Eigenschaften, und ein neues Feld an jeder Stunde hiesse, sie
                    alle beim ersten Abruf neu zu schreiben. */
                 ] + ($pruefung ? ['exam' => true,
-                                  'examTitle' => mb_substr($text($z['examTitle'] ?? ''), 0, 80)] : []);
+                                  'examTitle' => mb_substr($text($z['examTitle'] ?? ''), 0, 80)] : [])
+                /* Die Notiz der Lehrkraft (24.09.2026), ebenso nur dort, wo es
+                   eine gibt. Zeilen bleiben, gekappt auf 500 Zeichen. */
+                  + ($notiz !== '' ? ['notes' => $notiz] : []);
                 $anzahl++;
             }
             usort($slots, static fn(array $a, array $b): int

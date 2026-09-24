@@ -853,6 +853,20 @@ trait UntisLesen
            Eintrag `color` als „4da9ff", ohne Raute). Unbrauchbares bleibt leer. */
         $farbe = trim((string)($e['color'] ?? ''), " #");
         $farbe = preg_match('/^[0-9A-Fa-f]{6}$/', $farbe) === 1 ? '#' . strtoupper($farbe) : '';
+        /* Die STUNDEN-NOTIZ der Lehrkraft („Vokabeltest Unit 1 Station 1",
+           „Heute Filmdreh! … Materialien denken"), 24.09.2026 gemessen: in
+           `notesAll`, dieselbe noch einmal als `texts` vom Typ NOTES_FOR_ALL. */
+        $notiz = trim((string)($e['notesAll'] ?? ''));
+        if ($notiz === '') {
+            $teile = [];
+            foreach ((array)($e['texts'] ?? []) as $t) {
+                if (is_array($t) && (string)($t['type'] ?? '') === 'NOTES_FOR_ALL'
+                    && trim((string)($t['text'] ?? '')) !== '') {
+                    $teile[] = trim((string)$t['text']);
+                }
+            }
+            $notiz = implode("\n", $teile);
+        }
         return [
             'date'      => (int)str_replace('-', '', substr($start, 0, 10)),
             'startTime' => $zeit($start),
@@ -872,6 +886,7 @@ trait UntisLesen
             'examTitle' => mb_substr($titel, 0, UntisPruefungCalc::TITEL_MAX),
             'pid'       => $pid,
             'color'     => $farbe,
+            'notes'     => UntisPruefungCalc::NotizSauber($notiz),
         ];
     }
 
@@ -1112,11 +1127,12 @@ trait UntisLesen
             if ($genommen === '') {
                 $genommen = (string)array_key_first($termine);
             }
-            /* Eine Klassenarbeit ist kein WOCHENmuster: faellt der Tag, der die
+            /* Eine Notiz auch nicht („Vokabeltest") — sie gilt dem einen Tag.
+               Eine Klassenarbeit ist kein WOCHENmuster: faellt der Tag, der die
                Vorlage stellt, auf eine Pruefung, steht dort die Stunde — sonst
                stuende die KA jeden Donnerstag im Plan. */
             $tage[$wt] = array_map(static fn(array $s): array
-                => ['exam' => false, 'examTitle' => ''] + $s, $termine[$genommen]);
+                => ['exam' => false, 'examTitle' => '', 'notes' => ''] + $s, $termine[$genommen]);
         }
         ksort($tage);
 
@@ -1206,6 +1222,8 @@ trait UntisLesen
             'pid'       => (int)($st['pid'] ?? ($st['id'] ?? 0)),
             // Fachfarbe aus WebUntis; das Stundenplan-Modul merkt sie je Fach.
             'color'     => (string)($st['color'] ?? ''),
+            // Notiz der Lehrkraft zu DIESER Stunde an DIESEM Tag.
+            'notes'     => (string)($st['notes'] ?? ''),
         ];
         if ($slot['start'] === '' || $slot['end'] === '') {
             return null;
