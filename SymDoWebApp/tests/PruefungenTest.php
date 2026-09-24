@@ -51,6 +51,14 @@ $koerper = $start === false ? '' : substr($html, $start, (int)strpos($html, "\n}
 pruefe($koerper !== '' && !str_contains($koerper, 'hw-zeile') && !str_contains($koerper, 'data-hw'),
     'der Block traegt weder .hw-zeile noch data-hw (sonst binde hwBinden Abhaken und Wischen)');
 pruefe(str_contains($koerper, ">= heute"), 'gelesen wird nur ab heute');
+/* Build 209 liess im Hausaufgaben-Kasten der Uebersicht einen Verweis auf die
+   entfernte Variable `sprung` stehen — er warf erst ab der Zeile „n weitere"
+   und brach damit das ganze Zeichnen der Uebersicht ab (Stundenplan, Termine,
+   Briefing fehlten, die Mitgliederwahl schien zu haengen). */
+$karte = substr($html, (int)strpos($html, 'function hwKarteHtml('), 9000);
+$karte = substr($karte, 0, (int)strpos($karte, "\n}\n"));
+pruefe(!preg_match('/\bsprung\b/', $karte) && str_contains($karte, '<button class="more-row" ${ziel}>'),
+    'Hausaufgaben-Kasten: „n weitere" nutzt dasselbe Ziel wie „Alle anzeigen" (kein Rest von sprung)');
 foreach (['.plan-stueck.pruefung {', '.wp-stunde.pruefung {', '.hw-pruefung {', '.hw-pruef-balken > span {',
           '.hw-pruef-rund i, .hw-pruef-rund svg'] as $css) {
     pruefe(str_contains($html, $css), "Stil: $css");

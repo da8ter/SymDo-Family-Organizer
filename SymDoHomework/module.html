@@ -13432,14 +13432,16 @@ function hwKarteHtml() {
   const vis = visibleTabs();
   const kinderIds = new Set((store.users || []).filter(u => String(u.persona || '') === 'child').map(u => String(u.id)));
   const erstesKind = String(((gruppen.ueberfaellig[0] || gruppen.heute[0] || gruppen.morgen[0]) || {}).childId || '');
-  let alle = '';
+  // Das Ziel als Attribut: „Alle anzeigen" und die Zeile „n weitere" unten teilen es.
+  let ziel = '';
   if (vis.includes('homework')) {
-    alle = `<button class="link" data-goto="homework">${escapeHtml(translate('Show all'))}</button>`;
+    ziel = 'data-goto="homework"';
   } else if (homeworkMoeglich() && !kindGewaehlt() && kinderIds.has(erstesKind)) {
-    alle = `<button class="link" data-hw-alle="${escapeHtml(erstesKind)}">${escapeHtml(translate('Show all'))}</button>`;
+    ziel = `data-hw-alle="${escapeHtml(erstesKind)}"`;
   } else if (vis.includes('plan')) {
-    alle = `<button class="link" data-goto="plan">${escapeHtml(translate('Show all'))}</button>`;
+    ziel = 'data-goto="plan"';
   }
+  const alle = ziel ? `<button class="link" ${ziel}>${escapeHtml(translate('Show all'))}</button>` : '';
   let html = `<div class="card hw-karte"><div class="card-head">` +
     `<h3>${escapeHtml(translate('Homework'))}</h3>` + alle +
     `</div>`;
@@ -13490,8 +13492,8 @@ function hwKarteHtml() {
       : translate('%1 more homework items').replace('%1', String(rest));
     /* Ohne Sprungziel bleibt es eine Auskunft und wird kein Knopf: ein Knopf,
        der nichts tut, ist schlimmer als eine Zeile Text. */
-    html += sprung
-      ? `<button class="more-row" data-goto="plan"><span>${escapeHtml(label)}</span>` +
+    html += ziel
+      ? `<button class="more-row" ${ziel}><span>${escapeHtml(label)}</span>` +
         `<i class="fa-light fa-chevron-right"></i></button>`
       : `<div class="more-row"><span>${escapeHtml(label)}</span></div>`;
   }
