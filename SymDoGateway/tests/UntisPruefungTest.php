@@ -254,6 +254,10 @@ $ohneInfo = $gemessen;
 $ohneInfo['lessonInfo'] = null;
 pruefe('Ohne lessonInfo: Titel aus dem INFO-Element', $lp->pEintrag($ohneInfo)['examTitle'], 'KA Briefe schreiben');
 pruefe('Normale Stunde: kein Merkmal', $lp->pEintrag(rest(1, $HEUTE, '08:00', '09:00', ['M', 'Mathematik']))['exam'], false);
+pruefe('Fachfarbe aus WebUntis: „ff5757" wird #FF5757', $z['color'], '#FF5757');
+$kaputt = $gemessen;
+$kaputt['color'] = 'rot';
+pruefe('Unbrauchbare Farbe bleibt leer', $lp->pEintrag($kaputt)['color'], '');
 
 /* Der feste Abruf: 60 Tage, Mo–Fr Mathe 08:00, Deutsch 09:30, und um 13:05 zwei
    Religionskurse nebeneinander (Klassenplan). Dazu die Pruefungen:

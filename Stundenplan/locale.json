@@ -91,7 +91,8 @@
             "Either weekdays or dates — not both in one payload.": "Entweder Wochentage oder Datumsangaben — nicht beides in einem Rumpf.",
             "\"%s\" is not a date.": "„%s\" ist kein Datum.",
             "The dated days need a kernel restart first — the attribute does not exist yet.": "Die datierten Tage brauchen erst einen Kernel-Neustart — das Attribut gibt es noch nicht.",
-            "%d subjects added: %s — press Apply to keep them.": "%d Fächer ergänzt: %s — zum Behalten auf „Übernehmen“ drücken."
+            "%d subjects added: %s — press Apply to keep them.": "%d Fächer ergänzt: %s — zum Behalten auf „Übernehmen“ drücken.",
+            "Colors from WebUntis (override the colors above)": "Farben aus UNTIS (schlagen die Farben oben)"
         }
     }
 }

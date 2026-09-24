@@ -89,17 +89,43 @@ class TimetableSubjects
     }
 
     /**
+     * Die Farbe aus WebUntis fuer ein Fach: erst der genaue Name, dann nach
+     * FachGleich (die Faecherliste sagt vielleicht „Mathe", WebUntis
+     * „Mathematik"). null = WebUntis kennt keine.
+     *
+     * @param array<string,string> $farben Fach => #RRGGBB
+     */
+    public static function UntisFarbe(string $fach, array $farben): ?string
+    {
+        $fach = trim($fach);
+        if ($fach === '' || $farben === []) {
+            return null;
+        }
+        if (isset($farben[$fach])) {
+            return self::FarbeHex($farben[$fach]);
+        }
+        foreach ($farben as $name => $farbe) {
+            if (self::FachGleich((string)$name, $fach)) {
+                return self::FarbeHex($farbe);
+            }
+        }
+        return null;
+    }
+
+    /**
      * Was eine Stunde anzeigt: Name, Symbolklasse, Farbe.
      *
-     * Reihenfolge der Farbe: eigene Farbe der Stunde, sonst die des Fachs,
-     * sonst die Vorgabe. Das Fach wird ueber die Kennung gesucht; ist es
+     * Reihenfolge der Farbe: eigene Farbe der Stunde, sonst die aus WebUntis
+     * (nur mit Schalter, dann leer sonst), sonst die des Fachs, sonst die
+     * Vorgabe. Das Fach wird ueber die Kennung gesucht; ist es
      * geloescht, bleibt der in der Stunde mitgeschriebene Name stehen — ohne
      * Symbol, aber lesbar. Ohne diesen Rueckfall stuenden nach dem Loeschen
      * eines Fachs leere Karten im Raster.
      *
+     * @param array<string,string> $untis Fach => #RRGGBB aus WebUntis
      * @return array{name:string,icon:string,color:string}
      */
-    public static function Aufloesen(array $slot, array $faecher): array
+    public static function Aufloesen(array $slot, array $faecher, array $untis = []): array
     {
         $kennung = (string)($slot['subjectId'] ?? '');
         $fach    = null;
@@ -114,6 +140,7 @@ class TimetableSubjects
             $name = trim((string)($slot['subject'] ?? ''));
         }
         $farbe = self::FarbeHex($slot['color'] ?? null)
+            ?? self::UntisFarbe($name, $untis)
             ?? ($fach !== null ? self::FarbeHex($fach['color'] ?? null) : null)
             ?? self::FarbeHex(self::VORGABE_FARBE);
 

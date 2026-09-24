@@ -88,7 +88,10 @@ Meldung entsteht.
    und die Zelle anzeigt, werden ignoriert (das Format der Zelle steckt fest in
    der Konsole). Der Samstag erscheint nur bei Kindern, für die er eingeschaltet
    ist. Die Farbe kommt immer vom Fach; eine Ausnahmefarbe je Stunde gibt es
-   nicht.
+   nicht. Mit **Farben aus UNTIS** (unter den Fächern, Vorgabe an) gelten die
+   Fachfarben, die WebUntis beim Import mitliefert — sie schlagen die Farben
+   der Fächerliste, auch für die Hausaufgaben. Fächer ohne UNTIS-Farbe behalten
+   ihre eigene.
 4. **Betreuung**: unter jeder Tagesliste ein Schalter und daneben die Endzeit —
    dort, wo der Tag ohnehin gepflegt wird. Ein grauer Block läuft dann vom Ende
    des Unterrichts bis zu dieser Zeit, aber nur an Tagen mit Unterricht, und er
@@ -279,7 +282,9 @@ bis 6 = Samstag, `status` ist `normal`, `vertretung`, `entfall` oder `termin`
 (eine Veranstaltung). `insteadOf` nennt bei einer Vertretung die ersetzte
 Lehrkraft. Eine **Klassenarbeit** trägt `"exam": true` und ihren Titel in
 `examTitle` (höchstens 80 Zeichen) — ein Merkmal neben dem Status, denn auch
-eine Prüfung kann entfallen. Kachel und App zeigen sie mit eigenem Zeichen,
+eine Prüfung kann entfallen. `color` (`#RRGGBB`) ist die Fachfarbe aus WebUntis;
+sie wird je Fach gemerkt, nicht an der Stunde (Veranstaltungen und Prüfungen
+zählen nicht mit). Kachel und App zeigen sie mit eigenem Zeichen,
 hellem Rahmen und Titel; eine geänderte Prüfung erscheint als Prüfung, nicht
 als Vertretung. Geprüft
 wird alles vor dem ersten Schreiben — ein halber Plan überschreibt nie einen

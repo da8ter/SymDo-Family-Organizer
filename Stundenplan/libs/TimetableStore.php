@@ -204,6 +204,22 @@ trait TimetableStore
         return isset($mitglieder[$wert]) ? $wert : '';
     }
 
+    /**
+     * Die gemerkten Fachfarben aus WebUntis — leer, wenn der Schalter
+     * „Farben aus UNTIS" aus ist. Mit Schalter schlagen sie die Farbe der
+     * Faecherliste (Entscheidung 24.09.2026).
+     *
+     * @return array<string,string> Fach => #RRGGBB
+     */
+    private function UntisFarben(): array
+    {
+        if (!(bool)@$this->ReadPropertyBoolean('UseUntisColors')) {
+            return [];
+        }
+        $d = json_decode((string)@$this->ReadAttributeString('UntisColors'), true);
+        return is_array($d) ? array_filter($d, 'is_string') : [];
+    }
+
     /** @return list<array{id:string,name:string,icon:string,color:int}> */
     private function Faecher(): array
     {
@@ -633,6 +649,7 @@ trait TimetableStore
         $kinder  = $this->Kinder();
         $bilder  = $this->Gesichter();
         $faecher = $this->Faecher();
+        $untis   = $this->UntisFarben();
         $slots   = $this->Stunden();
         // Ein DATUM, nicht fest „heute": das Briefing fragt abends auch nach
         // morgen. Ferien und die Heute-Marke muessen sich dann auf diesen Tag
@@ -722,7 +739,7 @@ trait TimetableStore
                 $vorher = $von;
                 $karten = [];
                 foreach ($tages as $s) {
-                    $stil = TimetableSubjects::Aufloesen($s, $faecher);
+                    $stil = TimetableSubjects::Aufloesen($s, $faecher, $untis);
                     $beginn = TimetableCalc::Minuten((string)$s['start']);
                     $karten[] = [
                         'name'   => $stil['name'],

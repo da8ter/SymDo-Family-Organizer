@@ -109,6 +109,11 @@ class SymDoTimetable extends IPSModuleStrict
            Wochenplan, nur fuer die Tage, die eine Quelle wirklich gesehen hat.
            Siehe TimetableStore::ImportierteTage(). */
         $this->RegisterAttributeString('ImportedDays', '{}');
+        /* Fachfarben aus WebUntis ({Fach: "#RRGGBB"}, 24.09.2026). Gesammelt
+           von ImportSlots, angewandt nur mit dem Schalter darunter — dann
+           schlagen sie die Farben der Faecherliste. */
+        $this->RegisterAttributeString('UntisColors', '{}');
+        $this->RegisterPropertyBoolean('UseUntisColors', true);
         $this->RegisterAttributeString('Holidays', '[]');
         $this->RegisterAttributeInteger('HolidaysFetched', 0);
 
@@ -185,14 +190,31 @@ class SymDoTimetable extends IPSModuleStrict
     public function GetSubjects(): string
     {
         $raus = [];
+        $untis = $this->UntisFarben();
         foreach ($this->Faecher() as $f) {
             $raus[] = [
                 'name'  => (string)$f['name'],
                 'icon'  => TimetableSubjects::IconKlasse((string)$f['icon']),
                 // -1 heisst keine Farbe und ergibt null; ein leerer String ist
                 // fuer die Web-App einfacher, sie faellt dann auf ihre Vorgabe zurueck.
-                'color' => TimetableSubjects::FarbeHex((int)$f['color']) ?? '',
+                // Mit „Farben aus UNTIS" gewinnt die Farbe aus WebUntis.
+                'color' => TimetableSubjects::UntisFarbe((string)$f['name'], $untis)
+                    ?? TimetableSubjects::FarbeHex((int)$f['color']) ?? '',
             ];
+        }
+        /* Faecher, die nur WebUntis kennt, auch — sonst bekaemen ihre
+           Hausaufgaben keine Farbe, solange niemand sie in die Liste traegt. */
+        foreach ($untis as $name => $farbe) {
+            $bekannt = false;
+            foreach ($raus as $r) {
+                if (TimetableSubjects::FachGleich($r['name'], (string)$name)) {
+                    $bekannt = true;
+                    break;
+                }
+            }
+            if (!$bekannt) {
+                $raus[] = ['name' => (string)$name, 'icon' => '', 'color' => $farbe];
+            }
         }
         return (string)json_encode($raus, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
@@ -637,6 +659,8 @@ class SymDoTimetable extends IPSModuleStrict
      * einer Vertretung die ersetzte Lehrkraft. „exam": true bei einer
      * Klassenarbeit, „examTitle" ihr Titel (hoechstens 80 Zeichen) — ein
      * Merkmal neben dem Status, denn auch eine Pruefung kann entfallen.
+     * „color" (#RRGGBB) ist die Fachfarbe aus WebUntis — gemerkt je Fach im
+     * Attribut UntisColors, nicht an der Stunde.
      *
      * Geprueft wird ALLES vor dem ersten Schreiben. Ein halber Plan darf einen
      * guten nie ueberschreiben — lieber gar nichts und eine ehrliche Antwort.
@@ -711,6 +735,7 @@ class SymDoTimetable extends IPSModuleStrict
 
         $fertig = [];
         $anzahl = 0;
+        $farben = [];
         foreach ($tage as $tag => $zeilen) {
             $t = (int)$tag;
             if ($datiert) {
@@ -757,6 +782,13 @@ class SymDoTimetable extends IPSModuleStrict
                    zaehlt — $text() machte aus true die Zeichenkette „1" und aus
                    jedem Unsinn eine Pruefung. */
                 $pruefung = ($z['exam'] ?? false) === true || ($z['exam'] ?? 0) === 1;
+                /* Die Fachfarbe bleibt NICHT an der Stunde (siehe unten), sie
+                   wird je Fach gemerkt. Veranstaltungen und Pruefungen tragen
+                   in WebUntis eigene Farben, die gehoeren nicht zum Fach. */
+                $farbe = TimetableSubjects::FarbeHex($text($z['color'] ?? ''));
+                if ($farbe !== null && $status !== 'termin' && !$pruefung) {
+                    $farben[$fach] = $farbe;
+                }
                 $slots[] = [
                     'subject' => $fach,
                     'start'   => TimetableCalc::ZeitFeld($text($z['start'])),
@@ -836,6 +868,10 @@ class SymDoTimetable extends IPSModuleStrict
             }
         }
 
+        if ($farben !== []) {
+            $this->UntisFarbenMerken($farben);
+        }
+
         $quelle = trim((string)($rumpf['source'] ?? ''));
         $this->SendDebug('ImportSlots', sprintf('%s: Kind %d, %d %s, %d Stunde(n)',
             $quelle !== '' ? $quelle : 'unbekannte Quelle', $nr, count($fertig),
@@ -856,6 +892,27 @@ class SymDoTimetable extends IPSModuleStrict
             $antwort['verworfen'] = $verworfen;
         }
         return (string)json_encode($antwort, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Neue Fachfarben zu den gemerkten legen. Zusammengefuehrt statt ersetzt:
+     * ein datierter Abruf sieht nur zwei Wochen, ein Fach in Epochen fehlt
+     * darin. Geschrieben wird nur bei einer Aenderung, dann die Kachel neu.
+     *
+     * @param array<string,string> $neu Fach => #RRGGBB
+     */
+    private function UntisFarbenMerken(array $neu): void
+    {
+        $alt = json_decode((string)@$this->ReadAttributeString('UntisColors'), true);
+        $alt = is_array($alt) ? $alt : [];
+        $alle = $neu + $alt;          // das Neue gewinnt
+        ksort($alle);
+        ksort($alt);
+        if ($alle === $alt) {
+            return;
+        }
+        @$this->WriteAttributeString('UntisColors', (string)json_encode($alle, JSON_UNESCAPED_UNICODE));
+        $this->PushState();
     }
 
     /** Ferien erneuern und die Anzeige nachziehen. Haengt am Timer. */
@@ -1310,6 +1367,11 @@ class SymDoTimetable extends IPSModuleStrict
                         ['caption' => $this->Translate('Color'), 'name' => 'color', 'width' => '110px',
                          'add' => 0x1E88E5, 'edit' => ['type' => 'SelectColor']],
                     ],
+                ],
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'UseUntisColors',
+                    'caption' => $this->Translate('Colors from WebUntis (override the colors above)'),
                 ],
                 [
                     'type'    => 'Button',

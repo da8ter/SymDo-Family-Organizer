@@ -849,6 +849,10 @@ trait UntisLesen
                 break;
             }
         }
+        /* Die FACHFARBE, wie die Untis-App sie zeigt (24.09.2026 gemessen: je
+           Eintrag `color` als „4da9ff", ohne Raute). Unbrauchbares bleibt leer. */
+        $farbe = trim((string)($e['color'] ?? ''), " #");
+        $farbe = preg_match('/^[0-9A-Fa-f]{6}$/', $farbe) === 1 ? '#' . strtoupper($farbe) : '';
         return [
             'date'      => (int)str_replace('-', '', substr($start, 0, 10)),
             'startTime' => $zeit($start),
@@ -867,6 +871,7 @@ trait UntisLesen
             'exam'      => $pruefung,
             'examTitle' => mb_substr($titel, 0, UntisPruefungCalc::TITEL_MAX),
             'pid'       => $pid,
+            'color'     => $farbe,
         ];
     }
 
@@ -1199,6 +1204,8 @@ trait UntisLesen
             'examTitle' => mb_substr($titel, 0, UntisPruefungCalc::TITEL_MAX),
             // Die Nummer aus WebUntis; das Stundenplan-Modul laesst sie fallen.
             'pid'       => (int)($st['pid'] ?? ($st['id'] ?? 0)),
+            // Fachfarbe aus WebUntis; das Stundenplan-Modul merkt sie je Fach.
+            'color'     => (string)($st['color'] ?? ''),
         ];
         if ($slot['start'] === '' || $slot['end'] === '') {
             return null;
