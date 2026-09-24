@@ -17,9 +17,33 @@ trait ItemStore
         // Liste scheitern.
         foreach ($items as &$item) {
             $item['notes'] = (string)($item['notes'] ?? '');
+            // Doppelt kodierte Kategorie („Milch & KÃ¤se") heilen — sonst stand
+            // der Artikel in einer eigenen, falsch geschriebenen Gruppe.
+            if (isset($item['category']) && is_string($item['category'])) {
+                $item['category'] = self::DoppeltKodiertHeilen($item['category']);
+            }
         }
         unset($item);
         return $items;
+    }
+
+    /**
+     * „KÃ¤se" → „Käse": UTF-8, das einmal zu viel als ISO-8859-1 gelesen und
+     * wieder nach UTF-8 gebracht wurde (24.09.2026 an der SymBox gesehen, in
+     * einer Kategorie-Zuordnung und am Artikel). Zurueckgewandelt wird nur,
+     * wenn das Ergebnis wieder gueltiges UTF-8 ist und nichts Fremdes mehr
+     * enthaelt — ein echtes „Ã" (portugiesisch) bleibt stehen.
+     */
+    private static function DoppeltKodiertHeilen(string $text): string
+    {
+        if ($text === '' || !preg_match('/[\x{00C2}\x{00C3}][\x{0080}-\x{00BF}]/u', $text)) {
+            return $text;
+        }
+        $zurueck = @mb_convert_encoding($text, 'ISO-8859-1', 'UTF-8');
+        if (!is_string($zurueck) || $zurueck === '' || !mb_check_encoding($zurueck, 'UTF-8')) {
+            return $text;
+        }
+        return $zurueck;
     }
 
     private function SaveItems(array $Items): void

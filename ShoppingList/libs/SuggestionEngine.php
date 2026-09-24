@@ -629,7 +629,7 @@ trait SuggestionEngine
         if (is_array($overrides)) {
             $key = mb_strtolower(trim($Name));
             if (isset($overrides[$key]) && $overrides[$key] !== '') {
-                return $overrides[$key];
+                return self::DoppeltKodiertHeilen((string)$overrides[$key]);
             }
         }
 
@@ -722,7 +722,7 @@ trait SuggestionEngine
         if (!is_array($overrides)) {
             $overrides = [];
         }
-        $overrides[$key] = trim($Category);
+        $overrides[$key] = self::DoppeltKodiertHeilen(trim($Category));
         $this->WriteAttributeString(
             'CategoryOverrides',
             json_encode($overrides, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
