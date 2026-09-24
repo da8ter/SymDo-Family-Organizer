@@ -10733,7 +10733,21 @@ function renderDashboard() {
     // den Zeilen — wie in der Terminvorschau.
     html += `<div class="card"><div class="card-head"><h3>${translate('Tasks')}</h3>` +
       `<button class="link" data-goto="todos">${translate('Show all')}</button></div>`;
-    if (todayRows.length === 0) {
+    if (todayRows.length === 0 && myUpcoming.length > 0) {
+      /* Nichts faellig: dann die spaeteren offenen Aufgaben, die naechsten
+         zuerst, Aufgaben ohne Frist zuletzt (Wunsch 24.09.2026) — statt eines
+         leeren Kastens mit „alles im Griff". */
+      html += `<div class="cal-day-head"><span class="cal-weekday">${escapeHtml(translate('Later'))}</span></div>`;
+      myUpcoming.slice(0, DASH_TASKS_MAX).forEach(t => { html += taskRowHtml(t, multiTodo); });
+      const restSpaeter = myUpcoming.length - DASH_TASKS_MAX;
+      if (restSpaeter > 0) {
+        const label = restSpaeter === 1
+          ? translate('1 more task')
+          : translate('%1 more tasks').replace('%1', String(restSpaeter));
+        html += `<button class="more-row" data-goto="todos"><span>${escapeHtml(label)}</span>` +
+          `<i class="fa-light fa-chevron-right"></i></button>`;
+      }
+    } else if (todayRows.length === 0) {
       const msg = (overdueCount + todayCount === 0)
         ? translate('Nothing due — all under control.')
         : translate('No matches for this filter.');
