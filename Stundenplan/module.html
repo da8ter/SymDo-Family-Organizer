@@ -813,6 +813,17 @@
   let planAn  = 0;
   let ticker  = null;
 
+  /* Schrift und Symbol auf einer sehr hellen Fachfarbe schwarz statt weiss
+     (WebUntis: Sport #FFFFFF, Musik #FFFFA0). Dieselbe Regel und Schwelle wie
+     fachTinte in der Web-App. */
+  function tinte(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+    if (!m) { return ''; }
+    const v = parseInt(m[1], 16);
+    const l = 0.2126 * ((v >> 16) & 255) + 0.7152 * ((v >> 8) & 255) + 0.0722 * (v & 255);
+    return l >= 190 ? ';color:#1c1c1e' : '';
+  }
+
   function esc(t) {
     return String(t == null ? '' : t).replace(/[&<>"']/g, function (z) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[z];
@@ -1768,7 +1779,7 @@
             + (engeKarte ? ' hw-eng' : '') + '" title="'
             + esc(s.name + ', ' + s.start + ' – ' + s.end + (wo ? ', ' + wo : '')
                   + (marke ? ' — ' + marke : '') + (pruefTitel ? ': ' + pruefTitel : ''))
-            + '" style="background:' + esc(s.color)
+            + '" style="background:' + esc(s.color) + tinte(s.color)
             + ';top:' + y(s.from) + 'px;height:' + h + 'px">'
             + (s.icon ? '<span class="sym">' + symbol(s.icon) + '</span>' : '')
             + '<div><div class="fach">' + esc(s.name) + '</div>'
@@ -1974,7 +1985,7 @@
          immer, mehrere durch Schraegstrich getrennt („Jonas / Lena"). */
       const nur = mehrereKinder
         ? ' <span class="wessen">' + esc(f.wer.join(' / ')) + '</span>' : '';
-      return '<span class="fach"><span class="tupfen" style="background:' + esc(f.color) + '">'
+      return '<span class="fach"><span class="tupfen" style="background:' + esc(f.color) + tinte(f.color) + '">'
         + symbol(f.icon) + '</span>' + esc(f.name) + nur + '</span>';
     }).join('');
     const jetzt = tagWaehlen();
@@ -2113,7 +2124,7 @@
           + esc(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : '')
                 + (marke ? ' — ' + marke + statt : '') + (pruefTitel ? ': ' + pruefTitel : '')
                 + (s.hw ? ' — ' + s.hw + ' Hausaufgabe(n)' + (s.hwText ? ': ' + s.hwText : '') : '')) + '"'
-          + ' style="left:' + (a * 100) + '%;width:' + breite + '%;background:' + esc(fuellung)
+          + ' style="left:' + (a * 100) + '%;width:' + breite + '%;background:' + esc(fuellung) + tinte(s.color)
           + ';border-top-left-radius:' + (rundum ? '999px' : (erster ? r : '0'))
           + ';border-bottom-left-radius:' + (rundum ? '999px' : (erster ? r : '0'))
           + ';border-top-right-radius:' + (rundum ? '999px' : (letzter ? r : '0'))

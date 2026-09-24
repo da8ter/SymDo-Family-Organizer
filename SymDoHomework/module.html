@@ -9570,7 +9570,7 @@ function stundenplanLegendeHtml() {
   const eintraege = faecher.map(f => {
     const nur = mehrere
       ? ` <span class="wessen">${escapeHtml(f.wer.join(' / '))}</span>` : '';
-    return `<span class="plan-fach"><span class="tupfen" style="background:${escapeHtml(f.color)}">` +
+    return `<span class="plan-fach"><span class="tupfen" style="background:${escapeHtml(f.color)}${fachTinteStil(f.color)}">` +
       (f.icon ? `<i class="fa-light ${escapeHtml(f.icon)}"></i>` : '') + `</span>` +
       `${escapeHtml(f.name)}${nur}</span>`;
   }).join('');
@@ -9746,7 +9746,7 @@ function stundenplanKarte() {
         titelBreite = ` style="max-width:calc(${(anteil * 100).toFixed(1)}% - 26px)"`;
       }
       stuecke += `<div class="plan-stueck${erster ? ' erst' : ''}${zustand}" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : '') + zustandText)}"` +
-        ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(fuellung)}${kontur}` +
+        ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(fuellung)}${fachTinteStil(s.color)}${kontur}` +
         `;border-top-left-radius:${rundum || erster ? (rundum ? '999px' : r) : '0'}` +
         `;border-bottom-left-radius:${rundum || erster ? (rundum ? '999px' : r) : '0'}` +
         `;border-top-right-radius:${rundum || letzter ? (rundum ? '999px' : r) : '0'}` +
@@ -10019,7 +10019,7 @@ function renderWochenplan() {
           ersteProFach[String(sl.name || '')], idx);
         spalten += '<div class="wp-stunde' + lage + (hw && h < 57 ? ' wp-hw-eng' : '')
           + '" title="' + escapeHtml(hinweis) + '"' +
-          ' style="background:' + escapeHtml(sl.color || '#607D8B') + ';top:' + y(sl.from) +
+          ' style="background:' + escapeHtml(sl.color || '#607D8B') + fachTinteStil(sl.color) + ';top:' + y(sl.from) +
           'px;height:' + h + 'px">' +
           (sl.icon ? '<span class="wp-sym"><i class="fa-light ' + escapeHtml(sl.icon) + '"></i></span>' : '') +
           '<div><div class="wp-fach">' + escapeHtml(sl.name || '') + '</div>' +
@@ -13111,7 +13111,7 @@ function hwPruefungenHtml(ids, mitAvatar, subjects) {
     html += `<div class="hw-pruefung${weg ? ' entfallen' : ''}"${farbe ? ` style="--pf:${escapeHtml(farbe)}"` : ''}` +
       ` title="${escapeHtml([name, thema, wann, [p.room, p.teacher].filter(x => x).join(' · ')].filter(x => x).join(' — '))}">` +
       `<div class="hw-pruef-oben">` +
-        `<span class="hw-pruef-rund"><i class="fa-light ${escapeHtml(fach.icon || 'fa-file-pen')}"></i></span>` +
+        `<span class="hw-pruef-rund"${fachTinte(farbe) ? ` style="color:${fachTinte(farbe)}"` : ''}><i class="fa-light ${escapeHtml(fach.icon || 'fa-file-pen')}"></i></span>` +
         `<span class="hw-text">` +
           `<span class="hw-name">${escapeHtml(name)}</span>` +
           `<span class="hw-pruef-stand">${escapeHtml(stand)}</span>` +
@@ -13305,7 +13305,7 @@ function hwQuellenText(eintrag) {
 
 function hwZeileHtml(i, subjects, mitAvatar, wischbar) {
   const fach = hwFachInfo(i.subject, subjects);
-  const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}"` : '';
+  const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}${fachTinteStil(fach.color)}"` : '';
   const fertig = i.done === true;
   /* WER gehakt hat, steht in der Farbe: hier gesetzt orange, aus der Schule
      uebernommen in der Akzentfarbe. Ein alter Eintrag ohne das Feld gilt als
@@ -13511,7 +13511,7 @@ function hwKarteHtml() {
       if (gezeigt >= DASH_HW_MAX) return;
       gezeigt++;
       const fach = hwFachInfo(i.subject, subjects);
-      const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}"` : '';
+      const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}${fachTinteStil(fach.color)}"` : '';
       const wer = renderAvatarStack([String(i.childId)]);
       /* Der Kasten zeigte bisher NUR offene Aufgaben, deshalb war das
          Kaestchen hier fest leer. Seit eine selbst abgehakte Schulaufgabe bei
@@ -13805,6 +13805,27 @@ function hwFachTreffer(a, b) {
 }
 
 /** Symbol und Farbe eines Fachs aus dem Katalog des Stundenplans. */
+/**
+ * Schrift- und Symbolfarbe auf einer FACHFARBE. Weiss, solange die Farbe
+ * kraeftig genug ist (der Normalfall, auch das UNTIS-Blau); schwarz bei weiss
+ * oder sehr hell — WebUntis vergibt etwa Sport #FFFFFF und Musik #FFFFA0
+ * (Wunsch 24.09.2026). Leer = die Vorgabe des Stylesheets gilt.
+ * Die Schwelle liegt bewusst hoeher als bei eduLesefarbe: nur „sehr hell".
+ */
+function fachTinte(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return '';
+  const v = parseInt(m[1], 16);
+  const l = 0.2126 * ((v >> 16) & 255) + 0.7152 * ((v >> 8) & 255) + 0.0722 * (v & 255);
+  return l >= FACH_HELL_SCHWELLE ? '#1c1c1e' : '';
+}
+const FACH_HELL_SCHWELLE = 190;
+/** „;color:#1c1c1e" fuer einen Inline-Stil, sonst nichts. */
+function fachTinteStil(hex) {
+  const t = fachTinte(hex);
+  return t ? ';color:' + t : '';
+}
+
 function hwFachInfo(name, subjects) {
   const liste = Array.isArray(subjects) ? subjects : [];
   for (const f of liste) {
