@@ -97,14 +97,38 @@ const LISTE = { ok: true, rev: 1,
     { id: 'C', folderId: 'edupage:p1', title: 'C gesehen', updatedAt: 100, section: 'Info', pos: 3, source: 'edumaps', text: 'c' },
     { id: 'D', folderId: 'edupage:p2', title: 'D neu', updatedAt: 100, srcAt: 200, section: 'Info', pos: 1, source: 'edumaps', text: 'd' }
   ], memberFolders: {}, limits: {} };
-window.__symdoApiPost = (path) => Promise.resolve({ status: 200, json: path === '/edumaps' ? LISTE : { ok: true } });
+window.__posts = [];
+window.__symdoApiPost = (path, body) => { window.__posts.push(body || {}); return Promise.resolve({ status: 200, json: path === '/edumaps' ? LISTE : { ok: true } }); };
 const MODUS = new URLSearchParams(location.search).get('m') || location.hash.slice(1) || 'stand';
 try { localStorage.clear(); localStorage.setItem('symdo.eduOffen', JSON.stringify({ Info: true }));
-      if (MODUS === 'stand') localStorage.setItem('symdo.eduGesehen', JSON.stringify({ A: 100, B: 100, C: 100, D: 100 })); } catch (e) {}
+      if (MODUS === 'stand' || MODUS === 'neues') localStorage.setItem('symdo.eduGesehen', JSON.stringify({ A: 100, B: 100, C: 100, D: 100 })); } catch (e) {}
 const out = { modus: MODUS };
 const badge = (id) => { const el = document.getElementById(id); return el && el.style.display !== 'none' ? el.textContent : ''; };
 const zahl = (sel) => { const el = document.querSelectorAll ? null : document.querySelector(sel); return el ? el.textContent.trim() : ''; };
-window.addEventListener('load', () => setTimeout(() => {
+/* „Neues anzeigen" (24.09.2026): Knopf oben, alle neuen Karten untereinander. */
+if (MODUS === 'neues') window.addEventListener('load', () => setTimeout(() => {
+  const tab = document.getElementById('tab-edumaps'); if (tab) tab.click();
+  setTimeout(() => {
+    const k = document.getElementById('btnEduNeu');
+    out.a = { knopf: !!k, zahl: k ? zahl('#btnEduNeu .edu-neu-zahl') : '' };
+    if (k) k.click();
+    setTimeout(() => {
+      const g = JSON.parse(localStorage.getItem('symdo.eduGesehen') || '{}');
+      out.b = { karten: Array.from(document.querySelectorAll('#eduDetail .edu-karte')).map(x => x.dataset.note),
+                seiten: Array.from(document.querySelectorAll('#eduDetail .edu-neu-seite')).map(x => x.textContent),
+                pillen: document.querySelectorAll('#eduDetail .edu-neu').length, gA: g.A, gD: g.D,
+                badge: badge('tabEdumapsBadge'), aktiv: !!document.querySelector('#btnEduNeu.aktiv'),
+                volltext: window.__posts.some(b => Array.isArray(b.noteIds) && b.withText === true
+                  && b.noteIds.join(',') === 'A,D' || b.noteIds && b.noteIds.join(',') === 'D,A') };
+      const aus = document.getElementById('btnEduNeu'); if (aus) aus.click();
+      setTimeout(() => {
+        out.c = { karten: document.querySelectorAll('#eduDetail .edu-karte').length, knopf: !!document.getElementById('btnEduNeu') };
+        document.title = 'MESS ' + JSON.stringify(out);
+      }, 300);
+    }, 500);
+  }, 900);
+}, 400));
+if (MODUS !== 'neues') window.addEventListener('load', () => setTimeout(() => {
   const knopf = document.getElementById('tab-edumaps'); if (knopf) knopf.click();
   setTimeout(() => {
     out.a = { badge: badge('tabEdumapsBadge'), k1: zahl('[data-key="em:edu:k1"] .edu-neu-zahl'), k2: zahl('[data-key="em:edu:k2"] .edu-neu-zahl'),
@@ -156,6 +180,7 @@ $lesen2 = static function (string $modus) use ($tmp): ?array {
 };
 $starten('stand');
 $starten('leer');
+$starten('neues');
 $lauf = $lesen2;
 $r = $lauf('stand');
 pruefe('(a) Mit gemerktem Stand: Kind Eins 1 neu, Kind Zwei 1 neu, Tab-Abzeichen 2 (kein Kind gewaehlt)',
@@ -168,6 +193,18 @@ pruefe('(c) Seite verlassen und wieder oeffnen: keine Pille mehr',
 $r0 = $lauf('leer');
 pruefe('(d) Ohne gemerkten Stand: Grundlinie — keine Abzeichen, Schluessel danach da',
     [$r0['a']['badge'] ?? null, $r0['a']['k1'] ?? null, $r0['a']['schluessel'] ?? null, $r0['b']['pillen'] ?? null], ['', '', true, 0]);
+
+$rn = $lauf('neues');
+pruefe('(e) „Neues anzeigen": Knopf oben mit Zahl 2',
+    [$rn['a']['knopf'] ?? null, $rn['a']['zahl'] ?? null], [true, '2']);
+sort($rn['b']['karten']);
+pruefe('(f) eingeschaltet: A und D untereinander (nicht B im Archiv, nicht C), je Seite ein Weg, Pillen stehen',
+    [$rn['b']['karten'] ?? null, count($rn['b']['seiten'] ?? []), $rn['b']['pillen'] ?? null, $rn['b']['aktiv'] ?? null],
+    [['A', 'D'], 2, 2, true]);
+pruefe('(g) … als gesehen verbucht, Abzeichen weg, Volltext fuer genau diese Karten angefordert',
+    [$rn['b']['gA'] ?? null, $rn['b']['gD'] ?? null, $rn['b']['badge'] ?? null, $rn['b']['volltext'] ?? null], [200, 200, '', true]);
+pruefe('(h) ausgeschaltet: keine Karten mehr rechts, Knopf weg (nichts Neues)',
+    [$rn['c']['karten'] ?? null, $rn['c']['knopf'] ?? null], [0, false]);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

@@ -986,6 +986,25 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    roten Band also weiss, und damit stand Weiss auf Weiss (22.09.2026: die
    Pille sah leer aus). Ein festes Dunkelgrau ist auf Weiss immer lesbar. */
 .edu-kopf.bunt .edu-neu { background: #fff; color: #1b1b1b; }
+/* „Neues anzeigen" oben in den Klassenseiten — der Hausknopf der Web-App:
+   Flaeche 7 %, Akzentschrift, randlos, Radius 12. Eingeschaltet gefuellt. */
+.edu-neu-knopf {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  border: 0; border-radius: 12px; padding: 7px 11px; cursor: pointer;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
+  font: inherit; font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+.edu-neu-knopf i, .edu-neu-knopf svg { width: 13px; height: 13px; }
+.edu-neu-knopf.aktiv { background: var(--accent); color: #fff; }
+.edu-neu-knopf .edu-neu-zahl { margin-left: 2px; }
+/* Die Seite ueber einer Gruppe neuer Karten: ein Weg, antippbar. */
+.edu-neu-seite {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  border: 0; background: transparent; color: var(--muted); cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 700; padding: 10px 2px 4px; text-align: left;
+}
+.edu-neu-seite span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edu-neu-seite i, .edu-neu-seite svg { width: 12px; height: 12px; flex: 0 0 auto; }
 /* Zaehler neuer Karten an Ordnern und Abschnitten: der Kasten des Tab-Abzeichens,
    aber im Textfluss statt absolut. */
 .edu-neu-zahl { display: inline-block; vertical-align: middle; margin-left: 6px; min-width: 16px; height: 16px;
@@ -16323,6 +16342,12 @@ let edumapsGeladen = false;
 let edumapsLaden = false;
 let edumapsWartende = [];
 let eduOrdnerId = null;     // geoeffnete Seite (null = Uebersicht)
+/* „Neues anzeigen" (24.09.2026): statt einer Seite stehen rechts alle neuen
+   Karten untereinander, quer ueber die Seiten des gezeigten Kindes. Die Liste
+   ist ein SCHNAPPSCHUSS beim Einschalten — die Karten gelten damit als gesehen
+   und blieben sonst nicht stehen. */
+let eduNeuModus = false;
+let eduNeuListe = [];
 let eduTextOrdner = '';     // fuer welchen Ordner der Volltext geholt wurde
 
 /**
@@ -17189,6 +17214,7 @@ function bindeEdumapsKarten(frisch, ordner) {
 
 /** Welche Seite ihren Volltext braucht — die offene, denn nur sie zeigt Karten. */
 function eduVolltextWunsch() {
+  if (eduNeuModus) return 'neu:' + eduNeuListe.join(',');
   return eduOrdnerId || '';
 }
 
@@ -17203,8 +17229,10 @@ function ladeEdumaps(danach) {
     warten.forEach(f => { try { f(); } catch (e) {} });
   };
   const wunsch = eduVolltextWunsch();
-  aiPost('/edumaps', wunsch ? { action: 'list', folderId: wunsch, withText: true }
-                            : { action: 'list' }).then(r => {
+  const nutzlast = !wunsch ? { action: 'list' }
+    : (eduNeuModus ? { action: 'list', noteIds: eduNeuListe.slice(), withText: true }
+                   : { action: 'list', folderId: wunsch, withText: true });
+  aiPost('/edumaps', nutzlast).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true) { fertig(); return; }
     /* Unveraendert? Dann NICHTS anfassen — der Abruf laeuft im Minutentakt, und
@@ -17250,6 +17278,8 @@ function edumapsAktion(nutzlast, danach) {
 }
 
 function eduOrdnerOeffnen(fid) {
+  // Wer eine Seite oeffnet (oder zurueck geht), verlaesst „Neues anzeigen".
+  if (eduNeuModus) { eduNeuModus = false; eduNeuListe = []; eduNeuSitzung.clear(); }
   // Eine ANDERE Seite: die Pillen der vorigen haben ihren Besuch hinter sich.
   if (fid !== eduOrdnerId) eduNeuSitzung.clear();
   eduOrdnerId = fid;
@@ -17300,8 +17330,82 @@ function renderEdumaps() {
     return;
   }
   renderEdumapsMaster(elMaster);
-  renderEdumapsDetail(elDetail, offen);
-  document.getElementById('eduContent').classList.toggle('detail-open', !!offen);
+  if (eduNeuModus) {
+    renderEdumapsNeu(elDetail);
+  } else {
+    renderEdumapsDetail(elDetail, offen);
+  }
+  document.getElementById('eduContent').classList.toggle('detail-open', !!offen || eduNeuModus);
+}
+
+/**
+ * „Neues anzeigen" ein- oder ausschalten.
+ *
+ * Beim Einschalten werden die neuen Karten des gezeigten Kindes festgehalten
+ * und als gesehen verbucht — genau wie beim Oeffnen einer Seite. Die Pillen
+ * bleiben fuer diesen Besuch stehen (eduNeuSitzung).
+ */
+function eduNeuUmschalten() {
+  if (eduNeuModus) {
+    eduNeuModus = false; eduNeuListe = []; eduNeuSitzung.clear();
+    renderEdumaps();
+    return;
+  }
+  const ordner = new Map((edumaps.folders || []).map(f => [f.id, f]));
+  const neu = (edumaps.notes || []).filter(n => {
+    if (!eduIstNeu(n)) return false;
+    const seite = ordner.get(n.folderId);
+    if (!seite) return false;
+    const wurzel = seite.parentId && ordner.get(seite.parentId) ? ordner.get(seite.parentId) : seite;
+    return eduKindPasst(wurzel);
+  });
+  if (neu.length === 0) { showToast(translate('Nothing new')); return; }
+  /* Gruppiert nach Seite, die Seite mit der juengsten Karte zuerst; darin die
+     juengste Karte oben. */
+  const jungste = {};
+  for (const n of neu) jungste[n.folderId] = Math.max(jungste[n.folderId] || 0, eduStempel(n));
+  neu.sort((a, b) => (jungste[b.folderId] - jungste[a.folderId])
+    || String(a.folderId).localeCompare(String(b.folderId)) || (eduStempel(b) - eduStempel(a)));
+  eduNeuModus = true;
+  eduNeuListe = neu.map(n => n.id);
+  eduNeuSitzung.clear();
+  const g = eduGesehenLaden() || {};
+  for (const n of neu) { eduNeuSitzung.add(n.id); g[n.id] = eduStempel(n); }
+  eduGesehen = g;
+  eduGesehenSpeichern();
+  setEduBadges();
+  // Der Volltext der gesammelten Karten: die Uebersicht kam mit Vorschauen.
+  edumapsGeladen = false;
+  ladeEdumaps();
+  renderEdumaps();
+}
+
+/** Die rechte Spalte im Modus „Neues anzeigen": alle neuen Karten untereinander. */
+function renderEdumapsNeu(el) {
+  const notizen = new Map((edumaps.notes || []).map(n => [n.id, n]));
+  const karten = eduNeuListe.map(id => notizen.get(id)).filter(n => n && !n.archived);
+  let html = '<div class="screen-head" data-key="neuhead">' +
+    '<button class="icon-btn" id="btnEduBack" aria-label="' + translate('Back') + '">' +
+    '<i class="fa-light fa-chevron-left"></i></button>' +
+    '<h2>' + escapeHtml(translate('New on the class pages')) + '</h2></div>';
+  if (karten.length === 0) {
+    html += '<div class="empty-state" data-key="neuleer"><i class="fa-light fa-sparkles"></i>' +
+      translate('Nothing new') + '</div>';
+  }
+  let seite = null;
+  for (const n of karten) {
+    if (n.folderId !== seite) {
+      seite = n.folderId;
+      /* Ueber jeder Gruppe die Seite, mit ihrem Weg — ein Tipp darauf oeffnet
+         sie (und verlaesst damit diese Ansicht). */
+      const weg = notesPfad(seite).map(f => f.name).join(' › ');
+      html += '<button type="button" class="note-path-up edu-neu-seite" data-key="ens:' + escapeHtml(seite) +
+        '" data-up="' + escapeHtml(seite) + '"><i class="fa-light fa-school"></i><span>' + escapeHtml(weg) +
+        '</span><i class="fa-light fa-chevron-right"></i></button>';
+    }
+    html += edumapsKarteHtml(n, false, n.sectionColor || '');
+  }
+  bindeEdumapsKarten(renderRows(el, html), { id: '' });
 }
 
 /**
@@ -17313,7 +17417,15 @@ function renderEdumaps() {
  * samt seiner Handler wiederverwendet.
  */
 function renderEdumapsMaster(el) {
-  let html = '<div class="screen-head" data-key="head"><h2>' + translate('Class pages') + '</h2></div>';
+  /* „Neues anzeigen": nur, wenn es Neues gibt — oder die Ansicht gerade offen
+     ist, damit man sie auch wieder verlassen kann. */
+  const neuZahl = edumapsGeladen ? eduNeuZaehlen().gesamt : 0;
+  const neuKnopf = (neuZahl > 0 || eduNeuModus)
+    ? '<button type="button" class="edu-neu-knopf' + (eduNeuModus ? ' aktiv' : '') + '" id="btnEduNeu"' +
+      ' aria-pressed="' + (eduNeuModus ? 'true' : 'false') + '"><i class="fa-light fa-sparkles"></i>' +
+      '<span>' + escapeHtml(translate('Show new')) + '</span>' + eduNeuZahlHtml(neuZahl) + '</button>'
+    : '';
+  let html = '<div class="screen-head" data-key="head"><h2>' + translate('Class pages') + '</h2>' + neuKnopf + '</div>';
   if (!edumapsGeladen) {
     html += '<div class="empty-state" data-key="laden"><i class="fa-light fa-school"></i>' +
       translate('Loading …') + '</div>';
@@ -17351,6 +17463,8 @@ function bindeEdumapsMaster(frisch) {
     if (n.matches && n.matches('.fav-row[data-folder]')) zeilen.push(n);
     if (n.querySelectorAll) zeilen.push(...n.querySelectorAll('.fav-row[data-folder]'));
     zeilen.forEach(z => z.addEventListener('click', () => eduOrdnerOeffnen(z.dataset.folder)));
+    const knopf = n.matches && n.matches('#btnEduNeu') ? n : (n.querySelector ? n.querySelector('#btnEduNeu') : null);
+    if (knopf) knopf.addEventListener('click', eduNeuUmschalten);
   }
 }
 

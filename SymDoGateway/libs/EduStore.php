@@ -208,14 +208,23 @@ trait EduStore
                liest. Gedeckelt, damit eine volle Seite die Antwort nicht
                sprengt — der Rest kommt als Vorschau. */
             $volltextOrdner = (string)($body['folderId'] ?? '');
-            $mitText = ($body['withText'] ?? false) === true && $volltextOrdner !== '';
+            /* Oder für eine Auswahl von Karten quer über die Seiten — die
+               Ansicht „Neues anzeigen" (24.09.2026). Dieselbe Deckelung. */
+            $volltextKarten = [];
+            foreach (array_slice((array)($body['noteIds'] ?? []), 0, EduStoreCalc::FULLTEXT_MAX) as $kid) {
+                if (is_scalar($kid) && (string)$kid !== '') {
+                    $volltextKarten[(string)$kid] = true;
+                }
+            }
+            $mitText = ($body['withText'] ?? false) === true && ($volltextOrdner !== '' || $volltextKarten !== []);
             $rest = EduStoreCalc::FULLTEXT_MAX;
             $karten = [];
             foreach ($store['notes'] as $n) {
                 if (!is_array($n)) {
                     continue;
                 }
-                $voll = $mitText && (string)($n['folderId'] ?? '') === $volltextOrdner && $rest > 0;
+                $voll = $mitText && $rest > 0 && (($volltextOrdner !== '' && (string)($n['folderId'] ?? '') === $volltextOrdner)
+                    || isset($volltextKarten[(string)($n['id'] ?? '')]));
                 if ($voll) {
                     $rest--;
                 }

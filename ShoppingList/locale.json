@@ -689,7 +689,10 @@
             "Next exam: %1": "Nächste Prüfung: %1",
             "%1 day(s) until the exam": "%1 Tag(e) bis Prüfung",
             "Exam today": "Prüfung heute",
-            "Study start": "Lernstart"
+            "Study start": "Lernstart",
+            "Show new": "Neues anzeigen",
+            "Nothing new": "Nichts Neues",
+            "New on the class pages": "Neu auf den Klassenseiten"
         }
     }
 }
