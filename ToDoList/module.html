@@ -13581,12 +13581,9 @@ function hwKarteHtml() {
     const label = rest === 1
       ? translate('1 more homework item')
       : translate('%1 more homework items').replace('%1', String(rest));
-    /* Ohne Sprungziel bleibt es eine Auskunft und wird kein Knopf: ein Knopf,
-       der nichts tut, ist schlimmer als eine Zeile Text. */
-    html += ziel
-      ? `<button class="more-row" ${ziel}><span>${escapeHtml(label)}</span>` +
-        `<i class="fa-light fa-chevron-right"></i></button>`
-      : `<div class="more-row"><span>${escapeHtml(label)}</span></div>`;
+    /* Nur eine Auskunft, kein Knopf (Wunsch 24.09.2026) — der Weg zur ganzen
+       Liste ist „Alle anzeigen" oben im Kasten. */
+    html += `<div class="more-row"><span>${escapeHtml(label)}</span></div>`;
   }
   return html + '</div>';
 }

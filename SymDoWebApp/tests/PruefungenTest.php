@@ -57,8 +57,9 @@ pruefe(str_contains($koerper, ">= heute"), 'gelesen wird nur ab heute');
    Briefing fehlten, die Mitgliederwahl schien zu haengen). */
 $karte = substr($html, (int)strpos($html, 'function hwKarteHtml('), 9000);
 $karte = substr($karte, 0, (int)strpos($karte, "\n}\n"));
-pruefe(!preg_match('/\bsprung\b/', $karte) && str_contains($karte, '<button class="more-row" ${ziel}>'),
-    'Hausaufgaben-Kasten: „n weitere" nutzt dasselbe Ziel wie „Alle anzeigen" (kein Rest von sprung)');
+pruefe(!preg_match('/\bsprung\b/', $karte) && str_contains($karte, '<div class="more-row"><span>${escapeHtml(label)}</span></div>')
+    && !str_contains($karte, '<button class="more-row"'),
+    'Hausaufgaben-Kasten: „n weitere" ist nur Text, kein Knopf (kein Rest von sprung)');
 foreach (['.plan-stueck.pruefung {', '.wp-stunde.pruefung {', '.hw-pruefung {', '.hw-pruef-balken > span {',
           '.hw-pruef-rund i, .hw-pruef-rund svg'] as $css) {
     pruefe(str_contains($html, $css), "Stil: $css");
