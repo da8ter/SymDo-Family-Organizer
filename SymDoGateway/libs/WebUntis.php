@@ -980,8 +980,15 @@ trait WebUntis
                     'room'    => (string)($p['room'] ?? ''),
                     'teacher' => (string)($p['teacher'] ?? ''),
                     'status'  => (string)($p['status'] ?? 'normal'),
-                    // Der Anfang der Zeitleiste in der Oberflaeche (Lernstart).
-                    'learnFrom' => UntisPruefungCalc::LernStart((string)$p['date'], $lernTage),
+                    /* Der Anfang der Zeitleiste (Lernstart): der Tag, an dem die
+                       Pruefung im Plan erschien (Wunsch 24.09.2026). WebUntis
+                       nennt kein Erstelldatum — auch die Detailansicht
+                       (calendar-entry/detail) nicht —, am naechsten kommt der
+                       erste Abruf, der sie sah (stuendlich, acht Wochen voraus).
+                       Ohne diesen Tag gilt der Vorlauf der Lern-Erinnerung. */
+                    'learnFrom' => (int)($p['seit'] ?? 0) > 0 && date('Y-m-d', (int)$p['seit']) < (string)$p['date']
+                        ? date('Y-m-d', (int)$p['seit'])
+                        : UntisPruefungCalc::LernStart((string)$p['date'], $lernTage),
                 ];
             }
         }

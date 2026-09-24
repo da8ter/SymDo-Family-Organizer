@@ -498,10 +498,11 @@ pruefe('Hausaufgaben-Endpunkt: exams (ab heute, mit Kind) und examRev',
     [array_column($liste['exams'], 'subject'), $liste['exams'][0]['childId'], $liste['examRev'] === (int)$pf->pStand()['rev']],
     [['Deutsch', 'Chemie'], 'k1', true]);
 pruefe('… nach Kind gefiltert', $pf->pAktion(['action' => 'list', 'childId' => 'k2'])['exams'], []);
-pruefe('… mit Lernstart (UntisExamStudyDays = 7)', $liste['exams'][0]['learnFrom'], $tag(4 - 7));
-$pf->cfg['UntisExamStudyDays'] = 3;
-pruefe('… der Lernstart folgt der Einstellung', $pf->pAktion(['action' => 'list'])['exams'][0]['learnFrom'], $tag(4 - 3));
-$pf->cfg['UntisExamStudyDays'] = 7;
+pruefe('… Lernstart = der Tag, an dem die Pruefung im Plan erschien (seit)', $liste['exams'][0]['learnFrom'], $HEUTE);
+$st = $pf->pStand();
+$st['kinder']['k1']['exams'][0]['seit'] = 0;
+$pf->attr['UntisPruefungen'] = json_encode($st);
+pruefe('… ohne diesen Tag: der Vorlauf der Lern-Erinnerung', $pf->pAktion(['action' => 'list'])['exams'][0]['learnFrom'], $tag(4 - 7));
 
 // ══ 4. Vorabend-Meldung, Schulzeile, Briefing ═══════════════════════════════
 final class VorabendProbe extends IPSModuleStrict

@@ -449,8 +449,10 @@ und datierte Tage sehen genau dasselbe wie vorher.
   Prüfung eine Zeitleiste vom Lernstart bis zum Prüfungstag mit „n Tag(e) bis
   Prüfung · x %", entfallene durchgestrichen — in der Web-App, im Abschnitt
   unter dem Wochenraster und in der Hausaufgaben-Kachel. Den Lernstart liefert
-  das Gateway (`learnFrom`): so viele Tage vorher, wie `UntisExamStudyDays`
-  sagt, ist die Lern-Erinnerung aus, eine Woche.
+  das Gateway (`learnFrom`): der Tag, an dem die Prüfung im Plan erschien.
+  WebUntis nennt kein Erstelldatum; das Gateway merkt sich den ersten Abruf,
+  der sie sah (stündlich, acht Wochen voraus). Prüfungen, die schon vor dem
+  Update im Plan standen, beginnen deshalb am Tag des Updates.
 - **Das Briefing** nennt die Prüfung des Tages in der Schulzeile und die der
   folgenden sieben Tage in einem eigenen Block (höchstens vier), den Abstand
   ab heute gerechnet — auch in der Abendvorschau stimmt „in drei Tagen".
