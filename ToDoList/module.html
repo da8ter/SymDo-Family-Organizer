@@ -13156,7 +13156,7 @@ function hwPruefungenHtml(ids, mitAvatar, subjects) {
         (mitAvatar ? `<span class="cal-side"><span class="cal-chips">` +
           `${renderAvatarStack([String(p.childId)])}</span></span>` : '') +
       `</div>` +
-      (thema ? `<div class="hw-pruef-thema">${escapeHtml(thema)}</div>` : '') +
+      (thema ? `<div class="hw-pruef-thema"><b>${escapeHtml(translate('Topics'))}:</b> ${escapeHtml(thema)}</div>` : '') +
       /* Die Leiste nur, solange die Pruefung stattfindet — eine entfallene hat
          keinen Weg mehr vor sich. */
       (weg ? '' :

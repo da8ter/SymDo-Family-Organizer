@@ -298,7 +298,8 @@ pruefe(abs((int)($blk[1]['balkenBreite'] ?? 0) - (int)round(0.57 * (int)($blk[1]
 pruefe(($blk[1]['enden'] ?? null) === null ? false
     : (str_contains($blk[1]['enden'][0], $lang($tag(-4))) && str_contains($blk[1]['enden'][1], $lang($tag(3)) . ', 09:30')),
     'Unter dem Balken: Lernstart und Pruefung mit Uhrzeit: ' . json_encode($blk[1]['enden'] ?? null, JSON_UNESCAPED_UNICODE));
-pruefe(($blk[1]['thema'] ?? '') === 'Mich vorstellen, meine Familie' && ($blk[0]['thema'] ?? 'x') === '',
+pruefe(in_array($blk[1]['thema'] ?? '', ['Themen: Mich vorstellen, meine Familie', 'Topics: Mich vorstellen, meine Familie'], true)
+    && ($blk[0]['thema'] ?? 'x') === '',
     'Das Thema steht unter dem Namen, nur wo es eines gibt');
 pruefe(($blk[2]['weg'] ?? false) === true && in_array($blk[2]['stand'] ?? '', ['entfällt', 'cancelled'], true) && ($blk[2]['enden'] ?? []) === [],
     'Entfallen: durchgestrichen, „entfällt", ohne Zeitleiste');
