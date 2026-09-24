@@ -167,6 +167,10 @@ $ungueltig = array_values(array_filter((new PersonaProbe())->liste(),
 pruefe('Jede Persona hat eine gueltige eingebaute Gemini-Stimme', array_column($ungueltig, 'key'), []);
 
 $tts = (string)file_get_contents(__DIR__ . '/../libs/Tts.php');
+pruefe('Einkaufs-Ansage: Format vom Anbieter, nicht fest mp3 (Docker 25.09.: WAV ging als audio/mpeg hinaus)',
+    [str_contains($tts, "\$format = \$this->TtsFormat('mp3');"),
+     str_contains($tts, "\$this->TtsProduce(\$hash, \$text, '', '', \$format)"),
+     str_contains($tts, "\$mid = \$this->TtsProduce(\$hash, \$text);")], [true, true, false]);
 $brief = (string)file_get_contents(__DIR__ . '/../libs/Briefing.php');
 pruefe('Formular zeigt/verbirgt die Gemini-Felder beim Umschalten',
     str_contains($tts, "'gemini'     => ['TtsGeminiKey', 'TtsGeminiModel', 'TtsGeminiVoice', 'TtsGeminiHint']"), true);

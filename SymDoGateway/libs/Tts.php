@@ -406,6 +406,10 @@ trait Tts
         $fehler = 0;
         // Gleiche Texte nur einmal erzeugen: eine Liste wiederholt Abteilungen.
         $gesehen = [];
+        /* Das Format haengt am Anbieter: Gemini liefert nur WAV. Stand hier fest
+           „mp3", lag die WAV-Aufnahme als .mp3 in der Ablage und ging mit
+           audio/mpeg hinaus (am 25.09.2026 im Docker gemessen). */
+        $format = $this->TtsFormat('mp3');
         // JEDER Eingabetext bekommt genau einen Eintrag, und der traegt seine
         // Position. Der Aufrufer ordnet ueber 'i' zu, NICHT ueber den Text: hier
         // wird normalisiert („2 kg Äpfel" → „2 Kilo Äpfel"), der Text auf dem
@@ -420,11 +424,11 @@ trait Tts
                 $clips[] = ['i' => $i] + $gesehen[$text];
                 continue;
             }
-            $hash = $this->TtsHash($text);
+            $hash = $this->TtsHash($text, '', '', $format);
             $mid  = $this->TtsLookup($hash);
             $cached = $mid > 0;
             if (!$cached) {
-                $mid = $this->TtsProduce($hash, $text);
+                $mid = $this->TtsProduce($hash, $text, '', '', $format);
                 if ($mid > 0) {
                     $neu++;
                 } else {
@@ -439,7 +443,8 @@ trait Tts
         $this->SendDebug('TTS', 'prepare: ' . count($clips) . ' Schnipsel, ' . $neu . ' neu erzeugt, ' . $fehler . ' fehlgeschlagen', 0);
         $this->SendJson([
             'ok'        => $fehler === 0,
-            'voice'     => $this->TtsSetting('TtsVoice', 'alloy'),
+            'voice'     => $this->TtsProvider() === 'gemini'
+                ? $this->TtsGeminiVoiceSetting() : $this->TtsSetting('TtsVoice', 'alloy'),
             'clips'     => $clips,
             'generated' => $neu,
             'failed'    => $fehler,
