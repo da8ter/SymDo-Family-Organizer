@@ -143,6 +143,10 @@ pruefe('Briefing: nach dem Tag bis +7, sortiert, hoechstens 4 + Rest, Titel nur 
      str_ends_with($zeilen[2], '(entfällt)'), $zeilen[4]],
     [5, true, true, true, 'und 1 weitere Prüfung(en)']);
 $vorschau = UntisPruefungCalc::BriefingZeilen(['J' => [$p(['date' => $tag(2), 'subject' => 'Deutsch'])]], $tag(1), $tag(8), $HEUTE);
+pruefe('Briefing nennt das Thema', UntisPruefungCalc::BriefingZeilen(['J' => [$p(['date' => $tag(2), 'subject' => 'Englisch',
+    'title' => '1. KA Englisch', 'topic' => 'Mich vorstellen'])]], $tag(0), $tag(7), $HEUTE)[0],
+    'J: Prüfung Englisch („1. KA Englisch“), Thema: Mich vorstellen am ' . UntisPruefungCalc::Wochentag($tag(2)) . ', '
+    . date('d.m.', (int)strtotime($tag(2))) . ' um 08:00 — übermorgen');
 pruefe('Abendvorschau (Tag = morgen): Abstand trotzdem ab heute', str_contains($vorschau[0] ?? '', '— übermorgen'), true);
 pruefe('Lern-Erinnerung faellig ab Datum−7 bis zum Vortag, nicht entfallen',
     [UntisPruefungCalc::LernFaellig($p(['date' => $tag(8)]), $HEUTE, 7),
@@ -208,6 +212,18 @@ final class LeseProbe extends IPSModuleStrict
     private function UntisRpc(string $methode, array $params = []): array
     {
         return ['ok' => true, 'result' => []];
+    }
+    public array $details = [];
+    public string $detailDatum = '';
+    /** Die Detailansicht (v2): liefert exam.description fuer E1, sonst nichts. */
+    private function UntisRest(string $pfad, string $wurzel = 'api/rest/view/v1/'): ?array
+    {
+        $this->details[] = $wurzel . $pfad;
+        if (str_contains($pfad, 'calendar-entry/detail') && str_contains($pfad, $this->detailDatum . 'T09:30:00') && $this->detailDatum !== '' && $wurzel === 'api/rest/view/v2/') {
+            return ['calendarEntries' => [['exam' => ['name' => '1. KA Deutsch', 'description' => 'Diktat: Wörter mit ie',
+                'typeLongName' => 'Klassenarbeit', 'id' => 5906]]]];
+        }
+        return ['calendarEntries' => [['exam' => null]]];
     }
     public function pEintrag(array $e): ?array { return (new ReflectionMethod(self::class, 'UntisRestEintrag'))->invoke($this, $e); }
     public function pErnten(array $kind): array
@@ -279,6 +295,7 @@ $bau = static function (int $bisTag) use ($tag, $E1, $E2, $E3, $E4): array {
 };
 $kind = ['name' => 'Joshua', 'stpl' => 0, 'child' => '', 'type' => 5, 'id' => 4744,
          'kurse' => 'Evangelische Religion', 'userId' => 'k1'];
+$lp->detailDatum = $E1;
 $lp->roh = $bau(60);
 $weit = $lp->pErnten($kind);
 $lp->roh = $bau(14);
@@ -299,9 +316,13 @@ pruefe('Im datierten Tag steht die Pruefung mit Titel', array_values(array_filte
     static fn($s) => ($s['exam'] ?? false) === true))[0]['examTitle'] ?? null, 'KA Diktat');
 pruefe('Pruefungen: E1, E3 (eine Doppelstunde), E4 — nicht die KR-Arbeit des fremden Kurses',
     array_map(static fn($x) => [$x['date'], $x['subject'], $x['title'], $x['ids'], $x['start'], $x['end'], $x['status']], $weit['pruefungen']),
-    [[$E1, 'Deutsch', 'KA Diktat', [900001], '09:30', '10:30', 'normal'],
+    [[$E1, 'Deutsch', '1. KA Deutsch', [900001], '09:30', '10:30', 'normal'],
      [$E3, 'Englisch', 'KA 2', [900003, 900004], '10:35', '12:10', 'normal'],
      [$E4, 'Deutsch', 'KA Aufsatz', [900005], '09:30', '10:30', 'normal']]);
+pruefe('Thema, Name und Art aus der Detailansicht (v2), wo es eines gibt',
+    array_map(static fn($x) => [$x['title'], $x['topic'], $x['examType']], $weit['pruefungen']),
+    [['1. KA Deutsch', 'Diktat: Wörter mit ie', 'Klassenarbeit'], ['KA 2', '', ''], ['KA Aufsatz', '', '']]);
+pruefe('… je Pruefung ein Detailabruf', count(array_filter($lp->details, static fn($d) => str_contains($d, 'calendar-entry/detail'))), 3 + 1);
 pruefe('Im engen Abruf fehlen sie nicht — dort sind es nur die im Fenster',
     array_column($eng['pruefungen'], 'date'), [$E1]);
 $lp->weitKaputt = true;

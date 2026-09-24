@@ -50,6 +50,8 @@ trait UntisLesen
      * kamen in EINEM Abruf, 216 KB.
      */
     private const UNTIS_PRUEFUNG_TAGE = 56;
+    /** Hoechstens so viele Detailabrufe (Thema) je Kind und Lauf. */
+    private const UNTIS_PRUEFUNG_DETAILS_MAX = 10;
     /**
      * So weit ZURUECK werden die Hausaufgaben geholt — und NUR sie.
      *
@@ -534,6 +536,7 @@ trait UntisLesen
         $pruefungWeg = [];
         if ($pruefungenBekannt) {
             [$pruefungen, $pruefungWeg] = $this->UntisPruefungenLesen($alle, $this->UntisKurstext($kind), $bis);
+            $pruefungen = $this->UntisPruefungenDetails($pruefungen, $typ, $nr);
         }
         $this->SendDebug('WebUntis', sprintf('%s: %d Stunden über %s, %s Prüfung(en)',
             (string)$kind['name'], count($stunden), $quelle,
@@ -666,6 +669,49 @@ trait UntisLesen
             }
         }
         return [UntisPruefungCalc::Zusammenfassen($roh), $weg];
+    }
+
+    /**
+     * Thema, Name und Art jeder Pruefung aus der Detailansicht (24.09.2026).
+     *
+     * Der Stundenplan traegt nur `lessonInfo` („KA 1. KA Englisch"). Das THEMA
+     * („Mich Vorstellen, meine Familie, mein Zimmer") steht allein in
+     * `calendar-entry/detail` unter `exam.description` — gemessen an der
+     * SymBox, nur in v2 (v1 antwortet 404 „no longer supported"). Dort auch
+     * der saubere Name („1. KA Englisch") und die Art („Klassenarbeit").
+     *
+     * Ein Abruf je Pruefung, in derselben Sitzung, gedeckelt: jede Anfrage ist
+     * ein Zugriff mehr auf das Konto der Schule. Scheitert einer, bleibt die
+     * Pruefung, wie sie ist — das Thema ist ein Zusatz.
+     *
+     * @param list<array<string,mixed>> $pruefungen
+     * @return list<array<string,mixed>>
+     */
+    private function UntisPruefungenDetails(array $pruefungen, int $typ, int $nr): array
+    {
+        if ($typ !== self::UNTIS_TYP_SCHUELER && $typ !== self::UNTIS_TYP_KLASSE) {
+            return $pruefungen;
+        }
+        foreach (array_slice(array_keys($pruefungen), 0, self::UNTIS_PRUEFUNG_DETAILS_MAX) as $i) {
+            $p = $pruefungen[$i];
+            $d = $this->UntisRest('calendar-entry/detail?elementId=' . $nr . '&elementType=' . $typ
+                . '&startDateTime=' . $p['date'] . 'T' . $p['start'] . ':00'
+                . '&endDateTime=' . $p['date'] . 'T' . $p['end'] . ':00&homeworkOption=DUE', 'api/rest/view/v2/');
+            foreach ((array)($d['calendarEntries'] ?? []) as $e) {
+                $x = is_array($e) ? ($e['exam'] ?? null) : null;
+                if (!is_array($x)) {
+                    continue;
+                }
+                $name = trim((string)($x['name'] ?? ''));
+                if ($name !== '') {
+                    $pruefungen[$i]['title'] = mb_substr($name, 0, UntisPruefungCalc::TITEL_MAX);
+                }
+                $pruefungen[$i]['topic'] = mb_substr(trim((string)($x['description'] ?? '')), 0, UntisPruefungCalc::THEMA_MAX);
+                $pruefungen[$i]['examType'] = mb_substr(trim((string)($x['typeLongName'] ?? '')), 0, 40);
+                break;
+            }
+        }
+        return $pruefungen;
     }
 
     /**

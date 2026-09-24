@@ -890,10 +890,13 @@ trait WebUntis
     private function UntisLernNotiz(array $p): string
     {
         $titel = trim((string)($p['title'] ?? ''));
+        $thema = trim((string)($p['topic'] ?? ''));
         $zeit = strtotime((string)$p['date'] . ' 12:00:00');
         return sprintf($this->Translate('Study for the exam: %1$s (%2$s %3$s, %4$s)'),
             $titel !== '' ? $titel : (string)$p['subject'],
-            $this->UntisTagName((int)date('N', (int)$zeit)), date('d.m.', (int)$zeit), (string)$p['start']);
+            $this->UntisTagName((int)date('N', (int)$zeit)), date('d.m.', (int)$zeit), (string)$p['start'])
+            // Das Thema ist, was gelernt wird — es gehoert in die Erinnerung.
+            . ($thema !== '' ? ' — ' . $thema : '');
     }
 
     /** „08.10. 10:35 Deutsch — KA Briefe schreiben" */
@@ -980,6 +983,9 @@ trait WebUntis
                     'room'    => (string)($p['room'] ?? ''),
                     'teacher' => (string)($p['teacher'] ?? ''),
                     'status'  => (string)($p['status'] ?? 'normal'),
+                    // Thema und Art aus der Detailansicht von WebUntis.
+                    'topic'    => (string)($p['topic'] ?? ''),
+                    'examType' => (string)($p['examType'] ?? ''),
                     /* Der Anfang der Zeitleiste (Lernstart): der Tag, an dem die
                        Pruefung im Plan erschien (Wunsch 24.09.2026). WebUntis
                        nennt kein Erstelldatum — auch die Detailansicht

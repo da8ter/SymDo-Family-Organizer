@@ -27,6 +27,8 @@ class UntisPruefungCalc
     public const LUECKE_MAX = 20;
     /** So lang darf ein Titel werden — WebUntis kappt selbst nicht. */
     public const TITEL_MAX = 80;
+    /** Das Thema einer Klassenarbeit (exam.description). */
+    public const THEMA_MAX = 300;
     /** So weit schaut das Briefing voraus (Tage nach dem Briefingtag). */
     public const BRIEFING_TAGE = 7;
     /** Mehr Zeilen verträgt die Ansage nicht. */
@@ -92,6 +94,8 @@ class UntisPruefungCalc
             'room'    => mb_substr(trim((string)($roh['room'] ?? '')), 0, 60),
             'teacher' => mb_substr(trim((string)($roh['teacher'] ?? '')), 0, 60),
             'status'  => in_array($status, ['normal', 'vertretung', 'entfall'], true) ? $status : 'normal',
+            'topic'    => mb_substr(trim((string)($roh['topic'] ?? '')), 0, self::THEMA_MAX),
+            'examType' => mb_substr(trim((string)($roh['examType'] ?? '')), 0, 40),
         ];
     }
 
@@ -135,7 +139,7 @@ class UntisPruefungCalc
                         $v['end'] = $s['end'];
                     }
                     $v['status'] = self::StatusVereinen($v['status'], $s['status']);
-                    foreach (['room', 'teacher'] as $f) {
+                    foreach (['room', 'teacher', 'topic', 'examType'] as $f) {
                         if ($v[$f] === '') {
                             $v[$f] = $s[$f];
                         }
@@ -391,8 +395,10 @@ class UntisPruefungCalc
             $fach  = (string)($p['subject'] ?? '');
             $titel = (string)($p['title'] ?? '');
             $mitTitel = $titel !== '' && self::TitelNorm($titel) !== self::TitelNorm($fach);
-            $zeilen[] = sprintf('%s: Prüfung %s%s am %s, %s um %s — %s%s',
+            $thema = trim((string)($p['topic'] ?? ''));
+            $zeilen[] = sprintf('%s: Prüfung %s%s%s am %s, %s um %s — %s%s',
                 $e['name'], $fach, $mitTitel ? ' („' . $titel . '“)' : '',
+                $thema !== '' ? ', Thema: ' . $thema : '',
                 self::Wochentag((string)$p['date']), date('d.m.', (int)strtotime((string)$p['date'] . ' 12:00:00')),
                 (string)$p['start'], self::Abstand((string)$p['date'], $heute),
                 (string)($p['status'] ?? '') === 'entfall' ? ' (entfällt)' : '');

@@ -4216,6 +4216,12 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 .hw-pruef-enden > span { display: flex; flex-direction: column; min-width: 0; }
 .hw-pruef-enden > span:last-child { align-items: flex-end; text-align: right; }
 .hw-pruef-enden small { font-size: 11px; font-weight: 500; color: var(--muted); }
+/* Das Thema: unter dem Namen, ueber die volle Breite, hoechstens zwei Zeilen. */
+.hw-pruef-thema {
+  font-size: 13px; line-height: 1.35; color: var(--text); opacity: .85;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: anywhere;
+}
 .hw-pruefung.entfallen { opacity: .62; }
 .hw-pruefung.entfallen .hw-name { text-decoration: line-through; }
 
@@ -13137,8 +13143,10 @@ function hwPruefungenHtml(ids, mitAvatar, subjects) {
       : (zeit.tage <= 0 ? translate('Exam today')
         : String(translate('%1 day(s) until the exam')).replace('%1', String(zeit.tage))) + ' · ' + zeit.prozent + '%';
     const wann = pruefDatumLang(p.date) + (p.start ? ', ' + p.start : '');
+    // Das Thema aus WebUntis („Mich Vorstellen, meine Familie, mein Zimmer").
+    const thema = String(p.topic || '').trim();
     html += `<div class="hw-pruefung${weg ? ' entfallen' : ''}"${farbe ? ` style="--pf:${escapeHtml(farbe)}"` : ''}` +
-      ` title="${escapeHtml([name, wann, [p.room, p.teacher].filter(x => x).join(' · ')].filter(x => x).join(' — '))}">` +
+      ` title="${escapeHtml([name, thema, wann, [p.room, p.teacher].filter(x => x).join(' · ')].filter(x => x).join(' — '))}">` +
       `<div class="hw-pruef-oben">` +
         `<span class="hw-pruef-rund"><i class="fa-light ${escapeHtml(fach.icon || 'fa-file-pen')}"></i></span>` +
         `<span class="hw-text">` +
@@ -13148,6 +13156,7 @@ function hwPruefungenHtml(ids, mitAvatar, subjects) {
         (mitAvatar ? `<span class="cal-side"><span class="cal-chips">` +
           `${renderAvatarStack([String(p.childId)])}</span></span>` : '') +
       `</div>` +
+      (thema ? `<div class="hw-pruef-thema">${escapeHtml(thema)}</div>` : '') +
       /* Die Leiste nur, solange die Pruefung stattfindet — eine entfallene hat
          keinen Weg mehr vor sich. */
       (weg ? '' :
