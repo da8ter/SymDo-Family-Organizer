@@ -64,6 +64,12 @@ trait Briefing
 
     /** Dasselbe fuer Azure-MP3 mit 48 kbit/s — siehe Rechnung in BriefingAudioBudget. */
     private const BRIEFING_TTS_BYTES_AZURE_MP3 = 420;
+    /**
+     * Gemini liefert WAV: 24 kHz x 16 Bit = 48 000 B/s. Bei rund 14 gesprochenen
+     * Zeichen je Sekunde sind das ~3 400 B/Zeichen; mal 1,34, weil die Kachel die
+     * Aufnahme als Base64 ueber das Relay holt und auch DAS unter die Grenze muss.
+     */
+    private const BRIEFING_TTS_BYTES_GEMINI_WAV = 4600;
 
     /** Format der Aufnahmen. Jeder Browser und iOS spielen AAC ohne Zutun. */
     /** Briefing-Aufnahmen im Zwischenspeicher: nach so vielen Tagen weg. */
@@ -1902,6 +1908,11 @@ trait Briefing
             // liest dafuer den deutschen Anweisungssatz der Persona.
             $stimme    = $this->BriefingElevenVoice();
             $anweisung = $this->BriefingSpeechStyle();
+        } elseif ($anbieter === 'gemini') {
+            // Eine Gemini-Stimme je Persona (eingebaut oder zugeordnet), der
+            // Vortrag als Stil-Anweisung — derselbe Satz wie bei OpenAI.
+            $stimme    = $this->BriefingVoiceFor('gemini');
+            $anweisung = $this->BriefingSpeechStyle();
         } elseif ($anbieter === 'polly') {
             // NICHT in den OpenAI-Zweig fallen lassen: dort kaeme „shimmer" heraus,
             // und Polly kennt keine Stimme dieses Namens. Leer heisst „die im
@@ -2010,6 +2021,8 @@ trait Briefing
             if ($jeZeichen <= 0) {
                 $jeZeichen = (int)$this->TtsElevenQualityFor(1)['bytes'];
             }
+        } elseif ($anbieter === 'gemini') {
+            $jeZeichen = self::BRIEFING_TTS_BYTES_GEMINI_WAV;
         } else {
             $jeZeichen = self::BRIEFING_TTS_BYTES_AAC;
         }
@@ -2083,26 +2096,29 @@ trait Briefing
      * `eleven` bleibt leer: welche Stimmen ein ElevenLabs-Konto hat, weiss nur das
      * Konto. Ohne Eintrag gilt dort die im Anbieter-Feld eingestellte Stimme.
      *
-     * @return list<array{key:string,caption:string,openai:string,azure:string,eleven:string}>
+     * `gemini`: eine der 30 fertigen Gemini-Stimmen, nach Googles Kurzbeschreibung
+     * gewaehlt (Kore „firm", Charon „informative", Achernar „soft" …).
+     *
+     * @return list<array{key:string,caption:string,openai:string,azure:string,eleven:string,gemini:string}>
      */
     private function BriefingPersonas(): array
     {
         return [
             ['key' => 'neutral', 'caption' => 'Matter-of-fact', 'openai' => 'alloy',
-             'azure' => 'de-DE-KatjaNeural', 'eleven' => ''],
+             'azure' => 'de-DE-KatjaNeural', 'eleven' => '', 'gemini' => 'Kore'],
             ['key' => 'formal', 'caption' => 'Formal', 'openai' => 'sage',
-             'azure' => 'de-DE-ChristophNeural', 'eleven' => ''],
+             'azure' => 'de-DE-ChristophNeural', 'eleven' => '', 'gemini' => 'Charon'],
             // Conrad ist die einzige deutsche Azure-Stimme MIT Stilen (cheerful, sad)
             // und klingt gesetzt — beides passt zum Butler.
             ['key' => 'butler', 'caption' => 'Butler', 'openai' => 'ash',
-             'azure' => 'de-DE-ConradNeural', 'eleven' => ''],
+             'azure' => 'de-DE-ConradNeural', 'eleven' => '', 'gemini' => 'Algieba'],
             ['key' => 'funny', 'caption' => 'Funny', 'openai' => 'fable',
-             'azure' => 'de-DE-FlorianMultilingualNeural', 'eleven' => ''],
+             'azure' => 'de-DE-FlorianMultilingualNeural', 'eleven' => '', 'gemini' => 'Puck'],
             ['key' => 'drill', 'caption' => 'Drill sergeant', 'openai' => 'onyx',
-             'azure' => 'de-DE-RalfNeural', 'eleven' => ''],
+             'azure' => 'de-DE-RalfNeural', 'eleven' => '', 'gemini' => 'Alnilam'],
             // Deutlich weiblich; „coral" klang dafuer zu neutral.
             ['key' => 'coach', 'caption' => 'Motivational coach', 'openai' => 'shimmer',
-             'azure' => 'de-DE-AmalaNeural', 'eleven' => ''],
+             'azure' => 'de-DE-AmalaNeural', 'eleven' => '', 'gemini' => 'Laomedeia'],
             // Ebenfalls weiblich. Von den 13 OpenAI-Stimmen sind nur „nova" und
             // „shimmer" durchgaengig als weiblich beschrieben — die Doku sagt zum
             // Geschlecht nichts. „shimmer" gilt als weich und sanft; fuer einen
@@ -2110,12 +2126,12 @@ trait Briefing
             // Trainerin teilt, faellt nicht auf: die Anweisung macht daraus zwei ganz
             // andere Vortraege, und der Ton-Zwischenspeicher unterscheidet danach.
             ['key' => 'jammerlappen', 'caption' => 'Whiner', 'openai' => 'shimmer',
-             'azure' => 'de-DE-SeraphinaMultilingualNeural', 'eleven' => ''],
+             'azure' => 'de-DE-SeraphinaMultilingualNeural', 'eleven' => '', 'gemini' => 'Achernar'],
             // Ein Fuenfzehnjaehriger ist unter den 13 Stimmen nicht dabei — keine
             // klingt jung. „verse" ist von den maennlichen die beweglichste; das
             // Jugendliche muss die Anweisung machen.
             ['key' => 'digga', 'caption' => 'Teen slang', 'openai' => 'verse',
-             'azure' => 'de-DE-KasperNeural', 'eleven' => ''],
+             'azure' => 'de-DE-KasperNeural', 'eleven' => '', 'gemini' => 'Zubenelgenubi'],
         ];
     }
 
@@ -2184,7 +2200,7 @@ trait Briefing
             if ($ton === '') {
                 continue;
             }
-            foreach (['openai', 'azure', 'eleven', 'polly'] as $anbieter) {
+            foreach (['openai', 'azure', 'eleven', 'polly', 'gemini'] as $anbieter) {
                 $wert = trim((string)($zeile[$anbieter] ?? ''));
                 if ($wert !== '') {
                     $karte[$ton][$anbieter] = $wert;

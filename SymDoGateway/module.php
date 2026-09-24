@@ -2375,12 +2375,18 @@ class SymDoGateway extends IPSModuleStrict
         foreach ($this->TtsPollyCachedVoices() as $v) {
             $polly[] = ['caption' => (string)$v['name'], 'value' => (string)$v['id']];
         }
+        // Gemini wie Azure: eine feste Liste, eine eingebaute Stimme je Persona.
+        $gemini = [];
+        foreach (self::TTS_GEMINI_VOICES as $name => $art) {
+            $gemini[] = ['caption' => $name . ' (' . $this->Translate($art) . ')', 'value' => $name];
+        }
 
         // „Wie eingebaut" muss waehlbar BLEIBEN, sonst kann man eine Aenderung nicht
         // zurueknehmen. Steht bewusst oben.
         $wieEingebaut = ['caption' => $this->Translate('— as built in —'), 'value' => ''];
         array_unshift($openai, $wieEingebaut);
         array_unshift($azure, $wieEingebaut);
+        array_unshift($gemini, $wieEingebaut);
         $wieOben = ['caption' => $this->Translate('— the voice set above —'), 'value' => ''];
         array_unshift($eleven, $wieOben);
         array_unshift($polly, $wieOben);
@@ -2396,6 +2402,8 @@ class SymDoGateway extends IPSModuleStrict
              'edit' => ['type' => 'Select', 'options' => $eleven]],
             ['caption' => 'Amazon Polly', 'name' => 'polly', 'width' => '200px',
              'edit' => ['type' => 'Select', 'options' => $polly]],
+            ['caption' => 'Gemini', 'name' => 'gemini', 'width' => '200px',
+             'edit' => ['type' => 'Select', 'options' => $gemini]],
             // KEINE unsichtbare Schluessel-Spalte mehr: Symcon schreibt die Werte
             // unsichtbarer Spalten nicht mit, die Zeilen kamen ohne `tone` zurueck.
             // Die Zuordnung laeuft jetzt ueber die Reihenfolge (siehe
@@ -2468,9 +2476,11 @@ class SymDoGateway extends IPSModuleStrict
                 'azure'   => (string)($z['azure'] ?? ''),
                 'eleven'  => (string)($z['eleven'] ?? ''),
                 'polly'   => (string)($z['polly'] ?? ''),
+                'gemini'  => (string)($z['gemini'] ?? ''),
                 // Die eingebauten Stimmen als Anzeige daneben: sonst sieht man bei
                 // „wie eingebaut" nicht, WAS eingebaut ist.
-                'vorgabe' => $p['openai'] . ' / ' . str_replace(['de-DE-', 'Neural'], '', $p['azure']),
+                'vorgabe' => $p['openai'] . ' / ' . str_replace(['de-DE-', 'Neural'], '', $p['azure'])
+                    . ' / ' . $p['gemini'],
             ];
         }
 

@@ -8,6 +8,7 @@ declare(strict_types=1);
    auch beim Sprechen selbst. Deshalb steht das require HIER, beim einzigen
    Benutzer, und nicht in AppCore neben den Traits. */
 require_once __DIR__ . '/AwsSigV4.php';
+require_once __DIR__ . '/TtsGemini.php';
 
 /**
  * Sprachausgabe für die Einkaufs-Ansage.
@@ -54,6 +55,27 @@ trait Tts
      * Kennung einer deutschen Stimme aus seinem Konto ein (Knopf „Stimmen abrufen").
      */
     private const TTS_ELEVEN_VOICE = '21m00Tcm4TlvDq8ikWAM';
+
+    /**
+     * Google Gemini TTS (seit 23.09.2026 allgemein verfuegbar). Zwei Modelle:
+     * „flash" fuer Klang und Ausdruck, „flash-lite" fuer Tempo und Preis.
+     * Angesprochen ueber die Interactions-Schnittstelle; sie liefert WAV
+     * (24 kHz, 16 Bit, mono) und KEIN MP3 — rund 48 KB je Sekunde.
+     */
+    private const TTS_GEMINI_MODELS = ['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts'];
+    private const TTS_GEMINI_VOICE  = 'Kore';
+    /** Die 30 fertigen Stimmen, mit Googles Kurzbeschreibung. */
+    private const TTS_GEMINI_VOICES = [
+        'Zephyr' => 'Bright', 'Puck' => 'Upbeat', 'Charon' => 'Informative', 'Kore' => 'Firm',
+        'Fenrir' => 'Excitable', 'Leda' => 'Youthful', 'Orus' => 'Firm', 'Aoede' => 'Breezy',
+        'Callirrhoe' => 'Easy-going', 'Autonoe' => 'Bright', 'Enceladus' => 'Breathy',
+        'Iapetus' => 'Clear', 'Umbriel' => 'Easy-going', 'Algieba' => 'Smooth', 'Despina' => 'Smooth',
+        'Erinome' => 'Clear', 'Algenib' => 'Gravelly', 'Rasalgethi' => 'Informative',
+        'Laomedeia' => 'Upbeat', 'Achernar' => 'Soft', 'Alnilam' => 'Firm', 'Schedar' => 'Even',
+        'Gacrux' => 'Mature', 'Pulcherrima' => 'Forward', 'Achird' => 'Friendly',
+        'Zubenelgenubi' => 'Casual', 'Vindemiatrix' => 'Gentle', 'Sadachbia' => 'Lively',
+        'Sadaltager' => 'Knowledgeable', 'Sulafat' => 'Warm',
+    ];
 
     /**
      * Stilverstaerkung fuer ALLE Personas. 0 ist die Einstellung der Vorschau und
@@ -231,6 +253,11 @@ trait Tts
         $this->RegisterPropertyString('TtsPollyRegion', self::TTS_POLLY_REGION);
         $this->RegisterPropertyString('TtsPollyVoice', self::TTS_POLLY_VOICE);
         $this->RegisterPropertyString('TtsPollyEngine', 'neural');
+        /* Fuenfter Anbieter: Google Gemini TTS. Eigener Schluessel aus dem Google
+           AI Studio, unabhaengig vom KI-Anbieter. */
+        $this->RegisterPropertyString('TtsGeminiKey', '');
+        $this->RegisterPropertyString('TtsGeminiModel', self::TTS_GEMINI_MODELS[0]);
+        $this->RegisterPropertyString('TtsGeminiVoice', self::TTS_GEMINI_VOICE);
         // Die abgerufenen Polly-Stimmen — wie bei ElevenLabs, damit die Auswahl
         // ohne HTTP-Abruf bei jedem Formularaufbau auskommt.
         $this->RegisterAttributeString('TtsPollyVoiceCache', '[]');
@@ -257,6 +284,9 @@ trait Tts
             // welcher Anbieter die TEXTE schreibt.
             return $this->TtsSetting('TtsElevenKey', '') !== '';
         }
+        if ($this->TtsProvider() === 'gemini') {
+            return $this->TtsSetting('TtsGeminiKey', '') !== '';
+        }
         if ($this->TtsProvider() === 'polly') {
             // Zwei Geheimnisse UND die Region: ohne Region gibt es keinen Wirt,
             // an den die Anfrage ginge, und ohne beide Schluessel keine
@@ -278,12 +308,12 @@ trait Tts
             && true;
     }
 
-    /** openai | azure | elevenlabs | polly — ueber TtsSetting, weil die
+    /** openai | azure | elevenlabs | polly | gemini — ueber TtsSetting, weil die
      *  Eigenschaften erst nach dem naechsten Kernel-Start existieren. */
     private function TtsProvider(): string
     {
         $wahl = $this->TtsSetting('TtsProvider', 'openai');
-        return in_array($wahl, ['azure', 'elevenlabs', 'polly'], true) ? $wahl : 'openai';
+        return in_array($wahl, ['azure', 'elevenlabs', 'polly', 'gemini'], true) ? $wahl : 'openai';
     }
 
     /**
@@ -301,6 +331,10 @@ trait Tts
         if ($this->TtsProvider() === 'polly') {
             // Polly kennt mp3, ogg_vorbis und pcm — kein AAC, kein FLAC.
             return 'mp3';
+        }
+        if ($this->TtsProvider() === 'gemini') {
+            // Gemini liefert nur WAV (oder rohes PCM, mu-law, a-law) — kein MP3.
+            return 'wav';
         }
         if ($this->TtsProvider() !== 'azure') {
             return $wunsch;
@@ -757,6 +791,11 @@ trait Tts
             $modell  = $this->TtsSetting('TtsElevenModel', 'eleven_multilingual_v2')
                 . '|' . $this->TtsElevenFormat($text, $format);
             $vorgabe = $this->TtsSetting('TtsElevenVoice', self::TTS_ELEVEN_VOICE);
+        } elseif ($this->TtsProvider() === 'gemini') {
+            // Eigene Felder wie bei ElevenLabs: sonst aenderte ein Wechsel von
+            // Modell oder Stimme den Schluessel nicht.
+            $modell  = $this->TtsGeminiModel();
+            $vorgabe = $this->TtsGeminiVoiceSetting();
         } else {
             $modell  = $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts');
             $vorgabe = $this->TtsSetting('TtsVoice', 'alloy');
@@ -846,6 +885,9 @@ trait Tts
         if ($this->TtsProvider() === 'polly') {
             return $this->TtsRequestPolly($text, $stimme, $anweisung, $format);
         }
+        if ($this->TtsProvider() === 'gemini') {
+            return $this->TtsRequestGemini($text, $stimme, $anweisung);
+        }
         $key = trim((string) $this->AiProp('AiOpenAIKey'));
         if ($key === '') {
             return '';
@@ -887,6 +929,74 @@ trait Tts
             return '';
         }
         return $roh;
+    }
+
+    /** Das eingestellte Gemini-Modell; Unbekanntes faellt auf „flash". */
+    private function TtsGeminiModel(): string
+    {
+        $m = $this->TtsSetting('TtsGeminiModel', self::TTS_GEMINI_MODELS[0]);
+        return in_array($m, self::TTS_GEMINI_MODELS, true) ? $m : self::TTS_GEMINI_MODELS[0];
+    }
+
+    /** Die eingestellte Gemini-Stimme; Unbekanntes faellt auf die Vorgabe. */
+    private function TtsGeminiVoiceSetting(): string
+    {
+        $v = $this->TtsSetting('TtsGeminiVoice', self::TTS_GEMINI_VOICE);
+        return isset(self::TTS_GEMINI_VOICES[$v]) ? $v : self::TTS_GEMINI_VOICE;
+    }
+
+    /**
+     * Google Gemini TTS: ein POST an die Interactions-Schnittstelle, die Tondatei
+     * kommt Base64-kodiert im JSON zurueck.
+     *
+     * Die Vortragsanweisung (Persona) reist als `speech_metadata.style` am Text —
+     * so beschreibt Google die „Sprechweise ueber die ganze Aeusserung". Die
+     * Sprache erkennt das Modell selbst; ein Sprachfeld gibt es nicht.
+     *
+     * Antwort (Doku, 25.09.2026): steps[] vom Typ model_output, darin content[]
+     * vom Typ audio mit `data` — genommen wird das LETZTE Audio-Stueck.
+     *
+     * @return string rohe WAV-Daten, '' bei Fehler
+     */
+    private function TtsRequestGemini(string $text, string $stimme, string $anweisung): string
+    {
+        $key = $this->TtsSetting('TtsGeminiKey', '');
+        if ($key === '') {
+            return '';
+        }
+        $stimme = isset(self::TTS_GEMINI_VOICES[$stimme]) ? $stimme : $this->TtsGeminiVoiceSetting();
+        $stil = trim($anweisung !== '' ? $anweisung : $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS));
+        $teil = ['type' => 'text', 'text' => $text];
+        if ($stil !== '') {
+            $teil['annotations'] = [['type' => 'speech_metadata', 'style' => $stil]];
+        }
+        $body = json_encode([
+            'model'             => $this->TtsGeminiModel(),
+            'input'             => [['type' => 'user_input', 'content' => [$teil]]],
+            'response_format'   => ['type' => 'audio', 'mime_type' => 'audio/wav'],
+            'generation_config' => ['speech_config' => [['voice' => $stimme]]],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $resp = $this->AiHttpPost('https://generativelanguage.googleapis.com/v1beta/interactions', [
+            'x-goog-api-key: ' . $key,
+            'Content-Type: application/json',
+        ], (string)$body);
+        if (($resp['err'] ?? '') !== '') {
+            $this->SendDebug('TTS', 'Gemini HTTP-Fehler: ' . $resp['err'], 0);
+            return '';
+        }
+        $status = (int)($resp['status'] ?? 0);
+        $roh    = (string)($resp['body'] ?? '');
+        if ($status !== 200) {
+            // Die Meldung steht im JSON; der Schluessel steht nie darin.
+            $this->SendDebug('TTS', 'Gemini Antwort ' . $status . ': ' . mb_substr($roh, 0, 300), 0);
+            return '';
+        }
+        $wav = TtsGemini::AudioAusAntwort($roh);
+        if ($wav === '') {
+            $this->SendDebug('TTS', 'Gemini: kein Audio in der Antwort: ' . mb_substr($roh, 0, 300), 0);
+        }
+        return $wav;
     }
 
     /**
@@ -1250,8 +1360,12 @@ trait Tts
     private function GetTtsProviderPanel(array $cfg): array
     {
         $ist = (string)($cfg['TtsProvider'] ?? 'openai');
-        if (!in_array($ist, ['openai', 'azure', 'elevenlabs', 'polly'], true)) {
+        if (!in_array($ist, ['openai', 'azure', 'elevenlabs', 'polly', 'gemini'], true)) {
             $ist = 'openai';
+        }
+        $geminiStimmen = [];
+        foreach (self::TTS_GEMINI_VOICES as $name => $art) {
+            $geminiStimmen[] = ['caption' => $name . ' (' . $this->Translate($art) . ')', 'value' => $name];
         }
         // Die abgerufenen Stimmen als Auswahl; ohne Abruf bleibt das Feld ein
         // Textfeld-Ersatz mit der Vorgabestimme, damit man auch ohne Abruf
@@ -1285,7 +1399,41 @@ trait Tts
                         ['caption' => $this->Translate('Azure Speech (own key, German voices)'), 'value' => 'azure'],
                         ['caption' => $this->Translate('ElevenLabs (own key, paid account required)'), 'value' => 'elevenlabs'],
                         ['caption' => $this->Translate('Amazon Polly (own access key, billed per character)'), 'value' => 'polly'],
+                        ['caption' => $this->Translate('Google Gemini TTS (own key from Google AI Studio)'), 'value' => 'gemini'],
                     ]
+                ],
+                [
+                    'type'    => 'PasswordTextBox',
+                    'name'    => 'TtsGeminiKey',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Gemini API key'),
+                    'visible' => $ist === 'gemini'
+                ],
+                [
+                    'type'    => 'Select',
+                    'name'    => 'TtsGeminiModel',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Gemini model'),
+                    'options' => [
+                        ['caption' => $this->Translate('Gemini 3.8 Flash TTS (most expressive)'), 'value' => 'gemini-3.8-flash-tts'],
+                        ['caption' => $this->Translate('Gemini 3.8 Flash-Lite TTS (faster, cheaper)'), 'value' => 'gemini-3.8-flash-lite-tts'],
+                    ],
+                    'visible' => $ist === 'gemini'
+                ],
+                [
+                    'type'    => 'Select',
+                    'name'    => 'TtsGeminiVoice',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Gemini voice'),
+                    'options' => $geminiStimmen,
+                    'visible' => $ist === 'gemini'
+                ],
+                [
+                    'type'    => 'Label',
+                    'name'    => 'TtsGeminiHint',
+                    'visible' => $ist === 'gemini',
+                    'caption' => sprintf($this->Translate("Gemini speaks German by itself and takes the persona's speaking instruction as style. The key comes from Google AI Studio (aistudio.google.com) and is independent of the AI provider.\n\nGemini delivers WAV only (about 48 KB per second, no MP3). With your output limit of %s, about %d seconds fit into one recording — a longer briefing is split at a sentence end."),
+                        $this->BriefingLimitText(), (int)($this->OutputLimit() * 0.8 / 1.34 / 48000))
                 ],
                 [
                     'type'    => 'PasswordTextBox',
@@ -1472,6 +1620,7 @@ trait Tts
             'polly'      => ['TtsPollyKey', 'TtsPollySecret', 'TtsPollyRegion', 'TtsPollyVoice',
                              'TtsPollyEngine', 'TtsPollyVoicesButton', 'TtsPollyStatus',
                              'TtsPollyHint'],
+            'gemini'     => ['TtsGeminiKey', 'TtsGeminiModel', 'TtsGeminiVoice', 'TtsGeminiHint'],
         ];
         if (!isset($gruppen[$anbieter])) {
             $anbieter = 'openai';

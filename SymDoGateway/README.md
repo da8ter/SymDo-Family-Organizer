@@ -85,7 +85,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - Für den Kalender-Bereich: das Modul **OpenCalendar** von Burkhard Kneiseler, optional — im **Symcon Module Store** unter „OpenCalendar" zu finden, Quelltext und Dokumentation unter [github.com/Burki24/OpenCalendar](https://github.com/Burki24/OpenCalendar) (Bibliothekskennung `de.burki24.opencalendar`)
 - Für die E-Mail-Analyse: eine **E-Mail, Empfangen (IMAP)**-Instanz oder eine Mail-Weiterleitung, optional
 - Für die KI-Funktionen: ein eigener API-Schlüssel (**Anthropic** oder **OpenAI**) oder ein **lokaler, OpenAI-kompatibler Server** (z. B. LM Studio)
-- Für die Sprachausgabe (Briefing und Einkaufs-Ansage): **OpenAI**, **Microsoft Azure Speech**, **ElevenLabs** oder **Amazon Polly** (eigener Schlüssel; bei ElevenLabs ist ein kostenpflichtiger Zugang nötig, Polly rechnet je Zeichen ab)
+- Für die Sprachausgabe (Briefing und Einkaufs-Ansage): **OpenAI**, **Microsoft Azure Speech**, **ElevenLabs**, **Amazon Polly** oder **Google Gemini TTS** (eigener Schlüssel; bei ElevenLabs ist ein kostenpflichtiger Zugang nötig, Polly rechnet je Zeichen ab)
 - Für den Sprachdialog: ein **OpenAI**-Schlüssel (Realtime-Modelle) und ein Gerät mit Mikrofon in einem sicheren Kontext (HTTPS, Symcon-App oder Connect), optional
 - Für den Stundenplan aus WebUntis: ein Eltern- oder Schülerkonto der Schule, optional
 - Für die Klassenseiten: die Adresse der Edumaps-Klassenseite, optional
@@ -240,6 +240,7 @@ Die KI schreibt jeden Morgen zur eingestellten Uhrzeit (Standard 5:30 Uhr) eine 
 | Azure Speech | Schlüssel, Region | deutsche Neural-Stimmen |
 | ElevenLabs | Schlüssel, Stimme, Modell, Stimmen-Umfang, Tonqualität | **kostenpflichtiger Zugang nötig**; „Stimmen des Kontos abrufen" listet die eigenen Stimmen — Vorgabe ist die Rubrik *Meine Stimmen* wie auf der ElevenLabs-Webseite; Tonqualität `auto` wählt die beste Stufe, die zur Textlänge passt |
 | Amazon Polly | Zugriffsschlüssel-ID, Geheimschlüssel, Region, Stimme, Engine | rechnet je Zeichen ab, ohne Monatsmindestbetrag, und läuft in Frankfurt (`eu-central-1`). Braucht **zwei** Geheimnisse, weil jede Anfrage unterschrieben wird (Signature Version 4). Anzulegen in der AWS-Konsole unter IAM; die Berechtigung braucht nur `polly:SynthesizeSpeech` und `polly:DescribeVoices`. „Deutsche Stimmen abrufen" füllt die Auswahl. Die **Engine** entscheidet über Klang und Preis: `neural` ist die Vorgabe, `generative` klingt am natürlichsten und kostet mit Abstand am meisten, `standard` ist am günstigsten und hörbar blecherner |
+| Google Gemini TTS | API-Schlüssel (Google AI Studio), Modell, Stimme | `gemini-3.8-flash-tts` (ausdrucksstärkste, Vorgabe) oder `gemini-3.8-flash-lite-tts` (schneller, günstiger), seit 23.09.2026 allgemein verfügbar. 30 fertige Stimmen, je Persona eine eingebaute (Spalte „Gemini“ im Personas-Editor); die Vortragsanweisung der Persona reist als Stil mit. Deutsch erkennt das Modell selbst. Liefert **nur WAV** (24 kHz, rund 48 KB je Sekunde, kein MP3): bei 1 MiB Ausgabegrenze passen nur etwa 12 Sekunden in eine Aufnahme und ein Briefing zerfiele in viele Stücke; mit hochgesetzter Kernoption `ScriptOutputBufferLimit` (etwa 6 MB) ist es eine Aufnahme |
 
 ## 9. Einkaufs-Ansage
 
@@ -286,7 +287,7 @@ Alle KI-Funktionen (Foto-/PDF-Analyse, Mail-Analyse, Briefing) laufen über den 
 
 Verwendete Modelle: Anthropic `claude-sonnet-4-5`, OpenAI `gpt-4o` (PDFs über `gpt-5.6-terra`), lokal das im Formular eingetragene Modell.
 
-> Die **Sprachausgabe** des Briefings und der Einkaufs-Ansage hängt nicht am KI-Anbieter — sie hat ihre eigene Wahl (OpenAI, Azure Speech, ElevenLabs oder Amazon Polly, Kapitel 8).
+> Die **Sprachausgabe** des Briefings und der Einkaufs-Ansage hängt nicht am KI-Anbieter — sie hat ihre eigene Wahl (OpenAI, Azure Speech, ElevenLabs, Amazon Polly oder Google Gemini TTS, Kapitel 8).
 
 ## 12. Benachrichtigungen
 
