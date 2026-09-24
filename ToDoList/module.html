@@ -10932,6 +10932,12 @@ function renderDashboard() {
 
   // Interaktionen
   el.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.goto)));
+  // „Alle anzeigen" der Hausaufgaben ohne gewaehltes Kind: erst das Kind, dann der Bereich.
+  el.querySelectorAll('[data-hw-alle]').forEach(b => b.addEventListener('click', () => {
+    mitgliedWaehlen(b.dataset.hwAlle);
+    if (visibleTabs().includes('homework')) setTab('homework');
+    else if (visibleTabs().includes('plan')) setTab('plan');
+  }));
   el.querySelectorAll('[data-briefing="play"]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
     briefingVorlesen();
@@ -13470,10 +13476,24 @@ function hwKarteHtml() {
   /* Der Sprung in den Stundenplan-Bereich nur, wenn es ihn für diesen Blick
      gibt: er gehört dem Kindmodus. Ein Knopf auf einen abgeschalteten Bereich
      wäre eine Sackgasse — dieselbe Regel wie bei den Zahlenkacheln oben. */
-  const sprung = visibleTabs().includes('plan');
+  /* „Alle anzeigen" wie im Aufgabenkasten (Wunsch 24.09.2026). Ziel ist der
+     Hausaufgaben-Bereich; den gibt es in der vollen Oberflaeche nur mit
+     gewaehltem Kind — ohne Auswahl waehlt der Knopf das Kind der dringendsten
+     Aufgabe und springt dann hin (data-hw-alle). Ohne Hausaufgaben-Bereich
+     bleibt der Stundenplan das Ziel, ohne beides kein Knopf. */
+  const vis = visibleTabs();
+  const kinderIds = new Set((store.users || []).filter(u => String(u.persona || '') === 'child').map(u => String(u.id)));
+  const erstesKind = String(((gruppen.ueberfaellig[0] || gruppen.heute[0] || gruppen.morgen[0]) || {}).childId || '');
+  let alle = '';
+  if (vis.includes('homework')) {
+    alle = `<button class="link" data-goto="homework">${escapeHtml(translate('Show all'))}</button>`;
+  } else if (homeworkMoeglich() && !kindGewaehlt() && kinderIds.has(erstesKind)) {
+    alle = `<button class="link" data-hw-alle="${escapeHtml(erstesKind)}">${escapeHtml(translate('Show all'))}</button>`;
+  } else if (vis.includes('plan')) {
+    alle = `<button class="link" data-goto="plan">${escapeHtml(translate('Show all'))}</button>`;
+  }
   let html = `<div class="card hw-karte"><div class="card-head">` +
-    `<h3>${escapeHtml(translate('Homework'))}</h3>` +
-    (sprung ? `<button class="link" data-goto="plan">${escapeHtml(translate('Open'))}</button>` : '') +
+    `<h3>${escapeHtml(translate('Homework'))}</h3>` + alle +
     `</div>`;
   let gezeigt = 0;
   bloecke.forEach(([k, titel, istHeute]) => {
