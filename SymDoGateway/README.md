@@ -369,6 +369,8 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 | Kurswahl | `UntisCourses` | **eine Zeile je Überschneidung**: Wochentag, Uhrzeit, die gleichzeitig stehenden Kurse — und ein Dropdown, aus dem der besuchte gewählt wird. Die Zeilen entstehen aus dem, was der letzte Abruf gefunden hat |
 | Push bei Änderungen | `UntisPush` | meldet neue Vertretungen und Entfälle aufs Handy |
 | Hausaufgaben mitholen | `UntisHomework` | übernimmt die Hausaufgaben, die die Schule eingetragen hat (Kapitel 15) |
+| Push bei Prüfungen | `UntisExamPush` | meldet Prüfungen, die im Plan erscheinen, verlegt werden oder entfallen, und erinnert am Vorabend (Vorgabe: an) |
+| Lern-Erinnerung | `UntisExamStudyDays` | so viele Tage vor einer Prüfung erscheint eine Hausaufgabe „Für die Prüfung lernen", fällig am Vortag (0–30, Vorgabe 7, 0 = aus) |
 
 > **Gemessen am 10.09.2026, beide Pläne desselben Kindes.** Der Modul-Abruf
 > fragt `timetableType=MY_TIMETABLE`, also den **persönlichen** Plan: 55
@@ -429,6 +431,45 @@ wie bisher — das Konto oder das Kind, dessen Name zum Familienmitglied passt.
 **Testverbindung** meldet das Schuljahr und nennt die Kinder des Kontos. Das Kind muss im Stundenplan-Modul als Familienmitglied verknüpft sein, sonst weiß niemand, wohin die Stunden gehören. Nach wiederholt fehlgeschlagener Anmeldung pausiert der Abruf, damit das Konto nicht gesperrt wird; die Testverbindung startet ihn wieder.
 
 Was daraus wird: Der Stundenplan zeigt **datierte Tage** mit Datum im Spaltenkopf und blättert durch beide Wochen; entfallene Stunden erscheinen als gestrichelte Kapsel, Vertretungen mit Kante; freie Tage nennen den Grund. Das **Briefing** nennt, was ausfällt und was dafür läuft. Der **Sprachdialog** beantwortet „Was hat Tim am Dienstag?" und „Fällt bei Mia etwas aus?". Eigene Zulieferer können denselben Weg nutzen: `STPL_ImportSlots()` im Stundenplan-Modul.
+
+### Prüfungen
+
+WebUntis führt eine Klassenarbeit als eigenen Eintragstyp (`type: EXAM`) im
+Stundenplan, mit dem Titel in `lessonInfo` („KA Briefe schreiben"). Die eigene
+Prüfungsliste von WebUntis (`/api/exams`) gibt einem Eltern- oder
+Schülerkonto meist keine Auskunft (gemessen: 403), der Stundenplan ist also
+die Quelle. Das Gateway liest Prüfungen **acht Wochen** voraus — der
+Stundenplan selbst bleibt beim Fenster von 14 Tagen, Wochenvorlage, Kurswahl
+und datierte Tage sehen genau dasselbe wie vorher.
+
+- **Im Stundenplan** trägt die Stunde ein eigenes Zeichen, einen hellen Rahmen
+  und den Titel. Eine Prüfung schlägt „Vertretung"; entfällt sie, erscheint
+  sie als entfallene Prüfung. Die Wochenvorlage trägt nie eine Prüfung.
+- **Über den Hausaufgaben** stehen die anstehenden Prüfungen des Kindes mit
+  Fach, Tag, Uhrzeit und Abstand („in 14 Tagen"), entfallene durchgestrichen —
+  in der Web-App, im Abschnitt unter dem Wochenraster und in der
+  Hausaufgaben-Kachel.
+- **Das Briefing** nennt die Prüfung des Tages in der Schulzeile und die der
+  folgenden sieben Tage in einem eigenen Block (höchstens vier), den Abstand
+  ab heute gerechnet — auch in der Abendvorschau stimmt „in drei Tagen".
+- **Push** (`UntisExamPush`): eine Sammelmeldung je Kind, wenn Prüfungen im
+  Plan erscheinen, verlegt werden oder entfallen; dazu am Vorabend eine
+  Erinnerung zur Uhrzeit der Hausaufgaben-Erinnerung (Benachrichtigungen). Ziel
+  sind die Geräte des Kindes, hat es keine, der Haushalt. **Der erste Abruf
+  meldet nichts** — er legt die Grundlage; ebenso bleibt es still, solange der
+  gemerkte Stand nicht gespeichert werden kann (vor dem Neuladen des Moduls).
+- **Verlegt** erkennt das Gateway an derselben Nummer oder daran, dass eine
+  gestrichene oder verschwundene Prüfung mit demselben Fach und Titel an
+  anderer Stelle wieder auftaucht. Eine Doppelstunde ist eine Prüfung.
+- **Lern-Erinnerung** (`UntisExamStudyDays`): eine gewöhnliche Hausaufgabe des
+  Kindes (Herkunft `exam`), angelegt N Tage vorher, fällig am Vortag. Sie zieht
+  mit, wenn die Prüfung verlegt wird, und verschwindet, wenn sie entfällt,
+  verschwindet oder der Tag da ist — solange sie offen ist. Abgehakt bleibt sie
+  stehen, selbst gelöscht kommt sie nicht wieder.
+- Findet der Abruf die Prüfungen nicht verlässlich (Rückfall auf die alte
+  Schnittstelle), bleibt der gemerkte Stand unangetastet. Eine Prüfung, die an
+  einer ungeklärten Überschneidung der Kurswahl scheitert, nennt die
+  Statuszeile.
 
 ## 15. Hausaufgaben
 

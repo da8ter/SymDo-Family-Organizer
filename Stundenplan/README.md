@@ -275,7 +275,13 @@ auch für eigene Skripte. Der Rumpf:
 ```
 
 `child` ist der Name oder die Nummer des Kindes, Wochentage sind 1 = Montag
-bis 6 = Samstag, `status` ist `normal`, `vertretung` oder `entfall`. Geprüft
+bis 6 = Samstag, `status` ist `normal`, `vertretung`, `entfall` oder `termin`
+(eine Veranstaltung). `insteadOf` nennt bei einer Vertretung die ersetzte
+Lehrkraft. Eine **Klassenarbeit** trägt `"exam": true` und ihren Titel in
+`examTitle` (höchstens 80 Zeichen) — ein Merkmal neben dem Status, denn auch
+eine Prüfung kann entfallen. Kachel und App zeigen sie mit eigenem Zeichen,
+hellem Rahmen und Titel; eine geänderte Prüfung erscheint als Prüfung, nicht
+als Vertretung. Geprüft
 wird alles vor dem ersten Schreiben — ein halber Plan überschreibt nie einen
 guten; Tage, die der Rumpf nicht nennt, bleiben unangetastet. Die Antwort nennt
 Kind, Tage, Stunden und Ersetztes oder den Fehler.

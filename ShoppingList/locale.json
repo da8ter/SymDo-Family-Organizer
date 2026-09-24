@@ -681,7 +681,12 @@
             "Shortened — the full text was not available.": "Gekürzt — der vollständige Text lag nicht mehr vor.",
             "Not kept": "Nicht aufbewahrt",
             "too large for a note": "zu groß für die Notiz",
-            "Loading part %1 of %2": "Lade Teil %1 von %2"
+            "Loading part %1 of %2": "Lade Teil %1 von %2",
+            "Exams": "Prüfungen",
+            "Exam": "Prüfung",
+            "exam cancelled": "Prüfung entfällt",
+            "in %d days": "in %d Tagen",
+            "Source: exam (UNTIS)": "Quelle: Prüfung (UNTIS)"
         }
     }
 }

@@ -279,6 +279,9 @@ trait TimetableStore
                         'status'    => trim((string)($zeile['status'] ?? '')),
                         // Ersetzte Lehrkraft, nur aus dem Import.
                         'insteadOf' => trim((string)($zeile['insteadOf'] ?? '')),
+                        // Klassenarbeit (nur aus dem Import, 24.09.2026).
+                        'exam'      => ($zeile['exam'] ?? false) === true,
+                        'examTitle' => trim((string)($zeile['examTitle'] ?? '')),
                         // Keine Farbe je Stunde mehr — sie kommt vom Fach.
                         'color'     => null,
                     ];
@@ -439,6 +442,8 @@ trait TimetableStore
                         'teacher'   => trim((string)($zeile['teacher'] ?? '')),
                         'status'    => trim((string)($zeile['status'] ?? '')),
                         'insteadOf' => trim((string)($zeile['insteadOf'] ?? '')),
+                        'exam'      => ($zeile['exam'] ?? false) === true,
+                        'examTitle' => trim((string)($zeile['examTitle'] ?? '')),
                         'color'     => null,
                         // Damit die Kachel sagen kann, woher die Stunde kommt.
                         'dated'     => $datum,
@@ -735,6 +740,10 @@ trait TimetableStore
                         'status'  => (string)($s['status'] ?? ''),
                         // Ersetzte Lehrkraft bei einer Vertretung (nur aus dem Import).
                         'insteadOf' => (string)($s['insteadOf'] ?? ''),
+                        /* Klassenarbeit: Merkmal und Titel (24.09.2026). Die
+                           Karte ist die Ausgabe fuer Kachel, Gateway und App. */
+                        'exam'      => ($s['exam'] ?? false) === true,
+                        'examTitle' => (string)($s['examTitle'] ?? ''),
                         'from'   => $beginn,
                         'to'     => TimetableCalc::Minuten((string)$s['end']),
                         'gap'    => TimetableCalc::LueckeHoehe($vorher, $beginn),

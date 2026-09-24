@@ -161,8 +161,11 @@ trait WebPush
         /* ODER: laeuft der Timer nur fuer die Aufgaben-Erinnerung, bleibt die
            Vorabend-Meldung fuer Hausaufgaben stumm — und NIRGENDS stuende ein
            Fehler. Genau diese Kopplung war die Falle. */
+        /* Dasselbe fuer die Vorabend-Meldung einer PRUEFUNG (24.09.2026): sie
+           haengt am Schalter im WebUntis-Bereich, laeuft aber in diesem Takt. */
         $an = ((bool)$this->PushProp('PushOnTaskDue', false)
-               || (bool)$this->PushProp('PushOnHomework', false))
+               || (bool)$this->PushProp('PushOnHomework', false)
+               || $this->PushExamAn())
               && $this->PushSubscriptions() !== [];
         try {
             // Der Klammeraffe wie beim Attribut-Schreiben: Fehlt der Timer (Trait neu,
@@ -187,6 +190,7 @@ trait WebPush
                auch den beiden vorzeitigen. Hier deshalb nichts. */
             $this->PushRemindRun();
             $this->PushHomeworkRun();
+            $this->PushExamRun();
             return true;
         }
         if ($ident === 'PushTestAll') {
@@ -874,6 +878,75 @@ trait WebPush
                und ausserhalb des Kindmodus ist der Bereich gar nicht sichtbar. */
             $ziel = $this->PushSubscriptions($kindId) !== [] ? $kindId : '';
             $this->PushBroadcast($this->Translate('Homework for tomorrow'), $text, $ziel, 'dashboard');
+            $merker[$schluessel] = $jetzt;
+            $geaendert = true;
+        }
+        if ($geaendert) {
+            $this->PushWriteSent($merker);
+        }
+    }
+
+    /** Ist die Pruefungs-Meldung an? Nur mit eingeschaltetem WebUntis. */
+    private function PushExamAn(): bool
+    {
+        return (bool)$this->PushProp('UntisExamPush', true) && (bool)$this->PushProp('UntisEnabled', false);
+    }
+
+    /**
+     * Die Vorabend-Meldung einer PRUEFUNG: was morgen geschrieben wird, je Kind
+     * eine Nachricht.
+     *
+     * Zur Uhrzeit der Hausaufgaben-Erinnerung und in ihrem Takt — hier und
+     * nicht im stuendlichen WebUntis-Lauf: der steht bei gesperrtem Konto still
+     * und kann bei langem Abrufabstand den ganzen Abend verpassen. Gelesen wird
+     * nur der gemerkte Stand; geschrieben nur der Merker gemeldeter Nachrichten.
+     */
+    private function PushExamRun(): void
+    {
+        if (!$this->PushExamAn() || $this->PushSubscriptions() === []) {
+            return;
+        }
+        [$std, $min] = $this->PushHomeworkZeit();
+        $jetzt = time();
+        if ((int)date('H', $jetzt) * 60 + (int)date('i', $jetzt) < $std * 60 + $min) {
+            return;
+        }
+        $morgen = date('Y-m-d', (int)strtotime('+1 day', $jetzt));
+        $namen = [];
+        foreach ($this->LoadUsers() as $u) {
+            $namen[(string)$u['id']] = (string)$u['name'];
+        }
+        $merker = $this->PushSentStore();
+        $geaendert = false;
+        foreach ($this->UntisPruefungenStand()['kinder'] as $kindId => $eintrag) {
+            $kindId = (string)$kindId;
+            $morgige = array_values(array_filter((array)($eintrag['exams'] ?? []),
+                static fn(mixed $p): bool => is_array($p) && (string)($p['date'] ?? '') === $morgen
+                    && (string)($p['status'] ?? '') !== 'entfall'));
+            if ($morgige === []) {
+                continue;
+            }
+            $schluessel = 'ex:' . $morgen . ':' . $kindId;
+            if ((int)($merker[$schluessel] ?? 0) > 0) {
+                continue;
+            }
+            $teile = [];
+            foreach ($morgige as $p) {
+                $titel = trim((string)($p['title'] ?? ''));
+                $fach = (string)($p['subject'] ?? '');
+                $teile[] = (string)($p['start'] ?? '') . ' ' . $fach
+                    . ($titel !== '' && UntisPruefungCalc::TitelNorm($titel) !== UntisPruefungCalc::TitelNorm($fach)
+                        ? ' — ' . $titel : '');
+            }
+            $name = $namen[$kindId] ?? (string)($eintrag['name'] ?? '');
+            $ziel = $this->PushSubscriptions($kindId) !== [] ? $kindId : '';
+            $bilanz = $this->PushBroadcast($this->Translate('Exam tomorrow'),
+                ($name !== '' ? $name . ': ' : '') . implode('; ', $teile), $ziel, 'dashboard');
+            /* Ganz ohne Zaehler lief gerade ein anderer Versand (die Sperre in
+               PushBroadcast wartet nicht) — dann in der naechsten Minute. */
+            if (array_sum($bilanz) === 0) {
+                continue;
+            }
             $merker[$schluessel] = $jetzt;
             $geaendert = true;
         }

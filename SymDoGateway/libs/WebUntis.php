@@ -33,6 +33,9 @@ trait WebUntis
        Formular aufsuchen, nur weil das Kennwort einmal falsch stand. */
     private const UNTIS_SPERRE_FRIST = 6 * 3600;
     private const UNTIS_INTERVALL_STD = 60;      // Minuten
+    private const UNTIS_PRUEF_ATTR    = 'UntisPruefungen';
+    private const UNTIS_LERN_TAGE_STD = 7;       // Lern-Erinnerung so viele Tage vorher
+    private const UNTIS_LERN_TAGE_MAX = 30;
 
     /* Die Ueberschneidungen im Plan dieses Kindes: je Wochentag und Uhrzeit
        die Faecher, die dort gleichzeitig stehen. Daraus baut das Formular eine
@@ -66,6 +69,15 @@ trait WebUntis
            Hand pflegt, soll das durch ein Modul-Update nicht anders
            vorfinden. */
         $this->RegisterPropertyBoolean('UntisHomework', false);
+        /* Pruefungen (24.09.2026): melden, wenn eine im Plan erscheint, verlegt
+           wird oder entfaellt — und am Vorabend erinnern (zur Uhrzeit der
+           Hausaufgaben-Erinnerung, Minutentakt in WebPush). Eigener Schalter:
+           wer Vertretungen stumm haben will, will die Klassenarbeit trotzdem
+           wissen. */
+        $this->RegisterPropertyBoolean('UntisExamPush', true);
+        /* So viele Tage vor einer Pruefung erscheint eine Lern-Erinnerung in den
+           Hausaufgaben des Kindes, faellig am Vortag. 0 = aus. */
+        $this->RegisterPropertyInteger('UntisExamStudyDays', self::UNTIS_LERN_TAGE_STD);
         /* Je Kind: Anzeigename, Ziel-Stundenplan und wessen Plan geholt wird.
            Leerer Elementtyp = der Plan des angemeldeten Kontos selbst. */
         $this->RegisterPropertyString('UntisStudents', '[]');
@@ -100,6 +112,9 @@ trait WebUntis
         // Wann der Riegel zufiel — er oeffnet sich nach einer Frist von selbst
         // wieder (siehe UntisGesperrt).
         $this->RegisterAttributeInteger('UntisFailAt', 0);
+        /* Die gemerkten Pruefungen je Kind — Quelle fuer Liste, Briefing und
+           die Vorabend-Meldung. Einziger Schreiber: UntisPruefungenEinpflegen. */
+        $this->RegisterAttributeString(self::UNTIS_PRUEF_ATTR, '{}');
         $this->RegisterTimer('UntisScan', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'UntisScan\', 0);');
     }
 
@@ -622,8 +637,19 @@ trait WebUntis
      */
     private function UntisKindEinpflegen(array $kind, array $ernte, bool $trocken): string
     {
+        /* Die Pruefungen ZUERST: auch ein Lauf ohne eine einzige Stunde im
+           Planfenster (Ferien) kennt die Klassenarbeit danach. `null` heisst
+           „unbekannt" (RPC-Rueckfall, gescheiterter Abruf) — dann bleibt der
+           gemerkte Stand, wie er ist, samt Lern-Erinnerungen. */
+        $pruefText = '';
+        $pruefungen = $ernte['pruefungen'] ?? null;
+        if (is_array($pruefungen)) {
+            $pruefText = $trocken
+                ? sprintf($this->Translate('%d exam(s)'), count($pruefungen))
+                : $this->UntisPruefungenEinpflegen($kind, $pruefungen);
+        }
         if (($ernte['ok'] ?? false) !== true) {
-            return (string)($ernte['meldung'] ?? '');
+            return (string)($ernte['meldung'] ?? '') . ($pruefText === '' ? '' : ', ' . $pruefText);
         }
         $stunden    = (int)($ernte['stunden'] ?? 0);
         $auffaellig = (array)($ernte['auffaellig'] ?? []);
@@ -651,7 +677,8 @@ trait WebUntis
                jemand sie gesehen hat — und der echte Lauf schwiege dann. */
             return sprintf($this->Translate('%1$s: %2$d lesson(s), %3$d change(s), %4$d unresolved overlap(s) — dry run, nothing written'),
                 $kind['name'], $stunden, count($auffaellig), $offen) . $verlust
-                . ($klassenText === '' ? '' : ', ' . sprintf($this->Translate('class %s'), $klassenText));
+                . ($klassenText === '' ? '' : ', ' . sprintf($this->Translate('class %s'), $klassenText))
+                . ($pruefText === '' ? '' : ', ' . $pruefText);
         }
         $tage    = (array)($ernte['tage'] ?? []);
         $datiert = (array)($ernte['datiert'] ?? []);
@@ -677,7 +704,315 @@ trait WebUntis
         return sprintf($this->Translate('%1$s: %2$d lesson(s), %3$d change(s), %4$d new, %5$d weekday(s) + %6$d date(s) written, %7$d overlap(s) unresolved'),
             $kind['name'], $stunden, count($auffaellig), $neu, $eingespielt, $datierteTage, $offen)
             . $verlust . ($klassenText === '' ? '' : ', ' . sprintf($this->Translate('class %s'), $klassenText))
-            . ($hausaufgaben === '' ? '' : ', ' . $hausaufgaben);
+            . ($hausaufgaben === '' ? '' : ', ' . $hausaufgaben)
+            . ($pruefText === '' ? '' : ', ' . $pruefText);
+    }
+
+    // ──────────────────────────────── Pruefungen ────────────────────────────────
+
+    /**
+     * Der gemerkte Stand. `da` sagt, ob es das Attribut schon gibt: vor dem
+     * Neuladen des Moduls liest die Hilfe die Vorgabe, und wer dann jeden Lauf
+     * mit „nichts gemerkt" vergleicht, meldet stuendlich alles als neu.
+     *
+     * @return array{v:int, rev:int, kinder:array<string,mixed>, da:bool}
+     */
+    private function UntisPruefungenStand(): array
+    {
+        $roh = $this->ReadAttributeStringSafe(self::UNTIS_PRUEF_ATTR, '');
+        $d = json_decode($roh, true);
+        $d = is_array($d) ? $d : [];
+        return ['v' => 1, 'rev' => (int)($d['rev'] ?? 0),
+                'kinder' => is_array($d['kinder'] ?? null) ? $d['kinder'] : [], 'da' => $roh !== ''];
+    }
+
+    /** Schreiben mit Rueckleseprobe — nur ein gelesener Stand ist ein gesicherter. */
+    private function UntisPruefungenSchreiben(array $stand): bool
+    {
+        unset($stand['da']);
+        $json = (string)json_encode($stand, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        @$this->WriteAttributeString(self::UNTIS_PRUEF_ATTR, $json);
+        if ($this->ReadAttributeStringSafe(self::UNTIS_PRUEF_ATTR, '') !== $json) {
+            $this->LogMessage('SymDo WebUntis: Attribut ' . self::UNTIS_PRUEF_ATTR
+                . ' nicht beschreibbar — das Modul muss einmal neu geladen werden.', KL_ERROR);
+            return false;
+        }
+        // Die Liste steht in den Hausaufgaben: andere Geraete sollen nachladen.
+        $this->WsPushDirty();
+        return true;
+    }
+
+    /**
+     * Die Pruefungen eines Abrufs einpflegen: abgleichen, Lern-Erinnerungen
+     * nachfuehren, merken, melden.
+     *
+     * Gemeldet wird NUR, wenn es fuer dieses Kind schon einen gesicherten Stand
+     * gab und der neue gesichert ist. Der erste Lauf legt die Grundlage still —
+     * sonst kaeme nach dem Update eine Meldung mit allem, was in acht Wochen
+     * ansteht; und ein nicht schreibbares Attribut hiesse: jede Stunde dieselbe.
+     *
+     * @param list<array<string,mixed>> $neu die Pruefungen des Abrufs
+     */
+    private function UntisPruefungenEinpflegen(array $kind, array $neu): string
+    {
+        $userId = trim((string)($kind['userId'] ?? ''));
+        if ($userId === '') {
+            // Ohne Mitglied weiss niemand, wessen Pruefung es ist — die
+            // Statuszeile sagt es schon bei den Hausaufgaben.
+            return '';
+        }
+        $stand = $this->UntisPruefungenStand();
+        if (!$stand['da']) {
+            return $this->Translate('exams: waiting for the module to be reloaded');
+        }
+        $heute = date('Y-m-d');
+        $neu = array_values(array_filter($neu,
+            static fn(mixed $p): bool => is_array($p) && (string)($p['date'] ?? '') >= $heute));
+        $vorher = is_array($stand['kinder'][$userId] ?? null) ? $stand['kinder'][$userId] : null;
+        $hatteStand = $vorher !== null && (int)($vorher['seit'] ?? 0) > 0;
+        $alt = $hatteStand ? array_values(array_filter((array)($vorher['exams'] ?? []), 'is_array')) : [];
+
+        $erg = UntisPruefungCalc::Abgleichen($alt, $neu, time());
+        $liste = $this->UntisLernAbgleich($userId, $erg['liste'], $erg['weg'], $heute);
+        if ($liste === null) {
+            // Die Hausaufgaben waren gerade gesperrt: alles beim naechsten Lauf,
+            // sonst gingen Loeschungen fuer verschwundene Pruefungen verloren.
+            return $this->Translate('exams: homework busy, next run');
+        }
+        $zahl = count(array_filter($liste, static fn(array $p): bool => (string)$p['status'] !== 'entfall'));
+        $eintrag = ['seit' => $hatteStand ? (int)$vorher['seit'] : time(),
+                    'name' => (string)($kind['name'] ?? ''), 'exams' => $liste];
+        if ($hatteStand && $eintrag == $vorher) {
+            return sprintf($this->Translate('%d exam(s)'), $zahl);
+        }
+        $stand['kinder'][$userId] = $eintrag;
+        $stand['rev'] = (int)$stand['rev'] + 1;
+        if (!$this->UntisPruefungenSchreiben($stand)) {
+            return $this->Translate('exams: not saved');
+        }
+        if ($hatteStand) {
+            $this->UntisPruefungenMelden($kind, $erg);
+        }
+        return sprintf($this->Translate('%d exam(s)'), $zahl);
+    }
+
+    /**
+     * Die Lern-Erinnerungen eines Kindes nachfuehren.
+     *
+     * Einmal angelegt, danach nur noch NACHGEFUEHRT: verlegt → Faelligkeit und
+     * Notiz ziehen mit; entfaellt, verschwindet oder ist der Tag da → weg,
+     * solange noch offen. Abgehakt bleibt stehen. Und selbst geloescht bleibt
+     * geloescht — `lern` behaelt die Kennung, es wird nicht neu angelegt.
+     *
+     * Die Erinnerung ist eine gewoehnliche Hausaufgabe (Herkunft `exam`), die
+     * Pruefung steht als `srcId` daran: so findet ein zweiter Lauf sie auch
+     * dann, wenn der gemerkte Stand einmal nicht gespeichert werden konnte —
+     * sie entsteht nie doppelt.
+     *
+     * @param list<array<string,mixed>> $liste
+     * @param list<array<string,mixed>> $weg verschwundene Pruefungen
+     * @return list<array<string,mixed>>|null null = Hausaufgaben gesperrt
+     */
+    private function UntisLernAbgleich(string $userId, array $liste, array $weg, string $heute): ?array
+    {
+        $tage = max(0, min(self::UNTIS_LERN_TAGE_MAX,
+            (int)$this->UntisProp('UntisExamStudyDays', self::UNTIS_LERN_TAGE_STD)));
+        if (!in_array($userId, $this->HomeworkKinder(), true)) {
+            return $liste;     // kein Kind: keine Hausaufgaben, also auch keine Erinnerung
+        }
+        $bestand = [];
+        $nachQuelle = [];
+        foreach ($this->HomeworkItems() as $i) {
+            $bestand[(string)$i['id']] = $i;
+            if ((string)($i['source'] ?? '') === 'exam' && (string)($i['childId'] ?? '') === $userId
+                && (int)($i['srcId'] ?? 0) > 0) {
+                $nachQuelle[(int)$i['srcId']] = $i;
+            }
+        }
+        $offen = static fn(?array $i): bool => $i !== null && ($i['done'] ?? false) !== true;
+
+        $anlegen = [];
+        $aendern = [];
+        $loeschen = [];
+        foreach ($liste as $n => $p) {
+            $key = (int)$p['key'];
+            $lern = (string)($p['lern'] ?? '');
+            // Verloren gegangene Kennung (Stand nicht gespeichert): ueber die Quelle.
+            if ($lern === '' && isset($nachQuelle[$key])) {
+                $lern = (string)$nachQuelle[$key]['id'];
+                $liste[$n]['lern'] = $lern;
+                // Passt ihre Faelligkeit nicht mehr, gilt sie als verlegt.
+                $liste[$n]['lernFuer'] = (string)$nachQuelle[$key]['due']
+                    === UntisPruefungCalc::LernDue((string)$p['date'], $heute) ? (string)$p['date'] : '';
+                $p['lernFuer'] = $liste[$n]['lernFuer'];
+            }
+            if ($lern !== '') {
+                $item = $bestand[$lern] ?? null;
+                $vorbei = (string)$p['status'] === 'entfall' || (string)$p['date'] <= $heute;
+                if ($offen($item) && $vorbei) {
+                    $loeschen[] = $lern;
+                } elseif ($offen($item) && (string)($p['lernFuer'] ?? '') !== (string)$p['date']) {
+                    $aendern[$lern] = ['due' => UntisPruefungCalc::LernDue((string)$p['date'], $heute),
+                                       'note' => $this->UntisLernNotiz($p)];
+                    $liste[$n]['lernFuer'] = (string)$p['date'];
+                }
+                continue;
+            }
+            if (UntisPruefungCalc::LernFaellig($p, $heute, $tage)) {
+                $anlegen[$n] = [
+                    'childId' => $userId,
+                    'subject' => (string)$p['subject'],
+                    'due'     => UntisPruefungCalc::LernDue((string)$p['date'], $heute),
+                    'note'    => $this->UntisLernNotiz($p),
+                    'source'  => 'exam',
+                    'srcId'   => $key,
+                ];
+            }
+        }
+        foreach ($weg as $p) {
+            $lern = (string)($p['lern'] ?? '');
+            if ($lern !== '' && $offen($bestand[$lern] ?? null)) {
+                $loeschen[] = $lern;
+            }
+        }
+        $e = $this->HomeworkSystemAbgleich($anlegen, $aendern, $loeschen);
+        if (($e['ok'] ?? false) !== true) {
+            return null;
+        }
+        foreach ((array)$e['ids'] as $n => $id) {
+            $liste[(int)$n]['lern'] = (string)$id;
+            $liste[(int)$n]['lernFuer'] = (string)$liste[(int)$n]['date'];
+        }
+        return $liste;
+    }
+
+    /** „Für die Prüfung lernen: KA Briefe schreiben (Donnerstag 08.10., 10:35)" */
+    private function UntisLernNotiz(array $p): string
+    {
+        $titel = trim((string)($p['title'] ?? ''));
+        $zeit = strtotime((string)$p['date'] . ' 12:00:00');
+        return sprintf($this->Translate('Study for the exam: %1$s (%2$s %3$s, %4$s)'),
+            $titel !== '' ? $titel : (string)$p['subject'],
+            $this->UntisTagName((int)date('N', (int)$zeit)), date('d.m.', (int)$zeit), (string)$p['start']);
+    }
+
+    /** „08.10. 10:35 Deutsch — KA Briefe schreiben" */
+    private function UntisPruefungZeile(array $p): string
+    {
+        $titel = trim((string)($p['title'] ?? ''));
+        $fach = (string)($p['subject'] ?? '');
+        return date('d.m.', (int)strtotime((string)$p['date'] . ' 12:00:00')) . ' ' . (string)$p['start'] . ' ' . $fach
+            . ($titel !== '' && UntisPruefungCalc::TitelNorm($titel) !== UntisPruefungCalc::TitelNorm($fach)
+                ? ' — ' . $titel : '');
+    }
+
+    /**
+     * Eine Sammelmeldung je Kind: im Plan, verlegt, entfaellt.
+     *
+     * Ziel wie bei der Vorabend-Meldung der Hausaufgaben: die Geraete des
+     * Kindes, hat es keine, der Haushalt — Kinder haben oft keines, und eine
+     * Klassenarbeit ist keine Nachricht, die im Leeren verschwinden darf.
+     *
+     * @param array{neu:list<array>, verlegt:list<array>, entfallen:list<array>} $erg
+     */
+    private function UntisPruefungenMelden(array $kind, array $erg): void
+    {
+        if (!(bool)$this->UntisProp('UntisExamPush', true)) {
+            return;
+        }
+        $zeilen = [];
+        foreach ($erg['neu'] as $p) {
+            $zeilen[] = sprintf($this->Translate('In the plan: %s'), $this->UntisPruefungZeile($p));
+        }
+        foreach ($erg['verlegt'] as $v) {
+            $zeilen[] = sprintf($this->Translate('Moved: %1$s (before %2$s)'),
+                $this->UntisPruefungZeile($v['nachher']),
+                date('d.m.', (int)strtotime((string)$v['vorher']['date'] . ' 12:00:00')) . ' ' . (string)$v['vorher']['start']);
+        }
+        foreach ($erg['entfallen'] as $p) {
+            $zeilen[] = sprintf($this->Translate('Cancelled: %s'), $this->UntisPruefungZeile($p));
+        }
+        if ($zeilen === []) {
+            return;
+        }
+        $mehr = count($zeilen) - 4;
+        $zeilen = array_slice($zeilen, 0, 4);
+        if ($mehr > 0) {
+            $zeilen[] = sprintf($this->Translate('and %d more'), $mehr);
+        }
+        $userId = trim((string)($kind['userId'] ?? ''));
+        try {
+            $ziel = $this->PushSubscriptions($userId) !== [] ? $userId : '';
+            $this->PushBroadcast(sprintf($this->Translate('Exams %s'), (string)$kind['name']),
+                implode("\n", $zeilen), $ziel, 'dashboard');
+        } catch (\Throwable $e) {
+            $this->SendDebug('WebUntis', 'Pruefungsmeldung warf: ' . $e->getMessage(), 0);
+        }
+    }
+
+    /**
+     * Die Pruefungen fuer die Oberflaechen: ab heute, nach Kind gefiltert.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function UntisPruefungenOeffentlich(string $kind = ''): array
+    {
+        $heute = date('Y-m-d');
+        $raus = [];
+        foreach ($this->UntisPruefungenStand()['kinder'] as $userId => $eintrag) {
+            if ($kind !== '' && (string)$userId !== $kind) {
+                continue;
+            }
+            foreach ((array)($eintrag['exams'] ?? []) as $p) {
+                if (!is_array($p) || (string)($p['date'] ?? '') < $heute) {
+                    continue;
+                }
+                $raus[] = [
+                    'id'      => (string)($p['key'] ?? ''),
+                    'childId' => (string)$userId,
+                    'date'    => (string)$p['date'],
+                    'start'   => (string)($p['start'] ?? ''),
+                    'end'     => (string)($p['end'] ?? ''),
+                    'subject' => (string)($p['subject'] ?? ''),
+                    'title'   => (string)($p['title'] ?? ''),
+                    'room'    => (string)($p['room'] ?? ''),
+                    'teacher' => (string)($p['teacher'] ?? ''),
+                    'status'  => (string)($p['status'] ?? 'normal'),
+                ];
+            }
+        }
+        usort($raus, static fn(array $a, array $b): int
+            => [$a['date'], UntisPruefungCalc::Minuten($a['start']), $a['childId']]
+            <=> [$b['date'], UntisPruefungCalc::Minuten($b['start']), $b['childId']]);
+        return $raus;
+    }
+
+    /** Die Revision des Stands — die Oberflaeche zeichnet nur bei Aenderung neu. */
+    private function UntisPruefungenRev(): int
+    {
+        return (int)$this->UntisPruefungenStand()['rev'];
+    }
+
+    /**
+     * Die Zeilen „KOMMENDE PRUEFUNGEN" fuers Briefing: was NACH dem Briefingtag
+     * $tag (JJJJ-MM-TT) bis eine Woche danach ansteht. Die Pruefung des Tages
+     * selbst steht in der Schulzeile.
+     *
+     * @return list<string>
+     */
+    private function UntisPruefungenBriefing(string $tag): array
+    {
+        $namen = $this->UntisMitglieder();
+        $jeKind = [];
+        foreach ($this->UntisPruefungenStand()['kinder'] as $userId => $eintrag) {
+            $name = (string)($namen[(string)$userId] ?? ($eintrag['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $jeKind[$name] = (array)($eintrag['exams'] ?? []);
+        }
+        $bis = date('Y-m-d', (int)strtotime($tag . ' 12:00:00') + UntisPruefungCalc::BRIEFING_TAGE * 86400);
+        return UntisPruefungCalc::BriefingZeilen($jeKind, $tag, $bis, date('Y-m-d'));
     }
 
     /**

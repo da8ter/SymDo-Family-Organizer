@@ -1957,6 +1957,15 @@ class SymDoGateway extends IPSModuleStrict
                 ['type' => 'CheckBox', 'name' => 'UntisPush',
                  'caption' => $this->Translate('Push on cancellations and substitutions')],
                 ['type' => 'Label', 'caption' => $this->Translate('Goes to the devices of the assigned family member, once per lesson — not again on every fetch.')],
+                /* Pruefungen (24.09.2026): eigener Schalter, eigene Zeile. Die
+                   Vorabend-Meldung laeuft zur Uhrzeit der Hausaufgaben-
+                   Erinnerung (Bereich Benachrichtigungen). */
+                ['type' => 'CheckBox', 'name' => 'UntisExamPush',
+                 'caption' => $this->Translate('Push on exams: new in the plan, moved, cancelled — and the evening before')],
+                ['type' => 'NumberSpinner', 'name' => 'UntisExamStudyDays', 'minimum' => 0,
+                 'maximum' => 30, 'suffix' => ' ' . $this->Translate('days'),
+                 'caption' => $this->Translate('Study reminder as homework, days before the exam (0 = off)')],
+                ['type' => 'Label', 'caption' => $this->Translate('Exams are read eight weeks ahead and shown above the homework, marked in the timetable and mentioned in the briefing. The study reminder is an ordinary homework entry of the child, due the day before — it follows the exam when it is moved and disappears when it is cancelled, as long as it is still open. Nothing is reported on the first fetch.')],
                 /* Aus als Vorgabe: es ist ein Zugriff mehr je Durchlauf, und
                    wer seine Hausaufgaben von Hand pflegt, soll das nach einem
                    Modul-Update nicht anders vorfinden. */
@@ -2574,11 +2583,15 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'SelectTime',
                     'name'    => 'PushHomeworkTime',
-                    'caption' => $this->Translate('Homework reminder at')
+                    'caption' => $this->Translate('Evening reminder (homework, exams) at')
                 ],
                 [
                     'type'    => 'Label',
                     'caption' => $this->Translate('The homework reminder comes once per child and day, only if something is still open and only if there is school tomorrow.')
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('At the same time comes the reminder of an exam tomorrow — switched in the WebUntis section.')
                 ],
                 [
                     'type'    => 'Label',

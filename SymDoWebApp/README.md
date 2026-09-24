@@ -27,6 +27,7 @@ den Zeilen erscheinen.
 ## 1. Funktionsumfang
 
 - **Hausaufgaben** — im Stundenplan-Bereich alle offenen des Kindes, auf der Übersicht eine Karte für die Eltern; Fach mit Symbol und Farbe aus dem Stundenplan (Bestand und Grenzen: README des Gateways)
+- **Prüfungen** — die Klassenarbeiten aus WebUntis stehen als Block über den Hausaufgaben (Fach, Tag, Uhrzeit, „in 14 Tagen", entfallene durchgestrichen) und sind im Tagesbalken und im Wochenraster markiert: eigenes Zeichen, heller Rahmen, Titel. Eine geänderte Prüfung bleibt Prüfung, nicht Vertretung. Die Lern-Erinnerung vor einer Prüfung ist eine gewöhnliche Hausaufgabe mit der Quelle „Prüfung (UNTIS)"
 - **Dieselbe Oberfläche wie auf dem Handy** — Übersicht, Einkaufen (Favoriten als Blatt über das Herz in der Kopfzeile), ToDos, Kalender, Notizen und KI-Eingang in einer Kachel, mit denselben Gesten (wischen zum Erledigen und Löschen) wie in der App
 - **Begrüßung** auf der Übersicht — „Hallo Familie Muster", mit gewähltem Mitglied „Hallo Tim"; Familienname und Schalter stehen im Gateway
 - **Kindmodus** — wählt man in der Mitglieder-Leiste ein Kind, gehört ihm die Oberfläche: Einkauf und KI-Eingang fallen weg, dafür kommt sein **Stundenplan** als eigener Bereich mit Tageskarte, Legende und Blättern durch beide Wochen. Bei einem Erwachsenen oder ohne Auswahl bleibt alles, wie es eingerichtet ist. Die Mitglieder-Leiste steht auch dann, wenn keine Aufgabenliste eingebunden ist

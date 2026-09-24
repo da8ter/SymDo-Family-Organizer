@@ -1033,15 +1033,24 @@ trait VoiceTools
             if ($fach === '') {
                 continue;
             }
+            /* Eine Pruefung schlaegt „Vertretung": dass es eine Klassenarbeit
+               ist, ist die Auskunft, nicht wer sie beaufsichtigt (24.09.2026). */
+            $pruefung = ($s['exam'] ?? false) === true;
+            $titel = trim((string)($s['examTitle'] ?? ''));
+            $was = $titel !== '' && mb_strtolower($titel) !== mb_strtolower($fach) ? $fach . ', ' . $titel : $fach;
             if ($status === 'entfall') {
                 $entfall[] = $fach;
                 // Entfallenes zaehlt nicht zur Schulzeit — sonst behauptete die
                 // Antwort Unterricht bis 15 Uhr, obwohl die letzten zwei
                 // Stunden ausfallen. Dieselbe Regel wie in TagesDauer.
-                $faecher[] = sprintf($this->Translate('%1$s %2$s (cancelled)'), $beginn, $fach);
+                $faecher[] = $pruefung
+                    ? sprintf($this->Translate('%1$s %2$s (exam cancelled)'), $beginn, $was)
+                    : sprintf($this->Translate('%1$s %2$s (cancelled)'), $beginn, $fach);
                 continue;
             }
-            if ($status === 'vertretung') {
+            if ($pruefung) {
+                $faecher[] = sprintf($this->Translate('%1$s %2$s (exam)'), $beginn, $was);
+            } elseif ($status === 'vertretung') {
                 $vertretung[] = $fach;
                 $faecher[] = sprintf($this->Translate('%1$s %2$s (substitution)'), $beginn, $fach);
             } else {

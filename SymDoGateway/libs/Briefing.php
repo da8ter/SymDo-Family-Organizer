@@ -843,6 +843,9 @@ trait Briefing
             // Wie lange welches Kind an DIESEM Tag Schule hat. Kommt aus dem
             // Stundenplan-Modul; ohne Modul oder ohne Instanz bleibt es leer.
             'schule'       => $this->TimetableSchoolLines(date('Y-m-d', $this->BriefingDay($tage))),
+            // Die Pruefungen der Woche NACH diesem Tag (die des Tages steht in der
+            // Schulzeile). Kommt aus WebUntis; ohne WebUntis bleibt es leer.
+            'pruefungen'   => $this->UntisPruefungenBriefing(date('Y-m-d', $this->BriefingDay($tage))),
             // Das geplante Abendessen dieses Tages. Kommt aus dem Essensplan-
             // Modul; ohne Modul oder ohne Gericht bleibt es leer.
             'essen'        => $this->MealPlanLines(date('Y-m-d', $this->BriefingDay($tage))),
@@ -1390,12 +1393,18 @@ trait Briefing
                 . 'genannten Fächer auf, nicht nur eines davon, und stelle keine '
                 . 'Beziehung her, die dort nicht steht („statt X" nur, wenn es dort '
                 . 'so steht). '
+                // Pruefungen (24.09.2026): dieselbe Lehre wie bei den Aenderungen —
+                // ohne ausdrueckliches MUSS faellt sie beim Kuerzen als Erstes weg.
+                . 'Nennt die Zeile eine PRÜFUNG, MUSS sie ebenfalls in den Satz, mit '
+                . 'Fach und Uhrzeit. Direkt nach den Schulzeiten, wenn KOMMENDE '
+                . 'PRÜFUNGEN angegeben sind: je Prüfung ein kurzer Satz mit Kind, Fach, '
+                . 'Tag und dem Abstand genau so, wie er dort steht („in drei Tagen"). '
                 . 'Steht unten ein ABENDESSEN, erwähne es in einem kurzen Satz '
                 . '(„Heute Abend gibt es …" bzw. in der Vorschau „Morgen gibt es …"). '
                 . 'VIERTENS zum Schluss ein kurzer Hinweis, wie viele Artikel auf der '
                 . 'Einkaufsliste stehen. Steht unten „EINKAUFSLISTE: NICHT ERWÄHNEN", '
                 . 'lässt du diesen vierten Punkt ersatzlos weg und endest mit den '
-                . 'Schulzeiten. '
+                . 'Schulzeiten bzw. den kommenden Prüfungen. '
                 . 'Durchgehender Fließtext ohne Aufzählungszeichen, ohne Zwischentitel, '
                 . 'ohne Markdown. Kein Schlusswort, keine Ermunterung, keine Wiederholung. '
                 . 'Der Tonfall unten gilt auch hier, aber die KÜRZE hat Vorrang: lieber '
@@ -1408,6 +1417,12 @@ trait Briefing
                 // ohne diesen Satz laesst das Modell sie einfach weg.
                 . 'Stehen unten SCHULZEITEN, sage auch, wie lange die Kinder Schule '
                 . 'haben — je Kind kurz, und Betreuung getrennt vom Unterricht. '
+                // Pruefungen (24.09.2026): ausdruecklich, sonst fallen sie beim
+                // Zusammenfassen weg — wie vorher die Schulzeiten und die Aenderungen.
+                . 'Nennt eine Schulzeile eine PRÜFUNG, MUSS sie in den Text, mit Fach '
+                . 'und Uhrzeit. Stehen unten KOMMENDE PRÜFUNGEN, MUSST du jede davon '
+                . 'nennen — mit Kind, Fach, Tag und dem Abstand genau so, wie er dort '
+                . 'steht („morgen", „in drei Tagen"). '
                 // Siehe oben: ohne die ausdrueckliche Pflicht faellt die Aenderung
                 // beim Zusammenfassen als Erstes weg.
                 . 'Nennt die Zeile eine Änderung — entfallene Stunden, eine Vertretung, '
@@ -1463,6 +1478,10 @@ trait Briefing
             . 'Schreibe also nie „den ganzen Tag", wo eine Uhrzeit angegeben ist. '
             . 'Erfinde NICHTS: keine Termine, keine Aufgaben, keine Uhrzeiten, die unten nicht '
             . 'stehen — und nichts für andere Tage, es geht ausschließlich um ' . $tagWort . '. '
+            // Die eine Ausnahme MUSS hier stehen, sonst verbietet diese Regel genau
+            // den Block, den die Regel oben verlangt.
+            . 'Die EINZIGE Ausnahme davon sind die KOMMENDEN PRÜFUNGEN, die unten '
+            . 'ausdrücklich für andere Tage angegeben sind. '
             // Zahlen ausdruecklich dazu: die Regel nannte nur Termine, Aufgaben
             // und Uhrzeiten, und genau deshalb konnte aus „5 offene Artikel" ein
             // „mit einem Artikel ist die Liste mickrig" werden. Am 24.08.2026 im
@@ -1794,6 +1813,11 @@ trait Briefing
         // nicht ungefragt aendert — auf Zuruf gilt es jetzt ueberall.
         if (($daten['schule'] ?? []) !== []) {
             $teile[] = $block('SCHULZEITEN AN DIESEM TAG', $daten['schule'], 'keine');
+        }
+        // Die EINZIGE Angabe ueber andere Tage — und deshalb steht das dabei.
+        if (($daten['pruefungen'] ?? []) !== []) {
+            $teile[] = $block('KOMMENDE PRÜFUNGEN (die einzige Angabe über andere Tage — '
+                . 'Tag und Abstand genau so übernehmen)', $daten['pruefungen'], '');
         }
         if (($daten['essen'] ?? []) !== []) {
             $teile[] = $block('ABENDESSEN AN DIESEM TAG', $daten['essen'], '');

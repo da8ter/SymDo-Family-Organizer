@@ -883,6 +883,13 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .plan-stueck.termin { box-shadow: inset 0 0 0 1px rgba(255,255,255,.55); }
 .wp-stunde.termin { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7); }
 .wp-stunde.termin .wp-fach { font-style: italic; }
+/* Die Klassenarbeit (24.09.2026): sie FINDET statt, ist aber keine Stunde wie
+   jede andere — ein kraeftiger heller Rahmen, die Fachfarbe bleibt. WORTGLEICH
+   zur Stundenplan-Kachel. Entfaellt sie, gilt das Bild des Entfalls. */
+.plan-stueck.pruefung { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.95); }
+.wp-stunde.pruefung { box-shadow: inset 0 0 0 2px rgba(255,255,255,.95); }
+.wp-stunde.pruefung .wp-fach { font-weight: 800; }
+.plan-stueck.pruefung.entfall, .wp-stunde.pruefung.entfall { box-shadow: none; }
 .plan-titel {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-weight: 600;
@@ -4148,6 +4155,19 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .hw-faellig { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: var(--muted); }
+/* Eine anstehende Pruefung ueber den Hausaufgaben: dieselbe Zeile wie eine
+   Hausaufgabe, aber ohne Kaestchen und mit einer Kante in der Akzentfarbe —
+   man bereitet sich auf sie vor, abhaken kann man sie nicht. */
+.hw-pruefung {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--row); border-radius: 12px; padding: 8px 10px;
+  box-shadow: inset 3px 0 0 0 var(--accent);
+}
+.hw-pruefung.entfallen { opacity: .62; }
+.hw-pruefung.entfallen .hw-name { text-decoration: line-through; }
+.hw-pruefung .hw-faellig { color: var(--accent); }
+/* BEIDE Elementarten: /icons.js ersetzt das <i> nachtraeglich durch ein <svg>. */
+.hw-pruef-sym, svg.hw-pruef-sym { width: 12px; height: 12px; margin-right: 6px; opacity: .75; vertical-align: -1px; }
 
 /* ── Familientafel: eine Zeile je Mitglied, sieben Spalten ──────────────────
    Praefix ct-, weil cal- schon der Agenda gehoert (cal-card, cal-event,
@@ -9681,15 +9701,24 @@ function stundenplanKarte() {
       const wo = [s.room, s.teacher].filter(t => t).join(' · ');
       /* Entfall und Vertretung kommen aus dem Stundenplan-Modul (WebUntis).
          Von Hand gepflegte Stunden haben das Feld nicht — leer heisst normal. */
-      const zustand = s.status === 'entfall' ? ' entfall'
-        : (s.status === 'vertretung' ? ' vertretung' : (s.status === 'termin' ? ' termin' : ''));
+      /* Eine KLASSENARBEIT schlaegt die Vertretung: dass geschrieben wird, ist
+         die Auskunft (24.09.2026). Entfaellt sie, bleibt der Entfall sichtbar —
+         beide Klassen zusammen. */
+      const pruefung = s.exam === true;
+      const zustand = pruefung ? ' pruefung' + (s.status === 'entfall' ? ' entfall' : '')
+        : (s.status === 'entfall' ? ' entfall'
+        : (s.status === 'vertretung' ? ' vertretung' : (s.status === 'termin' ? ' termin' : '')));
       /* Bei einer Vertretung nennt WebUntis die weggefallene Lehrkraft mit —
          „statt Kais" sagt mehr als „Vertretung" allein. */
-      const zustandText = s.status === 'entfall' ? ', ' + translate('cancelled')
+      const zustandText = pruefung
+        ? ', ' + translate(s.status === 'entfall' ? 'exam cancelled' : 'Exam') + (s.examTitle ? ': ' + s.examTitle : '')
+        : (s.status === 'entfall' ? ', ' + translate('cancelled')
         : (s.status === 'vertretung'
             ? ', ' + translate('substitution')
               + (s.insteadOf ? ' ' + translate('instead of %1').replace('%1', s.insteadOf) : '')
-            : (s.status === 'termin' ? ', ' + translate('Event') : ''));
+            : (s.status === 'termin' ? ', ' + translate('Event') : '')));
+      // Titel im Balken: Vertretung, Termin — und die Pruefung, solange sie stattfindet.
+      const mitTitel = pruefung ? s.status !== 'entfall' : (s.status === 'vertretung' || s.status === 'termin');
       /* Entfallen heisst: gestrichelte Kontur in der Fachfarbe und eine
          Fuellung derselben Farbe (50 %). Die stattfindende Stunde bleibt
          kraeftig — der Unterschied ist damit auf einen Blick zu sehen, und was
@@ -9708,7 +9737,7 @@ function stundenplanKarte() {
          („1. Methodenta⚛"). Also bis zur naechsten Stunde, die auf ihm liegt,
          und 26 px ab fuer Zeichen und Abstaende. */
       let titelBreite = '';
-      if (s.status === 'vertretung' || s.status === 'termin') {
+      if (mitTitel) {
         let naechst = s.to;
         for (const x of slots) {
           if (x !== s && x.from > s.from && x.from < naechst) { naechst = x.from; }
@@ -9731,10 +9760,11 @@ function stundenplanKarte() {
         /* Vertretung und Termin tragen ihren Titel IM Balken, davor ein eigenes
            Zeichen: der Tausch bei der Vertretung, der Kalender beim Termin. Ein
            Ausflug heisst „Waldschule" und nicht „Biologie". */
-        (s.status === 'vertretung' || s.status === 'termin'
-          ? `<i class="fa-light ${s.status === 'termin' ? 'fa-calendar-star' : 'fa-right-left'}"></i>` +
-            `<span class="plan-titel"${titelBreite}>${escapeHtml(s.name || '')}</span>`
-          : (s.icon ? `<i class="fa-light ${escapeHtml(s.icon)}"></i>` : '')) + `</div>`;
+        (mitTitel
+          ? `<i class="fa-light ${pruefung ? 'fa-file-pen' : (s.status === 'termin' ? 'fa-calendar-star' : 'fa-right-left')}"></i>` +
+            `<span class="plan-titel"${titelBreite}>${escapeHtml((pruefung && s.examTitle) || s.name || '')}</span>`
+          : (pruefung ? `<i class="fa-light fa-file-pen"></i>`
+            : (s.icon ? `<i class="fa-light ${escapeHtml(s.icon)}"></i>` : ''))) + `</div>`;
     });
     let ticks = '<div class="plan-linie"></div>';
     const ersterTick = Math.ceil(von / 15) * 15;
@@ -9970,15 +10000,21 @@ function renderWochenplan() {
         spalten += luecke(vorher, sl.from);
         const h = Math.max(y(sl.to) - y(sl.from), proViertel * 3);
         const wo = [sl.room, sl.teacher].filter(x => x).join(' · ');
-        const lage = ['entfall', 'vertretung', 'termin'].includes(sl.status) ? ' ' + sl.status : '';
-        const marke = sl.status === 'entfall' ? translate('cancelled')
+        // Eine Klassenarbeit schlaegt die Vertretung (siehe Tagesbalken).
+        const pruefung = sl.exam === true;
+        const lage = pruefung ? ' pruefung' + (sl.status === 'entfall' ? ' entfall' : '')
+          : (['entfall', 'vertretung', 'termin'].includes(sl.status) ? ' ' + sl.status : '');
+        const marke = pruefung ? translate(sl.status === 'entfall' ? 'exam cancelled' : 'Exam')
+          : (sl.status === 'entfall' ? translate('cancelled')
           : (sl.status === 'vertretung'
               ? translate('substitution')
                 + (sl.insteadOf ? ' ' + translate('instead of %1').replace('%1', sl.insteadOf) : '')
-              : (sl.status === 'termin' ? translate('Event') : ''));
+              : (sl.status === 'termin' ? translate('Event') : '')));
+        const pruefTitel = pruefung && sl.examTitle
+          && String(sl.examTitle).toLowerCase() !== String(sl.name || '').toLowerCase() ? String(sl.examTitle) : '';
         // Derselbe Text im title: in schmalen Spalten wird gekuerzt.
         const hinweis = sl.name + ', ' + sl.start + ' – ' + sl.end +
-          (wo ? ', ' + wo : '') + (marke ? ' — ' + marke : '');
+          (wo ? ', ' + wo : '') + (marke ? ' — ' + marke : '') + (pruefTitel ? ': ' + pruefTitel : '');
         const hw = hwFuerSlot(hausaufgaben.items, kind.id, t.date, sl.name,
           ersteProFach[String(sl.name || '')], idx);
         spalten += '<div class="wp-stunde' + lage + (hw && h < 57 ? ' wp-hw-eng' : '')
@@ -9989,6 +10025,7 @@ function renderWochenplan() {
           '<div><div class="wp-fach">' + escapeHtml(sl.name || '') + '</div>' +
           '<div class="wp-zeit">' + escapeHtml(sl.start || '') + ' – ' + escapeHtml(sl.end || '') + '</div>' +
           (marke ? '<div class="wp-wo wp-zustand">' + escapeHtml(marke) + '</div>' : '') +
+          (pruefTitel ? '<div class="wp-wo">' + escapeHtml(pruefTitel) + '</div>' : '') +
           (wo ? '<div class="wp-wo">' + escapeHtml(wo) + '</div>' : '') +
           '</div>' +
           (hw ? '<span class="wp-hw" title="' + escapeHtml(
@@ -12800,7 +12837,7 @@ function calDateLabel(ts) {
    Zwilling zu ladeNotizen/notizenAktion: nach jeder Änderung ist der Server
    die Wahrheit, es wird nichts lokal geraten. Die Revision verhindert, dass
    der Minutentakt den Bestand blind ersetzt und neu zeichnet. */
-let hausaufgaben = { rev: 0, items: [], limits: {} };
+let hausaufgaben = { rev: 0, items: [], limits: {}, exams: [], examRev: 0 };
 let hwGeladen = false, hwLaden = false, hwWartende = [];
 
 function homeworkMoeglich() {
@@ -12822,11 +12859,16 @@ function ladeHausaufgaben(danach) {
   aiPost('/homework', { action: 'list' }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true) { fertig(); return; }
-    if (hwGeladen && (j.rev || 0) === (hausaufgaben.rev || 0)) { fertig(); return; }
+    /* BEIDE Revisionen: eine neue Klassenarbeit aendert den Hausaufgaben-
+       Bestand nicht — mit der einen allein kaeme sie nie an (24.09.2026). */
+    if (hwGeladen && (j.rev || 0) === (hausaufgaben.rev || 0)
+        && (j.examRev || 0) === (hausaufgaben.examRev || 0)) { fertig(); return; }
     hausaufgaben = {
       rev: j.rev || 0,
       items: Array.isArray(j.items) ? j.items : [],
-      limits: j.limits || {}
+      limits: j.limits || {},
+      exams: Array.isArray(j.exams) ? j.exams : [],
+      examRev: j.examRev || 0
     };
     hwGeladen = true;
     fertig();
@@ -12956,6 +12998,9 @@ function hwListeHtml(ids, mitAvatar) {
   const subjects = (stundenplan && stundenplan.subjects) || [];
   const gruppen = hwGruppen(hwOffene(hausaufgaben.items, '')
     .filter(i => ids.includes(String(i.childId))), localDayStr(new Date()));
+  /* Die anstehenden Pruefungen stehen OBEN — sie sind das, worauf man sich
+     vorbereitet (24.09.2026). */
+  const pruefungen = hwPruefungenHtml(ids, mitAvatar, subjects);
   const bloecke = [
     ['ueberfaellig', translate('Overdue')],
     ['heute', translate('Today')],
@@ -12963,7 +13008,7 @@ function hwListeHtml(ids, mitAvatar) {
     ['spaeter', translate('Later')],
     ['offen', translate('no date')]
   ];
-  let html = '';
+  let html = pruefungen;
   if (bloecke.every(([k]) => gruppen[k].length === 0)) {
     html += `<div class="hw-leer">${escapeHtml(translate('Nothing to do — well done!'))}</div>`;
   }
@@ -12989,6 +13034,67 @@ function hwListeHtml(ids, mitAvatar) {
     }
   }
   return html;
+}
+
+/**
+ * Die anstehenden Pruefungen aus WebUntis, als Block ueber den Hausaufgaben.
+ *
+ * Eigene Klassen und KEIN .hw-zeile oder data-hw: an diesen Merkmalen haengt
+ * hwBinden Abhaken, Oeffnen und Wischen — und eine Pruefung ist nichts
+ * davon. Gelesen wird nur ab heute: der Stand kann aelter sein als der Tag.
+ */
+function hwPruefungenHtml(ids, mitAvatar, subjects) {
+  const heute = localDayStr(new Date());
+  const liste = (Array.isArray(hausaufgaben.exams) ? hausaufgaben.exams : [])
+    .filter(p => p && ids.includes(String(p.childId)) && String(p.date || '') >= heute);
+  if (liste.length === 0) return '';
+  let html = `<div class="hw-gruppe hw-pruef-kopf">${escapeHtml(translate('Exams'))}</div>`;
+  liste.forEach(p => {
+    const fach = hwFachInfo(p.subject, subjects);
+    const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}"` : '';
+    const weg = p.status === 'entfall';
+    const titel = String(p.title || '').trim();
+    // Der Titel sagt, WAS geschrieben wird — das Fach steht dann darunter.
+    const mitTitel = titel !== '' && titel.toLowerCase() !== String(fach.name).toLowerCase();
+    const unten = [mitTitel ? fach.name : '', pruefDatumText(p.date), String(p.start || '')]
+      .filter(x => x).join(' · ');
+    html += `<div class="hw-pruefung${weg ? ' entfallen' : ''}"` +
+      ` title="${escapeHtml([mitTitel ? titel : fach.name, unten, [p.room, p.teacher].filter(x => x).join(' · ')]
+        .filter(x => x).join(' — '))}">` +
+      `<span class="hw-fach"${farbe}>` +
+        (fach.icon ? `<i class="fa-light ${escapeHtml(fach.icon)}"></i>` : '') +
+      `</span>` +
+      `<span class="hw-text">` +
+        `<span class="hw-name"><i class="fa-light fa-file-pen hw-pruef-sym"></i>` +
+          `${escapeHtml(mitTitel ? titel : fach.name)}</span>` +
+        `<span class="hw-notiz">${escapeHtml(unten)}</span>` +
+      `</span>` +
+      `<span class="hw-faellig">${escapeHtml(weg ? translate('cancelled') : pruefAbstandText(p.date))}</span>` +
+      (mitAvatar ? `<span class="cal-side"><span class="cal-chips">` +
+        `${renderAvatarStack([String(p.childId)])}</span></span>` : '') +
+    `</div>`;
+  });
+  return html;
+}
+
+/** „Do 08.10." */
+function pruefDatumText(iso) {
+  const d = new Date(String(iso || '') + 'T12:00:00');
+  if (isNaN(d.getTime())) return String(iso || '');
+  const wochentage = [translate('Sun'), translate('Mon'), translate('Tue'), translate('Wed'),
+    translate('Thu'), translate('Fri'), translate('Sat')];
+  return wochentage[d.getDay()] + ' ' + stundenplanDatumKurz(iso);
+}
+
+/** „heute", „morgen", „in 14 Tagen" — ab heute. */
+function pruefAbstandText(iso) {
+  const d = new Date(String(iso || '') + 'T12:00:00');
+  const h = new Date(localDayStr(new Date()) + 'T12:00:00');
+  if (isNaN(d.getTime())) return '';
+  const n = Math.round((d.getTime() - h.getTime()) / 86400000);
+  if (n <= 0) return translate('Today');
+  if (n === 1) return translate('Tomorrow');
+  return String(translate('in %d days')).replace('%d', String(n));
 }
 
 /**
@@ -13111,6 +13217,8 @@ function hwQuellenText(eintrag) {
   const q = String((eintrag && eintrag.source) || '');
   if (q === 'untis') return translate('Source: UNTIS');
   if (q === 'moodle') return translate('Source: LOGINEO');
+  // Die Lern-Erinnerung vor einer Pruefung — angelegt vom Gateway (24.09.2026).
+  if (q === 'exam') return translate('Source: exam (UNTIS)');
   return translate('Source: SymDo');
 }
 

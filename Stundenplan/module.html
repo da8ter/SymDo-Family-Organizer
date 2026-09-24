@@ -393,6 +393,13 @@
   .stunde.lage-termin { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7); }
   .stunde.lage-termin .fach { font-style: italic; }
   .stueck.lage-termin { box-shadow: inset 0 0 0 1px rgba(255,255,255,.55); }
+  /* Die Klassenarbeit (24.09.2026): sie FINDET statt, aber sie ist keine
+     Stunde wie jede andere — ein kraeftiger heller Rahmen, die Fachfarbe
+     bleibt. WORTGLEICH zur Web-App. Entfaellt sie, gilt das Bild des Entfalls. */
+  .stunde.lage-pruefung { box-shadow: inset 0 0 0 2px rgba(255,255,255,.95); }
+  .stunde.lage-pruefung .fach { font-weight: 800; }
+  .stueck.lage-pruefung { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.95); }
+  .stunde.lage-pruefung.lage-entfall, .stueck.lage-pruefung.lage-entfall { box-shadow: none; }
   .stunde.jetzt { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55); }
   .stunde.betreuung { color: #fff; }
 
@@ -1735,10 +1742,19 @@
              gepflegte Stunden tragen das Feld nicht — dann bleibt alles wie
              bisher. */
           const lage = ['entfall', 'vertretung', 'termin'].indexOf(s.status) >= 0 ? s.status : '';
-          const marke = lage === 'entfall' ? 'entfällt'
+          /* Eine KLASSENARBEIT schlaegt die Vertretung: dass geschrieben wird,
+             ist die Auskunft (24.09.2026). Entfaellt sie, bleibt der Entfall
+             sichtbar — beides zusammen. */
+          const pruefung = s.exam === true;
+          const lagen = pruefung ? ' lage-pruefung' + (lage === 'entfall' ? ' lage-entfall' : '')
+            : (lage ? ' lage-' + lage : '');
+          const marke = pruefung ? (lage === 'entfall' ? 'Prüfung entfällt' : 'Prüfung')
+            : (lage === 'entfall' ? 'entfällt'
             : (lage === 'vertretung'
                 ? 'Vertretung' + (s.insteadOf ? ' statt ' + s.insteadOf : '')
-                : (lage === 'termin' ? 'Termin' : ''));
+                : (lage === 'termin' ? 'Termin' : '')));
+          const pruefTitel = pruefung && s.examTitle
+            && String(s.examTitle).toLowerCase() !== String(s.name || '').toLowerCase() ? s.examTitle : '';
           /* Zusammen brauchen sie 8 (Innenabstand) + 22 (Fachsymbol)
              + 3 (Ueberstand des roten Punktes) + 16 (Hausaufgaben-Symbol)
              + 8 (Innenabstand) = 57px. Die kuerzeste Karte ist 45 Minuten
@@ -1748,16 +1764,17 @@
              das Fachsymbol von der oberen. */
           const engeKarte = s.hw && h < 57;
           spalten += '<div class="stunde' + (s.next ? ' jetzt' : '')
-            + (s.care ? ' betreuung' : '') + (lage ? ' lage-' + lage : '')
+            + (s.care ? ' betreuung' : '') + lagen
             + (engeKarte ? ' hw-eng' : '') + '" title="'
             + esc(s.name + ', ' + s.start + ' – ' + s.end + (wo ? ', ' + wo : '')
-                  + (marke ? ' — ' + marke : ''))
+                  + (marke ? ' — ' + marke : '') + (pruefTitel ? ': ' + pruefTitel : ''))
             + '" style="background:' + esc(s.color)
             + ';top:' + y(s.from) + 'px;height:' + h + 'px">'
             + (s.icon ? '<span class="sym">' + symbol(s.icon) + '</span>' : '')
             + '<div><div class="fach">' + esc(s.name) + '</div>'
             + '<div class="zeit">' + esc(s.start) + ' – ' + esc(s.end) + '</div>'
             + (marke ? '<div class="wo zustand">' + esc(marke) + '</div>' : '')
+            + (pruefTitel ? '<div class="wo">' + esc(pruefTitel) + '</div>' : '')
             + (wo ? '<div class="wo">' + esc(wo) + '</div>' : '')
             + '</div>'
             /* Offene Hausaufgaben zu dieser Stunde. Die Zahl kommt vom Modul
@@ -2056,11 +2073,19 @@
            deshalb in den Tipp, wo schon Fach und Zeit stehen. */
         const wo = [s.room, s.teacher].filter(function (t) { return t; }).join(' · ');
         const lage = ['entfall', 'vertretung', 'termin'].indexOf(s.status) >= 0 ? s.status : '';
-        const marke = lage === 'entfall' ? 'entfällt'
-          : (lage === 'vertretung' ? 'Vertretung' : (lage === 'termin' ? 'Termin' : ''));
+        // Eine Klassenarbeit schlaegt die Vertretung (siehe Wochenraster).
+        const pruefung = s.exam === true;
+        const lagen = pruefung ? ' lage-pruefung' + (lage === 'entfall' ? ' lage-entfall' : '')
+          : (lage ? ' lage-' + lage : '');
+        const marke = pruefung ? (lage === 'entfall' ? 'Prüfung entfällt' : 'Prüfung')
+          : (lage === 'entfall' ? 'entfällt'
+          : (lage === 'vertretung' ? 'Vertretung' : (lage === 'termin' ? 'Termin' : '')));
+        const pruefTitel = pruefung && s.examTitle ? String(s.examTitle) : '';
         /* Bei einer Vertretung nennt WebUntis die weggefallene Lehrkraft mit —
            „statt Kais" sagt mehr als „Vertretung" allein. */
-        const statt = (s.status === 'vertretung' && s.insteadOf) ? ' statt ' + s.insteadOf : '';
+        const statt = (!pruefung && s.status === 'vertretung' && s.insteadOf) ? ' statt ' + s.insteadOf : '';
+        // Die Pruefung traegt ihren Titel im Balken, solange sie stattfindet.
+        const mitTitel = s.status === 'vertretung' || s.status === 'termin' || (pruefung && lage !== 'entfall');
         /* Entfallen heisst: gestrichelte Kontur und eine Fuellung derselben
            Fachfarbe zu 50 %. Die stattfindende Stunde bleibt kraeftig — der
            Unterschied ist damit auf einen Blick zu sehen, und was unter der
@@ -2075,7 +2100,7 @@
            ihnen ueberdeckt. Also bis zur naechsten Stunde, die auf ihm liegt,
            und 26 px ab fuer Zeichen und Abstaende. */
         let titelBreite = '';
-        if (s.status === 'vertretung' || s.status === 'termin') {
+        if (mitTitel) {
           let naechst = s.to;
           slots.forEach(function (x) {
             if (x !== s && x.from > s.from && x.from < naechst) { naechst = x.from; }
@@ -2083,10 +2108,10 @@
           const anteil = Math.max(0, naechst - s.from) / Math.max(1, s.to - s.from);
           titelBreite = ' style="max-width:calc(' + (anteil * 100).toFixed(1) + '% - 26px)"';
         }
-        stuecke += '<div class="stueck' + (erster ? ' erst' : '') + (lage ? ' lage-' + lage : '')
+        stuecke += '<div class="stueck' + (erster ? ' erst' : '') + lagen
           + (s.hw ? ' hat-hw' : '') + '" title="'
           + esc(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : '')
-                + (marke ? ' — ' + marke + statt : '')
+                + (marke ? ' — ' + marke + statt : '') + (pruefTitel ? ': ' + pruefTitel : '')
                 + (s.hw ? ' — ' + s.hw + ' Hausaufgabe(n)' + (s.hwText ? ': ' + s.hwText : '') : '')) + '"'
           + ' style="left:' + (a * 100) + '%;width:' + breite + '%;background:' + esc(fuellung)
           + ';border-top-left-radius:' + (rundum ? '999px' : (erster ? r : '0'))
@@ -2100,10 +2125,10 @@
           /* Vertretung und Termin tragen ihren Titel IM Balken, davor ein
              eigenes Zeichen: der Tausch bei der Vertretung, der Kalender beim
              Termin. Ein Ausflug heisst „Waldschule" und nicht „Biologie". */
-          + (s.status === 'vertretung' || s.status === 'termin'
-              ? symbol(s.status === 'termin' ? 'fa-calendar-star' : 'fa-right-left')
-                + '<span class="titel"' + titelBreite + '>' + esc(s.name || '') + '</span>'
-              : symbol(s.icon))
+          + (mitTitel
+              ? symbol(pruefung ? 'fa-file-pen' : (s.status === 'termin' ? 'fa-calendar-star' : 'fa-right-left'))
+                + '<span class="titel"' + titelBreite + '>' + esc((pruefung && pruefTitel) || s.name || '') + '</span>'
+              : symbol(pruefung ? 'fa-file-pen' : s.icon))
           + '</div>';
       });
 

@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+/* Das Rechenwerk der Pruefungen. HIER eingebunden und nicht im Modul: die
+   Scanner-Instanz bindet nur diese Datei ein, und eine fehlende Klasse waere
+   dort ein Fatal mitten im Lauf. */
+require_once __DIR__ . '/UntisPruefungCalc.php';
+
 /**
  * WebUntis — die LESENDE Haelfte.
  *
@@ -35,6 +40,16 @@ trait UntisLesen
        undefinierte Methode. */
     private const UNTIS_CLIENT      = 'SymDo';   // Selbstauskunft in den Zugriffen der Schule
     private const UNTIS_TAGE_VOR    = 14;        // so weit im Voraus wird geholt
+    /**
+     * So weit voraus werden PRUEFUNGEN gelesen — und nur sie (24.09.2026).
+     *
+     * Der Stundenplan bleibt beim Fenster von 14 Tagen: er wird geschrieben,
+     * und alles dahinter (Wochenvorlage, Kurswahl, datierte Tage) soll genau
+     * das sehen, was es bisher sah. Eine Klassenarbeit steht dagegen oft Wochen
+     * vorher im Plan, und genau diese Vorwarnung ist der Wert. Gemessen: 98 Tage
+     * kamen in EINEM Abruf, 216 KB.
+     */
+    private const UNTIS_PRUEFUNG_TAGE = 56;
     /**
      * So weit ZURUECK werden die Hausaufgaben geholt — und NUR sie.
      *
@@ -407,9 +422,14 @@ trait UntisLesen
 
     private function UntisKindErnten(array $kind, array $raster, bool $mitHausaufgaben): array
     {
-        $nein = static fn(string $m): array => ['ok' => false, 'meldung' => $m,
+        /* `pruefungen` reist auch in der Absage mit: „keine Stunden im
+           Zeitraum" heisst in den Ferien, dass das PLANfenster leer ist — die
+           Klassenarbeit am ersten Tag danach liegt trotzdem im weiten Fenster.
+           null = unbekannt (dann fasst das Gateway den Stand nicht an). */
+        $nein = static fn(string $m, ?array $pruefungen = null): array => ['ok' => false, 'meldung' => $m,
             'stunden' => 0, 'tage' => [], 'datiert' => [], 'auffaellig' => [], 'offen' => 0,
-            'verworfen' => [], 'slots' => [], 'klassen' => '', 'hausaufgaben' => null, 'nr' => 0];
+            'verworfen' => [], 'slots' => [], 'klassen' => '', 'hausaufgaben' => null, 'nr' => 0,
+            'pruefungen' => $pruefungen];
 
         /* Ohne Zuordnung in der Zielinstanz wuerde der Import mit
            „unknown_child" abgewiesen — dann lieber gleich sagen, was fehlt,
@@ -480,19 +500,44 @@ trait UntisLesen
            öffentlich dokumentiert, deshalb bleibt die JSON-RPC als Rückfall
            stehen — fällt die Ansicht aus, ändert sich am Plan nur, dass
            Termine wieder wie Vertretungen aussehen. */
-        $stunden = $this->UntisPlanRest($typ, $nr, $von, $bis);
+        /* Das WEITE Fenster: bis UNTIS_PRUEFUNG_TAGE, damit eine Klassenarbeit
+           Wochen vorher bekannt ist. Scheitert DIESER Abruf, wird die Ansicht mit
+           dem alten Fenster wiederholt, BEVOR die JSON-RPC einspringt — sonst
+           risse ein zu grosses Fenster den ganzen Plan mit (Termine saehen dann
+           wieder wie Vertretungen aus). Die Pruefungen gelten in dem Fall als
+           unbekannt. */
+        $bisWeit = (int)date('Ymd', strtotime('+' . self::UNTIS_PRUEFUNG_TAGE . ' days'));
+        $alle = $this->UntisPlanRest($typ, $nr, $von, $bisWeit);
+        $pruefungenBekannt = $alle !== null && $alle !== [];
+        if (!$pruefungenBekannt) {
+            $alle = $this->UntisPlanRest($typ, $nr, $von, $bis);
+        }
         $quelle = 'rest';
-        if ($stunden === null || $stunden === []) {
+        if ($alle === null || $alle === []) {
             $quelle = 'rpc';
+            /* Die RPC kennt Pruefungen nur ungefaehr (lstype „ex"). Ein Rueckfall
+               darf den gemerkten Stand deshalb nicht leeren: unbekannt. */
+            $pruefungenBekannt = false;
             $params['options']['element'] = ['id' => $nr, 'type' => $typ];
             $r = $this->UntisRpc('getTimetable', $params);
             if (($r['ok'] ?? false) !== true) {
                 return $nein($kind['name'] . ': ' . (string)($r['message'] ?? '?'));
             }
-            $stunden = is_array($r['result'] ?? null) ? $r['result'] : [];
+            $alle = is_array($r['result'] ?? null) ? $r['result'] : [];
         }
-        $this->SendDebug('WebUntis', sprintf('%s: %d Stunden über %s',
-            (string)$kind['name'], count($stunden), $quelle), 0);
+        /* Der PLAN sieht genau das bisherige Fenster: Wochenvorlage, datierte
+           Tage, Meldungen, die Kurswahl-Liste des Formulars und die Leer-Pruefung
+           unten bleiben damit, wie sie waren. Nur die Pruefungen lesen weiter. */
+        $stunden = array_values(array_filter($alle,
+            static fn(mixed $st): bool => is_array($st) && (int)($st['date'] ?? 0) <= $bis));
+        $pruefungen = null;
+        $pruefungWeg = [];
+        if ($pruefungenBekannt) {
+            [$pruefungen, $pruefungWeg] = $this->UntisPruefungenLesen($alle, $this->UntisKurstext($kind), $bis);
+        }
+        $this->SendDebug('WebUntis', sprintf('%s: %d Stunden über %s, %s Prüfung(en)',
+            (string)$kind['name'], count($stunden), $quelle,
+            $pruefungen === null ? '?' : (string)count($pruefungen)), 0);
         /* Die Klasse steht in den Stunden des Kindes. Sie gehoert in den
            Bericht: dort steht dann, WELCHER Plan geholt wurde — und wer den
            Klassenplan statt des Kindplans will, findet die Nummer, ohne sie in
@@ -520,7 +565,7 @@ trait UntisLesen
             $this->SendDebug('WebUntis', 'Klasse(n): ' . $klassenText, 0);
         }
         if ($stunden === []) {
-            return $nein(sprintf($this->Translate('%s: no lessons in the period.'), $kind['name']));
+            return $nein(sprintf($this->Translate('%s: no lessons in the period.'), $kind['name']), $pruefungen);
         }
 
         /* Der Merker gilt je Kind: leeren, abbilden, mitgeben. Frueher stand er
@@ -530,6 +575,14 @@ trait UntisLesen
         [$tage, $datiert, $auffaellig, $offen, $verworfen] = $this->UntisAbbilden($stunden, $raster, $this->UntisKurstext($kind));
         $slots = $this->untisSlots;
         $this->untisSlots = [];
+        /* Pruefungen melden sich SELBST (Gateway, UntisPruefungenEinpflegen) —
+           auch eine geaenderte. Blieben sie hier, kaeme zur Meldung „Pruefung
+           entfaellt" noch „Deutsch entfaellt" bzw. „Deutsch vertreten". */
+        $auffaellig = array_values(array_filter($auffaellig,
+            static fn(array $a): bool => ($a['exam'] ?? false) !== true));
+        // Pruefungen HINTER dem Planfenster, die an einer ungeklaerten
+        // Ueberschneidung scheiterten — die davor zaehlt UntisAbbilden selbst.
+        $verworfen = array_merge($verworfen, $pruefungWeg);
 
         /* Die Hausaufgaben ZULETZT, und in derselben Sitzung. Zuletzt, weil der
            Plan die Hauptsache ist: faellt der Zusatz aus, steht der Stundenplan
@@ -553,7 +606,66 @@ trait UntisLesen
         return ['ok' => true, 'meldung' => '', 'stunden' => count($stunden),
                 'tage' => $tage, 'datiert' => $datiert, 'auffaellig' => $auffaellig,
                 'offen' => $offen, 'verworfen' => $verworfen, 'slots' => $slots,
-                'klassen' => $klassenText, 'hausaufgaben' => $hausaufgaben, 'nr' => $nr];
+                'klassen' => $klassenText, 'hausaufgaben' => $hausaufgaben, 'nr' => $nr,
+                'pruefungen' => $pruefungen];
+    }
+
+    /**
+     * Die Pruefungen eines Kindes aus dem WEITEN Fenster.
+     *
+     * Dieselbe Kurswahl wie beim Plan — der Klassenplan traegt die
+     * Religionsarbeit aller Kurse —, aber ohne ihre Nebenwirkung: mit Wochentag
+     * 0 sammelt UntisKurseWaehlen keine Ueberschneidungen fuer das Formular.
+     * Sonst wuchsen der Kurswahl-Liste Zeilen aus den Wochen drei bis acht.
+     *
+     * @param list<array<string,mixed>> $alle Stunden des weiten Fensters
+     * @return array{0:list<array<string,mixed>>, 1:list<string>} Pruefungen und,
+     *         HINTER dem Planfenster, die an einer ungeklaerten Ueberschneidung
+     *         gescheiterten (als Zeile fuer die Statusmeldung)
+     */
+    private function UntisPruefungenLesen(array $alle, string $kurse, int $planBis): array
+    {
+        $jeDatum = [];
+        foreach ($alle as $st) {
+            $b = is_array($st) ? $this->UntisSlotBauen($st) : null;
+            if ($b !== null) {
+                $jeDatum[$b['datum']][] = $b['slot'];
+            }
+        }
+        ksort($jeDatum);
+        $roh = [];
+        $weg = [];
+        foreach ($jeDatum as $datum => $slots) {
+            $mitPruefung = array_filter($slots, static fn(array $s): bool => ($s['exam'] ?? false) === true);
+            if ($mitPruefung === []) {
+                continue;
+            }
+            [$gewaehlt, , , $pruefungWeg] = $this->UntisKurseWaehlen($slots, $kurse, 0);
+            $iso = substr((string)$datum, 0, 4) . '-' . substr((string)$datum, 4, 2) . '-' . substr((string)$datum, 6, 2);
+            foreach ($gewaehlt as $s) {
+                if (($s['exam'] ?? false) !== true) {
+                    continue;
+                }
+                $roh[] = [
+                    'ids'     => (int)($s['pid'] ?? 0) > 0 ? [(int)$s['pid']] : [],
+                    'date'    => $iso,
+                    'start'   => (string)$s['start'],
+                    'end'     => (string)$s['end'],
+                    'subject' => (string)$s['subject'],
+                    'title'   => (string)($s['examTitle'] ?? ''),
+                    'room'    => (string)($s['room'] ?? ''),
+                    'teacher' => (string)($s['teacher'] ?? ''),
+                    'status'  => (string)$s['status'],
+                ];
+            }
+            if ((int)$datum > $planBis) {
+                foreach ($pruefungWeg as $s) {
+                    $weg[] = date('d.m.', (int)strtotime($iso)) . ' ' . (string)$s['start'] . ' '
+                        . $this->Translate('Exam') . ' ' . (string)$s['subject'];
+                }
+            }
+        }
+        return [UntisPruefungCalc::Zusammenfassen($roh), $weg];
     }
 
     /**
@@ -669,6 +781,28 @@ trait UntisLesen
         }
         $zeit = static fn(string $iso): int
             => (int)(substr($iso, 11, 2) . substr($iso, 14, 2));
+        /* Eine KLASSENARBEIT ist ein eigener Eintragstyp (am 24.09.2026
+           gemessen: `type: EXAM`, der Titel in `lessonInfo` und noch einmal als
+           INFO-Element). Die Nummer (`ids[0]`) haelt sie ueber mehrere Abrufe
+           wieder erkennbar. */
+        $pruefung = $typ === 'EXAM';
+        $titel = '';
+        if ($pruefung) {
+            $titel = trim((string)($e['lessonInfo'] ?? ''));
+            if ($titel === '' && isset($sammeln['INFO'][0])) {
+                $titel = (string)($sammeln['INFO'][0]['longname'] ?: $sammeln['INFO'][0]['name']);
+            }
+            if ($titel === '') {
+                $titel = trim((string)($e['lessonText'] ?? ''));
+            }
+        }
+        $pid = 0;
+        foreach ((array)($e['ids'] ?? []) as $x) {
+            if (is_numeric($x) && (int)$x > 0) {
+                $pid = (int)$x;
+                break;
+            }
+        }
         return [
             'date'      => (int)str_replace('-', '', substr($start, 0, 10)),
             'startTime' => $zeit($start),
@@ -684,6 +818,9 @@ trait UntisLesen
             'info'      => $info,
             'insteadOf' => implode(', ', array_unique($ersetzt)),
             'activityType' => 'Unterricht',
+            'exam'      => $pruefung,
+            'examTitle' => mb_substr($titel, 0, UntisPruefungCalc::TITEL_MAX),
+            'pid'       => $pid,
         ];
     }
 
@@ -856,57 +993,10 @@ trait UntisLesen
         $auffaellig = [];
         $ersteWoche = [];
         foreach ($stunden as $st) {
-            $datum = (string)($st['date'] ?? '');
-            if (strlen($datum) !== 8) {
-                continue;
+            $b = is_array($st) ? $this->UntisSlotBauen($st) : null;
+            if ($b !== null) {
+                $ersteWoche[$b['wt']][$b['datum']][] = $b['slot'];
             }
-            $zeit = strtotime(substr($datum, 0, 4) . '-' . substr($datum, 4, 2) . '-' . substr($datum, 6, 2));
-            $wochentag = (int)date('N', (int)$zeit);        // 1 = Montag
-            if ($wochentag > 6) {
-                continue;                                    // Sonntag kennt das Modul nicht
-            }
-            $code = strtolower(trim((string)($st['code'] ?? '')));
-            /* Der Eintragstyp entscheidet ZUERST: eine Veranstaltung ist keine
-               Vertretung, auch wenn WebUntis sie als „geändert" führt. Das Feld
-               gibt es nur aus der neuen Ansicht; ohne es gilt wie bisher der
-               Code allein. */
-            $art = strtoupper(trim((string)($st['kind'] ?? '')));
-            if ($art === 'EVENT') {
-                $status = 'termin';
-            } else {
-                $status = $code === 'cancelled' ? 'entfall' : ($code === 'irregular' ? 'vertretung' : 'normal');
-            }
-            /* Ganztagsblöcke wie „Projekttag" kommen OHNE Fach, aber mit Text.
-               Ohne diesen Rueckfall stuende dort ein Fragezeichen im Plan. */
-            $fach = $this->UntisFeld($st, 'su', 'longname') ?: $this->UntisFeld($st, 'su', 'name');
-            /* Bei einer Veranstaltung gewinnt IHR Name: der Ausflug heißt
-               „Waldschule" und nicht „Biologie", auch wenn er an der
-               Biologiestunde hängt. */
-            if ($status === 'termin' && trim((string)($st['info'] ?? '')) !== '') {
-                $fach = trim((string)$st['info']);
-            }
-            if ($fach === '') {
-                $fach = trim((string)($st['substText'] ?? ($st['info'] ?? '')));
-            }
-            if ($fach === '') {
-                $fach = $this->Translate('Lesson');
-            }
-            $slot = [
-                'subject' => $fach,
-                'start'   => $this->UntisZeit((int)($st['startTime'] ?? 0)),
-                'end'     => $this->UntisZeit((int)($st['endTime'] ?? 0)),
-                'room'    => $this->UntisFeld($st, 'ro', 'name'),
-                'teacher' => $this->UntisFeld($st, 'te', 'name'),
-                'status'  => $status,
-                // Wer ersetzt wurde — nur die neue Ansicht nennt es.
-                'insteadOf' => trim((string)($st['insteadOf'] ?? '')),
-                // Grund der Abweichung, fuer Meldung und Briefing.
-                'grund'   => trim((string)($st['substText'] ?? ($st['info'] ?? ''))),
-            ];
-            if ($slot['start'] === '' || $slot['end'] === '') {
-                continue;
-            }
-            $ersteWoche[$wochentag][$datum][] = $slot;
         }
         /* Je Wochentag EIN Termin. Genommen wird der fruehste — das ist die
            laufende oder kommende Woche und damit der Plan, der gilt.
@@ -971,7 +1061,11 @@ trait UntisLesen
             if ($genommen === '') {
                 $genommen = (string)array_key_first($termine);
             }
-            $tage[$wt] = $termine[$genommen];
+            /* Eine Klassenarbeit ist kein WOCHENmuster: faellt der Tag, der die
+               Vorlage stellt, auf eine Pruefung, steht dort die Stunde — sonst
+               stuende die KA jeden Donnerstag im Plan. */
+            $tage[$wt] = array_map(static fn(array $s): array
+                => ['exam' => false, 'examTitle' => ''] + $s, $termine[$genommen]);
         }
         ksort($tage);
 
@@ -982,6 +1076,88 @@ trait UntisLesen
             $offen += $n;
         }
         return [$tage, $datiert, $auffaellig, $offen, $verworfen];
+    }
+
+    /**
+     * EINE Stunde aus WebUntis in die Slot-Form des Stundenplan-Moduls.
+     *
+     * Herausgezogen aus UntisAbbilden, weil zwei Durchgaenge sie brauchen: der
+     * Plan (14 Tage) und die Pruefungen (UNTIS_PRUEFUNG_TAGE). Zwei Fassungen
+     * derselben Zuordnung liefen irgendwann auseinander.
+     *
+     * @param array<string,mixed> $st
+     * @return array{datum:string, wt:int, slot:array<string,mixed>}|null
+     *         null: kein Datum, Sonntag oder keine Uhrzeit
+     */
+    private function UntisSlotBauen(array $st): ?array
+    {
+        $datum = (string)($st['date'] ?? '');
+        if (strlen($datum) !== 8) {
+            return null;
+        }
+        $zeit = strtotime(substr($datum, 0, 4) . '-' . substr($datum, 4, 2) . '-' . substr($datum, 6, 2));
+        $wochentag = (int)date('N', (int)$zeit);        // 1 = Montag
+        if ($wochentag > 6) {
+            return null;                                 // Sonntag kennt das Modul nicht
+        }
+        $code = strtolower(trim((string)($st['code'] ?? '')));
+        /* Der Eintragstyp entscheidet ZUERST: eine Veranstaltung ist keine
+           Vertretung, auch wenn WebUntis sie als „geändert" führt. Das Feld
+           gibt es nur aus der neuen Ansicht; ohne es gilt wie bisher der
+           Code allein. */
+        $art = strtoupper(trim((string)($st['kind'] ?? '')));
+        if ($art === 'EVENT') {
+            $status = 'termin';
+        } else {
+            $status = $code === 'cancelled' ? 'entfall' : ($code === 'irregular' ? 'vertretung' : 'normal');
+        }
+        /* Die Pruefung: aus der neuen Ansicht als Merkmal, aus der alten
+           JSON-RPC als `lstype: ex`. Dort steht der Titel, wenn ueberhaupt, im
+           Stundentext. */
+        $pruefung = ($st['exam'] ?? false) === true
+            || strtolower(trim((string)($st['lstype'] ?? ''))) === 'ex';
+        $titel = $pruefung
+            ? (trim((string)($st['examTitle'] ?? '')) ?: trim((string)($st['lstext'] ?? '')))
+            : '';
+        /* Ganztagsblöcke wie „Projekttag" kommen OHNE Fach, aber mit Text.
+           Ohne diesen Rueckfall stuende dort ein Fragezeichen im Plan. */
+        $fach = $this->UntisFeld($st, 'su', 'longname') ?: $this->UntisFeld($st, 'su', 'name');
+        /* Bei einer Veranstaltung gewinnt IHR Name: der Ausflug heißt
+           „Waldschule" und nicht „Biologie", auch wenn er an der
+           Biologiestunde hängt. */
+        if ($status === 'termin' && trim((string)($st['info'] ?? '')) !== '') {
+            $fach = trim((string)$st['info']);
+        }
+        // Eine Pruefung ohne Fach heisst wie sie selbst, nicht „Stunde".
+        if ($fach === '' && $pruefung) {
+            $fach = $titel;
+        }
+        if ($fach === '') {
+            $fach = trim((string)($st['substText'] ?? ($st['info'] ?? '')));
+        }
+        if ($fach === '') {
+            $fach = $this->Translate('Lesson');
+        }
+        $slot = [
+            'subject' => $fach,
+            'start'   => $this->UntisZeit((int)($st['startTime'] ?? 0)),
+            'end'     => $this->UntisZeit((int)($st['endTime'] ?? 0)),
+            'room'    => $this->UntisFeld($st, 'ro', 'name'),
+            'teacher' => $this->UntisFeld($st, 'te', 'name'),
+            'status'  => $status,
+            // Wer ersetzt wurde — nur die neue Ansicht nennt es.
+            'insteadOf' => trim((string)($st['insteadOf'] ?? '')),
+            // Grund der Abweichung, fuer Meldung und Briefing.
+            'grund'   => trim((string)($st['substText'] ?? ($st['info'] ?? ''))),
+            'exam'      => $pruefung,
+            'examTitle' => mb_substr($titel, 0, UntisPruefungCalc::TITEL_MAX),
+            // Die Nummer aus WebUntis; das Stundenplan-Modul laesst sie fallen.
+            'pid'       => (int)($st['pid'] ?? ($st['id'] ?? 0)),
+        ];
+        if ($slot['start'] === '' || $slot['end'] === '') {
+            return null;
+        }
+        return ['datum' => $datum, 'wt' => $wochentag, 'slot' => $slot];
     }
 
     /**
@@ -997,10 +1173,28 @@ trait UntisLesen
      * Ein Eintrag mit MINUS davor („-AG") wirft ein Fach immer raus, auch wenn
      * es allein steht.
      *
-     * @return array{0:list<array<string,mixed>>, 1:int, 2:list<string>}
+     * @return array{0:list<array<string,mixed>>, 1:int, 2:list<string>, 3:list<array<string,mixed>>}
+     *         3 = Pruefungen, die an einer ungeklaerten Ueberschneidung scheiterten
      */
     private function UntisKurseWaehlen(array $slots, string $kurse, int $wochentag = 0): array
     {
+        /* Zweimal dasselbe Fach zur selben Zeit: welcher Eintrag bleibt? Bis zum
+           24.09.2026 der ERSTE — und stand die entfallene Deutschstunde vor der
+           Klassenarbeit, verschluckte sie die Arbeit. Jetzt eine Rangfolge:
+           Pruefung findet statt > Stunde findet statt > Pruefung entfaellt >
+           Stunde entfaellt. Bei gleichem Rang bleibt es beim ersten. */
+        $rang = static fn(array $s): int => ((string)($s['status'] ?? '') !== 'entfall' ? 2 : 0)
+            + (($s['exam'] ?? false) === true ? 1 : 0);
+        $einmalJeFach = static function (array $gruppe) use ($rang): array {
+            $nachFach = [];
+            foreach ($gruppe as $s) {
+                $k = mb_strtolower((string)$s['subject']);
+                if (!isset($nachFach[$k]) || $rang($s) > $rang($nachFach[$k])) {
+                    $nachFach[$k] = $s;
+                }
+            }
+            return $nachFach;
+        };
         /* ZUERST sammeln, WO sich Stunden ueberschneiden — und zwar bevor der
            Minus-Filter zuschlaegt: sonst faellt ein bereits abgewaehltes Fach
            aus der Auswahl heraus und liesse sich nie wieder waehlen.
@@ -1022,10 +1216,7 @@ trait UntisLesen
                    Liste eine Wahl, die es nicht gibt: zweimal derselbe
                    Fachname ist eine Doppelung, und ein Entfall neben einer
                    stattfindenden Stunde ist keine Wahl zwischen Kursen. */
-                $nachFach = [];
-                foreach ($gruppe as $s) {
-                    $nachFach[mb_strtolower((string)$s['subject'])] ??= $s;
-                }
+                $nachFach = $einmalJeFach($gruppe);
                 $stattfindend = array_filter($nachFach,
                     static fn(array $s): bool => (string)$s['status'] !== 'entfall');
                 $wahl = $stattfindend !== [] ? $stattfindend : $nachFach;
@@ -1080,16 +1271,14 @@ trait UntisLesen
            nicht lautlos passieren: der Nutzer sah einen freien Platz im Plan und
            erfuhr nie, dass zu dieser Zeit etwas ausfiel. */
         $verworfen = [];
+        $pruefungWeg = [];
         foreach ($nachZeit as $zeit => $gruppe) {
             /* ZUERST gleiche Faecher zusammenfassen: zweimal derselbe Name zur
                selben Zeit ist keine Wahl, sondern eine Doppelung (gemessen:
                „Individuelle Foerderung D/E/M" mittwochs 10:35 in zwei Gruppen).
-               Erst was danach uebrig bleibt, ist wirklich eine Wahl. */
-            $nachFach = [];
-            foreach ($gruppe as $s) {
-                $nachFach[mb_strtolower((string)$s['subject'])] ??= $s;
-            }
-            $gruppe = array_values($nachFach);
+               Erst was danach uebrig bleibt, ist wirklich eine Wahl. Welcher der
+               beiden bleibt, sagt die Rangfolge oben. */
+            $gruppe = array_values($einmalJeFach($gruppe));
             /* Ein Entfall und ein Ersatz zur selben Zeit sind keine Wahl
                zwischen Kursen — beides ist wahr. Am Projekttag stand um 8 Uhr
                der Block „Projekttag" NEBEN der entfallenen Mathematik; die
@@ -1124,7 +1313,13 @@ trait UntisLesen
                 $this->SendDebug('WebUntis', 'Ueberschneidung ' . $zeit . ' ungeklaert: '
                     . implode(', ', array_map(static fn(array $s): string => (string)$s['subject'], $gruppe)), 0);
                 foreach ($alle as $s) {
-                    if ((string)$s['status'] !== 'normal') {
+                    /* Eine PRUEFUNG, die hier verschwindet, ist die schlimmste
+                       Luecke von allen — sie steht auch mit Status „normal" in
+                       der Meldung. */
+                    if (($s['exam'] ?? false) === true) {
+                        $pruefungWeg[] = $s;
+                        $verworfen[] = (string)$zeit . ' ' . $this->Translate('Exam') . ' ' . (string)$s['subject'];
+                    } elseif ((string)$s['status'] !== 'normal') {
                         $verworfen[] = (string)$zeit . ' ' . (string)$s['subject'];
                     }
                 }
@@ -1133,15 +1328,17 @@ trait UntisLesen
             if (count($passend) > 1) {
                 // Mehrere ECHT verschiedene Treffer: die Kursliste entscheidet
                 // nicht. Die erste Stunde steht, der Rest wird gemeldet statt
-                // uebereinandergestapelt.
+                // uebereinandergestapelt — eine Pruefung darunter kommt nach
+                // vorn (stabil sortiert: sonst bleibt die Reihenfolge).
                 $offen++;
                 $this->SendDebug('WebUntis', 'Ueberschneidung ' . $zeit . ' mehrdeutig: '
                     . implode(', ', array_map(static fn(array $s): string => (string)$s['subject'], $passend)), 0);
+                usort($passend, static fn(array $a, array $b): int => $rang($b) <=> $rang($a));
             }
             $raus[] = $passend[0];
         }
         usort($raus, static fn(array $a, array $b): int => strcmp((string)$a['start'], (string)$b['start']));
-        return [$raus, $offen, $verworfen];
+        return [$raus, $offen, $verworfen, $pruefungWeg];
     }
 
     /** Ein Feld aus der Elementliste einer Stunde („su", „ro", „te"). */

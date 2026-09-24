@@ -634,7 +634,9 @@ class SymDoTimetable extends IPSModuleStrict
      * die interne Reihenfolge der Kinder nicht kennen muessen. Wochentage sind
      * 1 = Montag bis 6 = Samstag. „status": normal | vertretung | entfall |
      * termin (eine Veranstaltung: Ausflug, Projekttag). „insteadOf" nennt bei
-     * einer Vertretung die ersetzte Lehrkraft.
+     * einer Vertretung die ersetzte Lehrkraft. „exam": true bei einer
+     * Klassenarbeit, „examTitle" ihr Titel (hoechstens 80 Zeichen) — ein
+     * Merkmal neben dem Status, denn auch eine Pruefung kann entfallen.
      *
      * Geprueft wird ALLES vor dem ersten Schreiben. Ein halber Plan darf einen
      * guten nie ueberschreiben — lieber gar nichts und eine ehrliche Antwort.
@@ -749,6 +751,12 @@ class SymDoTimetable extends IPSModuleStrict
                 if (!in_array($status, ['normal', 'vertretung', 'entfall', 'termin'], true)) {
                     $status = 'normal';
                 }
+                /* Eine KLASSENARBEIT (24.09.2026). Ein Merkmal neben dem Status,
+                   kein fuenfter Status: eine Pruefung kann stattfinden,
+                   geaendert sein oder entfallen. Nur ein echtes true (oder 1)
+                   zaehlt — $text() machte aus true die Zeichenkette „1" und aus
+                   jedem Unsinn eine Pruefung. */
+                $pruefung = ($z['exam'] ?? false) === true || ($z['exam'] ?? 0) === 1;
                 $slots[] = [
                     'subject' => $fach,
                     'start'   => TimetableCalc::ZeitFeld($text($z['start'])),
@@ -760,7 +768,12 @@ class SymDoTimetable extends IPSModuleStrict
                        den weggefallenen Lehrer mit; ohne dieses Feld stuende
                        in der Kachel nur „Vertretung" statt „statt Kais". */
                     'insteadOf' => $text($z['insteadOf'] ?? ''),
-                ];
+                /* Nur an der Pruefung selbst: jede andere Stunde bleibt Zeichen
+                   fuer Zeichen, wie sie war — der Wochenplan steht in
+                   Eigenschaften, und ein neues Feld an jeder Stunde hiesse, sie
+                   alle beim ersten Abruf neu zu schreiben. */
+                ] + ($pruefung ? ['exam' => true,
+                                  'examTitle' => mb_substr($text($z['examTitle'] ?? ''), 0, 80)] : []);
                 $anzahl++;
             }
             usort($slots, static fn(array $a, array $b): int

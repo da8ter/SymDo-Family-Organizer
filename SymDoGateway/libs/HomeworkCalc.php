@@ -147,7 +147,11 @@ class HomeworkCalc
                deshalb nicht von Hand geaendert werden darf. Eine unbekannte
                Herkunft gilt als „app" — dann gehoert der Eintrag dem Nutzer,
                und kein Abruf fasst ihn an. */
-            'source'    => in_array((string)($roh['source'] ?? ''), ['app', 'voice', 'ai', 'edumaps', 'untis', 'moodle'], true)
+            /* `exam`: eine Lern-Erinnerung, die das Gateway vor einer Pruefung
+               anlegt (24.09.2026). Sie gehoert dem Kind wie ein von Hand
+               angelegter Eintrag — kein Abruf fasst sie an, die srcId sagt nur,
+               zu welcher Pruefung sie gehoert. */
+            'source'    => in_array((string)($roh['source'] ?? ''), ['app', 'voice', 'ai', 'edumaps', 'untis', 'moodle', 'exam'], true)
                 ? (string)$roh['source'] : 'app',
             'createdAt' => max(0, (int)($roh['createdAt'] ?? $jetzt)) ?: $jetzt,
             'updatedAt' => max(0, (int)($roh['updatedAt'] ?? $jetzt)) ?: $jetzt,

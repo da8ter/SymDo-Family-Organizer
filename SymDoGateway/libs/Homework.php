@@ -228,6 +228,12 @@ trait Homework
                 'rev'    => (int)$store['rev'],
                 'items'  => $items,
                 'limits' => ['items' => HomeworkCalc::ITEMS_MAX, 'note' => HomeworkCalc::NOTE_MAX],
+                /* Die anstehenden Pruefungen aus WebUntis (24.09.2026) — sie
+                   stehen oben in der Hausaufgabenliste. Mit EIGENER Revision:
+                   eine neue Klassenarbeit aendert den Hausaufgaben-Bestand
+                   nicht, und die Oberflaeche zeichnete sonst nie neu. */
+                'exams'   => $this->UntisPruefungenOeffentlich($kind),
+                'examRev' => $this->UntisPruefungenRev(),
             ];
         }
 
@@ -360,6 +366,87 @@ trait Homework
             return $this->HomeworkFehler('store_unwritable');
         }
         return ['ok' => true, 'rev' => (int)$store['rev'] + 1, 'item' => $satz];
+    }
+
+    /**
+     * Eintraege, die das Gateway SELBST fuehrt — heute die Lern-Erinnerungen
+     * vor einer Pruefung (WebUntis::UntisLernAbgleich).
+     *
+     * Anlegen, aendern und loeschen in EINEM Schreibvorgang unter der Sperre
+     * des Bestands. Die Sperre wartet nicht (0 ms, wie ueberall hier): ist sie
+     * belegt, sagt `ok:false`, und der Aufrufer versucht es beim naechsten Lauf
+     * — lieber eine Stunde spaeter als eine Nutzereingabe blockiert.
+     *
+     * Geaendert und geloescht wird nur, was noch OFFEN ist: ein Haekchen des
+     * Kindes nimmt kein Abruf zurueck.
+     *
+     * @param array<int|string, array<string,mixed>> $anlegen Schluessel => roher Eintrag
+     * @param array<string, array{due:string, note:string}> $aendern Kennung => Felder
+     * @param list<string> $loeschen Kennungen
+     * @return array{ok:bool, ids:array<int|string,string>} Schluessel aus $anlegen => neue Kennung
+     */
+    private function HomeworkSystemAbgleich(array $anlegen, array $aendern, array $loeschen): array
+    {
+        if ($anlegen === [] && $aendern === [] && $loeschen === []) {
+            return ['ok' => true, 'ids' => []];
+        }
+        $lock = self::HW_LOCK . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 0)) {
+            return ['ok' => false, 'ids' => []];
+        }
+        try {
+            $jetzt = time();
+            $heute = date('Y-m-d', $jetzt);
+            $store = $this->HomeworkStore();
+            $store['items'] = HomeworkCalc::Aufbewahrung($store['items'], $jetzt);
+            $offen = static fn(array $s): bool => ($s['done'] ?? false) !== true;
+            $geaendert = false;
+            $raus = [];
+            foreach ($store['items'] as $s) {
+                $id = (string)($s['id'] ?? '');
+                if (in_array($id, $loeschen, true) && $offen($s)) {
+                    $geaendert = true;
+                    continue;
+                }
+                if (isset($aendern[$id]) && $offen($s)) {
+                    $due = trim((string)$aendern[$id]['due']);
+                    if (HomeworkCalc::DatumImFenster($due, $heute)) {
+                        $s['due'] = $due;
+                    }
+                    $s['note'] = mb_substr(trim((string)$aendern[$id]['note']), 0, HomeworkCalc::NOTE_MAX);
+                    $s['updatedAt'] = $jetzt;
+                    $geaendert = true;
+                }
+                $raus[] = $s;
+            }
+            $store['items'] = $raus;
+            $ids = [];
+            if ($anlegen !== []) {
+                $faecher = $this->HomeworkFaecher();
+                $kinder = $this->HomeworkKinder();
+                foreach ($anlegen as $k => $roh) {
+                    if (count($store['items']) >= HomeworkCalc::ITEMS_MAX) {
+                        break;
+                    }
+                    $satz = HomeworkCalc::Normalisieren($roh, $faecher, $kinder, $heute, $jetzt);
+                    if ($satz === null) {
+                        continue;
+                    }
+                    $satz['id'] = bin2hex(random_bytes(4));
+                    $satz['createdAt'] = $jetzt;
+                    $satz['updatedAt'] = $jetzt;
+                    $store['items'][] = $satz;
+                    $ids[$k] = $satz['id'];
+                    $geaendert = true;
+                }
+            }
+            if ($geaendert && !$this->HomeworkWriteStore($store)) {
+                return ['ok' => false, 'ids' => []];
+            }
+            return ['ok' => true, 'ids' => $ids];
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
     }
 
     /**

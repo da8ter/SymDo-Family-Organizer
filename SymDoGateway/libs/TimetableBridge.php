@@ -140,6 +140,10 @@ trait TimetableBridge
                 /* Wer ersetzt wurde. Ohne diese Zeile stuende in der App nur
                    „Vertretung" — die Projektion hier ist eine Weissliste. */
                 'insteadOf' => (string)($s['insteadOf'] ?? ''),
+                /* Eine Klassenarbeit (24.09.2026): Merkmal und Titel. Ohne diese
+                   Zeilen sähe sie in der App aus wie eine gewöhnliche Stunde. */
+                'exam'      => ($s['exam'] ?? false) === true,
+                'examTitle' => (string)($s['examTitle'] ?? ''),
             ];
             /* Die Termin-Marker setzt das GATEWAY ein, nicht der Stundenplan.
                Der holt sie sich sonst mit TGW_GetEventsForTile zurueck — und
@@ -557,10 +561,16 @@ trait TimetableBridge
         /* Was ausfaellt und was STATTDESSEN laeuft, kommt aus dem Tag selbst —
            seit er datiert ist, steht beides dort mit Uhrzeit. Der Merker aus
            WebUntis ist nur noch der Rueckfall fuer Plaene ohne datierte Tage. */
+        /* Eine PRUEFUNG hat ihren eigenen Satzteil (24.09.2026) — sie zaehlt
+           weder als Entfall noch als Vertretung, auch wenn WebUntis sie als
+           geaendert fuehrt: dass Deutsch „vertreten" wird, verschwiege die
+           Klassenarbeit. */
+        $istPruefung = static fn(array $s): bool => ($s['exam'] ?? false) === true;
         $entfallSlots = array_values(array_filter($stunden,
-            static fn(array $s): bool => (string)($s['status'] ?? '') === 'entfall'));
+            static fn(array $s): bool => (string)($s['status'] ?? '') === 'entfall' && !$istPruefung($s)));
         $ersatzSlots  = array_values(array_filter($stunden,
-            static fn(array $s): bool => (string)($s['status'] ?? '') === 'vertretung'));
+            static fn(array $s): bool => (string)($s['status'] ?? '') === 'vertretung' && !$istPruefung($s)));
+        $pruefungen = array_values(array_filter($stunden, $istPruefung));
         /* Mit Uhrzeit nur, solange es ein oder zwei sind — bei vieren wird die
            Zeile sonst zur Aufzaehlung von Zahlen. Welche Faecher ausfallen,
            steht IMMER da: „4 Stunden entfallen" sagt niemandem, ob das Buch
@@ -593,6 +603,29 @@ trait TimetableBridge
             if ($betreuung !== []) {
                 $zeile .= ', danach Betreuung bis ' . (string)$betreuung[count($betreuung) - 1]['end'];
             }
+        }
+
+        /* Die Klassenarbeit gleich hinter der Schulzeit: sie ist das, wonach an
+           diesem Tag jemand fragt. Der Titel nur, wenn er mehr sagt als das Fach. */
+        $statt = array_values(array_filter($pruefungen,
+            static fn(array $s): bool => (string)($s['status'] ?? '') !== 'entfall'));
+        $gestrichen = array_values(array_filter($pruefungen,
+            static fn(array $s): bool => (string)($s['status'] ?? '') === 'entfall'));
+        if ($statt !== []) {
+            $teile = array_map(static function (array $s): string {
+                $fach = trim((string)($s['name'] ?? ''));
+                $titel = trim((string)($s['examTitle'] ?? ''));
+                return $fach . ' um ' . (string)($s['start'] ?? '')
+                    . ($titel !== '' && UntisPruefungCalc::TitelNorm($titel) !== UntisPruefungCalc::TitelNorm($fach)
+                        ? ' („' . $titel . '“)' : '');
+            }, $statt);
+            $zeile .= (count($teile) === 1 ? ', Prüfung in ' : ', Prüfungen in ') . $this->TimetableUnd($teile);
+        }
+        if ($gestrichen !== []) {
+            $faecherWeg = array_map(static fn(array $s): string => trim((string)($s['name'] ?? '')), $gestrichen);
+            $zeile .= count($faecherWeg) === 1
+                ? ', die Prüfung in ' . $faecherWeg[0] . ' entfällt'
+                : ', die Prüfungen in ' . $this->TimetableUnd($faecherWeg) . ' entfallen';
         }
 
         if ($entfall !== []) {
