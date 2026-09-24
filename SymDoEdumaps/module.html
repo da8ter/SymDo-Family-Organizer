@@ -4004,6 +4004,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 .hw-neu i, .hw-neu svg { width: 13px; height: 13px; }
 .hw-gruppe { font-size: 11px; font-weight: 700; color: var(--muted); padding: 6px 2px 0; }
 .hw-gruppe.spaet { color: var(--danger, #e5534b); }
+.hw-spaet-toggle > i:first-child, .hw-spaet-toggle > svg:first-child, .hw-spaet-toggle .count { color: var(--danger, #e5534b); }
 .hw-leer { font-size: 13px; color: var(--muted); padding: 6px 2px; }
 /* Wischen wie in den Listen und im Kalender: die Zeile liegt über zwei
    Untergründen (links löschen, rechts bearbeiten) und wird darüber verschoben.
@@ -6399,6 +6400,10 @@ let completedExpanded = ls.get('symdo.completedExpanded') === '1';
    waere eine Kopplung zwischen zwei Bereichen, die nichts miteinander zu tun
    haben. Eingeklappt als Vorgabe — erledigt ist erledigt. */
 let hwDoneExpanded = ls.get('symdo.hwDoneExpanded') === '1';
+/* Ueberfaellige Hausaufgaben: eingeklappt wie die erledigten (Wunsch
+   24.09.2026) — viele sind nur nie von der Lehrkraft abgehakt worden und
+   verdraengten sonst oben die, die wirklich anstehen. */
+let hwOverdueExpanded = ls.get('symdo.hwOverdueExpanded') === '1';
 // „Zuletzt benutzt" startet wie in der App eingeklappt (nur In-Memory)
 let cartExpanded = false;
 
@@ -12997,21 +13002,34 @@ function hwListeHtml(ids, mitAvatar) {
      vorbereitet (24.09.2026). */
   const pruefungen = hwPruefungenHtml(ids, mitAvatar, subjects);
   const bloecke = [
-    ['ueberfaellig', translate('Overdue')],
     ['heute', translate('Today')],
     ['morgen', translate('Tomorrow')],
     ['spaeter', translate('Later')],
     ['offen', translate('no date')]
   ];
   let html = pruefungen;
-  if (bloecke.every(([k]) => gruppen[k].length === 0)) {
+  if (bloecke.every(([k]) => gruppen[k].length === 0) && gruppen.ueberfaellig.length === 0) {
     html += `<div class="hw-leer">${escapeHtml(translate('Nothing to do — well done!'))}</div>`;
+  }
+  if (bloecke.every(([k]) => gruppen[k].length === 0) && gruppen.ueberfaellig.length > 0) {
+    html += `<div class="hw-leer">${escapeHtml(translate('Nothing due — only overdue ones below.'))}</div>`;
   }
   bloecke.forEach(([k, titel]) => {
     if (gruppen[k].length === 0) return;
-    html += `<div class="hw-gruppe${k === 'ueberfaellig' ? ' spaet' : ''}">${escapeHtml(titel)}</div>`;
+    html += `<div class="hw-gruppe">${escapeHtml(titel)}</div>`;
     gruppen[k].forEach(i => { html += hwZeileHtml(i, subjects, mitAvatar, true); });
   });
+  /* Die ueberfaelligen unten, eingeklappt — derselbe Abschnitt wie „Erledigt",
+     mit roter Zahl, damit sie nicht in Vergessenheit geraten. */
+  if (gruppen.ueberfaellig.length > 0) {
+    html += `<button type="button" class="section-toggle hw-spaet-toggle${hwOverdueExpanded ? ' open' : ''}" id="hwOverdueToggle">` +
+      `<i class="fa-light fa-triangle-exclamation"></i>${escapeHtml(translate('Overdue'))}` +
+      `<span class="count">${gruppen.ueberfaellig.length}</span>` +
+      `<i class="fa-light fa-chevron-right chev"></i></button>`;
+    if (hwOverdueExpanded) {
+      gruppen.ueberfaellig.forEach(i => { html += hwZeileHtml(i, subjects, mitAvatar, true); });
+    }
+  }
   /* Erledigte ganz unten in einem eingeklappten Abschnitt — dasselbe Muster
      wie in den Aufgabenlisten (.section-toggle), damit dieselbe Sache in der
      App nicht zweimal anders aussieht. Sie verschwinden nicht: ein Kind soll
@@ -13342,6 +13360,12 @@ function hwBinden(bereich, neuzeichnen) {
   if (klapp) klapp.addEventListener('click', () => {
     hwDoneExpanded = !hwDoneExpanded;
     ls.set('symdo.hwDoneExpanded', hwDoneExpanded ? '1' : '0');
+    zeichnen();
+  });
+  const klappSpaet = bereich.querySelector('#hwOverdueToggle');
+  if (klappSpaet) klappSpaet.addEventListener('click', () => {
+    hwOverdueExpanded = !hwOverdueExpanded;
+    ls.set('symdo.hwOverdueExpanded', hwOverdueExpanded ? '1' : '0');
     zeichnen();
   });
   bereich.querySelectorAll('[data-hw-done]').forEach(b => b.addEventListener('click', (ev) => {
