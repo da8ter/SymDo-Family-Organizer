@@ -577,8 +577,11 @@
             "Exams": "Prüfungen",
             "Exam": "Prüfung",
             "exam cancelled": "Prüfung entfällt",
-            "in %d days": "in %d Tagen",
-            "Source: exam (UNTIS)": "Quelle: Prüfung (UNTIS)"
+            "Source: exam (UNTIS)": "Quelle: Prüfung (UNTIS)",
+            "Next exam: %1": "Nächste Prüfung: %1",
+            "%1 day(s) until the exam": "%1 Tag(e) bis Prüfung",
+            "Exam today": "Prüfung heute",
+            "Study start": "Lernstart"
         }
     }
 }

@@ -958,6 +958,8 @@ trait WebUntis
     private function UntisPruefungenOeffentlich(string $kind = ''): array
     {
         $heute = date('Y-m-d');
+        $lernTage = max(0, min(self::UNTIS_LERN_TAGE_MAX,
+            (int)$this->UntisProp('UntisExamStudyDays', self::UNTIS_LERN_TAGE_STD)));
         $raus = [];
         foreach ($this->UntisPruefungenStand()['kinder'] as $userId => $eintrag) {
             if ($kind !== '' && (string)$userId !== $kind) {
@@ -978,6 +980,8 @@ trait WebUntis
                     'room'    => (string)($p['room'] ?? ''),
                     'teacher' => (string)($p['teacher'] ?? ''),
                     'status'  => (string)($p['status'] ?? 'normal'),
+                    // Der Anfang der Zeitleiste in der Oberflaeche (Lernstart).
+                    'learnFrom' => UntisPruefungCalc::LernStart((string)$p['date'], $lernTage),
                 ];
             }
         }

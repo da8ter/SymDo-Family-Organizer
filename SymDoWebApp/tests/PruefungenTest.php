@@ -51,7 +51,8 @@ $koerper = $start === false ? '' : substr($html, $start, (int)strpos($html, "\n}
 pruefe($koerper !== '' && !str_contains($koerper, 'hw-zeile') && !str_contains($koerper, 'data-hw'),
     'der Block traegt weder .hw-zeile noch data-hw (sonst binde hwBinden Abhaken und Wischen)');
 pruefe(str_contains($koerper, ">= heute"), 'gelesen wird nur ab heute');
-foreach (['.plan-stueck.pruefung {', '.wp-stunde.pruefung {', '.hw-pruefung {', 'svg.hw-pruef-sym'] as $css) {
+foreach (['.plan-stueck.pruefung {', '.wp-stunde.pruefung {', '.hw-pruefung {', '.hw-pruef-balken > span {',
+          '.hw-pruef-rund i, .hw-pruef-rund svg'] as $css) {
     pruefe(str_contains($html, $css), "Stil: $css");
 }
 pruefe(str_contains($html, "const zustand = pruefung ? ' pruefung'") && str_contains($html, "const lage = pruefung ? ' pruefung'"),
@@ -64,7 +65,8 @@ foreach (['ToDoList', 'ShoppingList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomewo
     $k = (string)@file_get_contents(__DIR__ . '/../../' . $kopie . '/module.html');
     pruefe(str_contains($k, 'function hwPruefungenHtml(') && str_contains($k, ".wp-stunde.pruefung {"), "Kopie $kopie ist nachgezogen");
 }
-$schluessel = ['Exams', 'Exam', 'exam cancelled', 'in %d days', 'Source: exam (UNTIS)'];
+$schluessel = ['Exams', 'Exam', 'exam cancelled', 'Source: exam (UNTIS)', 'Next exam: %1', '%1 day(s) until the exam',
+               'Exam today', 'Study start'];
 foreach (['SymDoWebApp', 'ToDoList', 'ShoppingList', 'SymDoHomework', 'SymDoNotes', 'SymDoEdumaps'] as $m) {
     $de = json_decode((string)file_get_contents(__DIR__ . '/../../' . $m . '/locale.json'), true)['translations']['de'] ?? [];
     pruefe(array_filter($schluessel, static fn($s) => !isset($de[$s])) === [], "Uebersetzungen in $m/locale.json");
@@ -126,20 +128,23 @@ $plan = ['span' => [480, 900], 'now' => (int)date('G') * 60 + (int)date('i'), 'h
                    ['name' => 'Englisch', 'icon' => 'fa-language', 'color' => '#f09fe0'],
                    ['name' => 'Mathematik', 'icon' => 'fa-calculator', 'color' => '#ff5757']],
     'children' => [['name' => 'Probekind', 'color' => '#1E88E5', 'userId' => $kind, 'next' => '', 'weekOver' => false, 'days' => $tage]]];
-$pr = static fn(string $id, string $datum, string $fach, string $titel, string $status = 'normal', ?string $wer = null): array => [
+$pr = static fn(string $id, string $datum, string $fach, string $titel, string $status = 'normal', ?string $wer = null,
+                ?string $lern = null): array => [
     'id' => $id, 'childId' => $wer ?? $kind, 'date' => $datum, 'start' => '09:30', 'end' => '10:30', 'subject' => $fach,
-    'title' => $titel, 'room' => '121', 'teacher' => 'Fa', 'status' => $status];
+    'title' => $titel, 'room' => '121', 'teacher' => 'Fa', 'status' => $status,
+    'learnFrom' => $lern ?? date('Y-m-d', (int)strtotime($datum . ' 12:00:00') - 7 * 86400)];
 $hw = ['ok' => true, 'rev' => 7, 'limits' => ['items' => 300, 'note' => 500], 'examRev' => 1,
     'items' => [['id' => 'h1', 'srcId' => 0, 'childId' => $kind, 'subject' => 'Mathematik', 'due' => $tag(1), 'done' => false,
                  'doneAt' => 0, 'doneBy' => '', 'note' => 'S. 12', 'source' => 'app', 'createdAt' => 1, 'updatedAt' => 1]],
     'exams' => [
         $pr('2', $tag(1), 'Englisch', 'Englisch'),                  // Titel = Fach: nur das Fach
-        $pr('1', $tag(3), 'Deutsch', 'KA Briefe schreiben'),
+        $pr('1', $tag(3), 'Deutsch', 'KA Briefe schreiben'),        // Lernstart vor 4 Tagen: 4/7
         $pr('3', $tag(6), 'Mathematik', 'Test', 'entfall'),
+        $pr('7', $tag(20), 'Englisch', 'KA 1. KA Englisch'),        // Lernstart erst in 13 Tagen: 0 %
         $pr('4', $tag(-1), 'Deutsch', 'Gestern'),                   // vorbei: nicht zeigen
         $pr('5', $tag(2), 'Deutsch', 'Fremd', 'normal', 'anderes-kind'),
     ]];
-$neu = $pr('6', $tag(9), 'Englisch', 'KA 2');
+$neu = $pr('6', $tag(9), 'Englisch', 'KA 2', 'normal', null, '');   // ohne Lernstart: eine Woche
 $daten = ['plan' => $plan, 'hw' => $hw, 'neu' => $neu, 'kind' => $kind];
 
 $arbeit = sys_get_temp_dir() . '/symdo-pruefung-' . getmypid();
@@ -179,10 +184,14 @@ $treiber = '<script>' . <<<'JS'
   function warte(bed, ms){ return new Promise(function(ok, nein){ var t0 = Date.now(); (function lauf(){ var r; try { r = bed(); } catch (e) {} if (r) return ok(r); if (Date.now() - t0 > (ms || 8000)) return nein(new Error('Zeit')); setTimeout(lauf, 100); })(); }); }
   function block(){ return qa('.hw-pruefung').filter(sichtbar); }
   function blockStand(){
-    return block().map(function(z){ return { name: q('.hw-name', z).textContent.trim(), unten: q('.hw-notiz', z).textContent,
-      rechts: q('.hw-faellig', z).textContent, weg: z.classList.contains('entfallen'),
+    return block().map(function(z){ var b = q('.hw-pruef-balken > span', z);
+      return { name: q('.hw-name', z).textContent.trim(), stand: q('.hw-pruef-stand', z).textContent,
+      balken: b ? b.style.width : null, balkenBreite: b ? Math.round(b.getBoundingClientRect().width) : null,
+      spur: b ? Math.round(b.parentElement.getBoundingClientRect().width) : null,
+      enden: qa('.hw-pruef-enden > span', z).map(function(x){ return x.textContent; }),
+      weg: z.classList.contains('entfallen'), farbe: getComputedStyle(z).getPropertyValue('--pf').trim(),
       zeile: !!z.querySelector('.hw-zeile, [data-hw], [data-hw-done]') || z.classList.contains('hw-zeile'),
-      sym: !!z.querySelector('.hw-pruef-sym') }; });
+      rund: !!z.querySelector('.hw-pruef-rund i, .hw-pruef-rund svg') }; });
   }
   warte(function(){ return q('.member-bar [data-member="' + P.kind + '"]'); }, 15000).then(function(b){
     b.click();
@@ -204,6 +213,7 @@ $treiber = '<script>' . <<<'JS'
     var liste = block()[0].parentElement;
     var kinderFolge = Array.from(liste.children).map(function(k){ return k.className; });
     s.push({ block: blockStand(), kopf: kinderFolge.indexOf('hw-gruppe hw-pruef-kopf'),
+             naechste: (q('.hw-pruef-naechste') || {}).textContent || '',
              ersteHw: kinderFolge.findIndex(function(c){ return /hw-zeile|hw-card/.test(c); }),
              ersterBlock: kinderFolge.indexOf(block()[0].className) });
     // Ein Tipp auf die Pruefung darf nichts oeffnen und nichts abhaken.
@@ -213,7 +223,7 @@ $treiber = '<script>' . <<<'JS'
     P.hw.exams.push(P.neu);
     P.hw.examRev = 2;
     document.dispatchEvent(new Event('visibilitychange'));
-    return warte(function(){ return block().length === 4; }, 20000);
+    return warte(function(){ return block().length === 5; }, 20000);
   }).then(function(){
     s.push({ neu: blockStand().map(function(x){ return x.name; }) });
     // 4. Das Wochenraster
@@ -261,23 +271,37 @@ pruefe(str_contains((string)($b['tipp'] ?? ''), 'KA Briefe schreiben') && !str_c
 
 // 2. Block
 $blk = (array)($s['block'] ?? []);
-pruefe(array_column($blk, 'name') === ['Englisch', 'KA Briefe schreiben', 'Test'],
-    'Block: ab heute, nur dieses Kind, nach Datum; Titel statt Fach, wenn er mehr sagt: ' . json_encode(array_column($blk, 'name'), JSON_UNESCAPED_UNICODE));
-pruefe(in_array($blk[0]['rechts'] ?? '', $morgen, true) && preg_match('/^in 3 (Tagen|days)$/', (string)($blk[1]['rechts'] ?? '')) === 1,
-    'Block: Abstand rechts („Morgen", „in 3 Tagen"): ' . json_encode(array_column($blk, 'rechts'), JSON_UNESCAPED_UNICODE));
-pruefe(($blk[2]['weg'] ?? false) === true && in_array($blk[2]['rechts'] ?? '', ['entfällt', 'cancelled'], true),
-    'Block: entfallen durchgestrichen mit „entfällt"');
-pruefe(str_contains((string)($blk[1]['unten'] ?? ''), 'Deutsch') && str_contains((string)($blk[1]['unten'] ?? ''), '09:30'),
-    'Block: darunter Fach, Tag und Zeit: ' . json_encode($blk[1]['unten'] ?? null, JSON_UNESCAPED_UNICODE));
-pruefe(array_filter($blk, static fn($z) => $z['zeile'] === true) === [] && array_filter($blk, static fn($z) => $z['sym'] !== true) === [],
-    'Block: keine Hausaufgaben-Zeile, jede mit Pruefungszeichen');
+$lang = static fn(string $iso): string => implode('.', array_reverse(explode('-', $iso)));
+pruefe(array_column($blk, 'name') === ['Englisch', 'Deutsch · KA Briefe schreiben', 'Mathematik · Test', 'KA 1. KA Englisch'],
+    'Block: ab heute, nur dieses Kind, nach Datum; Fach · Titel, der Titel allein, wenn er das Fach nennt: '
+    . json_encode(array_column($blk, 'name'), JSON_UNESCAPED_UNICODE));
+pruefe(in_array((string)($s['naechste'] ?? ''), ['Nächste Prüfung: ' . $lang($tag(1)), 'Next exam: ' . $lang($tag(1))], true),
+    'Kopf: „Nächste Prüfung" mit Datum: ' . json_encode($s['naechste'] ?? null, JSON_UNESCAPED_UNICODE));
+$stand = array_column($blk, 'stand');
+pruefe(preg_match('/^1 (Tag\(e\) bis Prüfung|day\(s\) until the exam) · 86%$/u', (string)($stand[0] ?? '')) === 1
+    && preg_match('/^3 (Tag\(e\) bis Prüfung|day\(s\) until the exam) · 57%$/u', (string)($stand[1] ?? '')) === 1
+    && preg_match('/^20 (Tag\(e\) bis Prüfung|day\(s\) until the exam) · 0%$/u', (string)($stand[3] ?? '')) === 1,
+    'Zeitleiste: Tage bis zur Pruefung und Anteil der Lernphase (6/7, 4/7, vor dem Lernstart 0): ' . json_encode($stand, JSON_UNESCAPED_UNICODE));
+pruefe(array_column($blk, 'balken') === ['86%', '57%', null, '0%'],
+    'Balken so breit wie der Anteil, keiner bei der entfallenen: ' . json_encode(array_column($blk, 'balken')));
+pruefe(abs((int)($blk[1]['balkenBreite'] ?? 0) - (int)round(0.57 * (int)($blk[1]['spur'] ?? 0))) <= 2,
+    'Balken wirklich gezeichnet (Breite im Bild): ' . json_encode([$blk[1]['balkenBreite'] ?? null, $blk[1]['spur'] ?? null]));
+pruefe(($blk[1]['enden'] ?? null) === null ? false
+    : (str_contains($blk[1]['enden'][0], $lang($tag(-4))) && str_contains($blk[1]['enden'][1], $lang($tag(3)) . ', 09:30')),
+    'Unter dem Balken: Lernstart und Pruefung mit Uhrzeit: ' . json_encode($blk[1]['enden'] ?? null, JSON_UNESCAPED_UNICODE));
+pruefe(($blk[2]['weg'] ?? false) === true && in_array($blk[2]['stand'] ?? '', ['entfällt', 'cancelled'], true) && ($blk[2]['enden'] ?? []) === [],
+    'Entfallen: durchgestrichen, „entfällt", ohne Zeitleiste');
+pruefe(($blk[1]['farbe'] ?? '') === '#4da9ff' && ($blk[0]['farbe'] ?? '') === '#f09fe0',
+    'Die Farbe ist die des Fachs: ' . json_encode(array_column($blk, 'farbe')));
+pruefe(array_filter($blk, static fn($z) => $z['zeile'] === true) === [] && array_filter($blk, static fn($z) => $z['rund'] !== true) === [],
+    'Block: keine Hausaufgaben-Zeile, jede mit rundem Fachzeichen');
 pruefe((int)($s['kopf'] ?? -1) >= 0 && (int)($s['kopf'] ?? 0) < (int)($s['ersterBlock'] ?? 0)
     && (int)($s['ersterBlock'] ?? 0) < (int)($s['ersteHw'] ?? -1), 'Block: Kopf „Prüfungen", dann die Pruefungen, DANN die Hausaufgaben');
 pruefe(($s['nachTipp']['hwOverlay'] ?? true) === false && ($s['nachTipp']['schreib'] ?? 1) === 0,
     'Ein Tipp auf die Pruefung oeffnet nichts und hakt nichts ab');
 
 // 3. examRev
-pruefe(($s['neu'] ?? null) === ['Englisch', 'KA Briefe schreiben', 'Test', 'KA 2'],
+pruefe(($s['neu'] ?? null) === ['Englisch', 'Deutsch · KA Briefe schreiben', 'Mathematik · Test', 'Englisch · KA 2', 'KA 1. KA Englisch'],
     'Neue Pruefung mit gleicher Hausaufgaben-Revision kommt ueber examRev an: ' . json_encode($s['neu'] ?? null, JSON_UNESCAPED_UNICODE));
 
 // 4. Raster

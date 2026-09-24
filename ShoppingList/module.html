@@ -4155,19 +4155,49 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .hw-faellig { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: var(--muted); }
-/* Eine anstehende Pruefung ueber den Hausaufgaben: dieselbe Zeile wie eine
-   Hausaufgabe, aber ohne Kaestchen und mit einer Kante in der Akzentfarbe —
-   man bereitet sich auf sie vor, abhaken kann man sie nicht. */
+/* Die anstehenden Pruefungen ueber den Hausaufgaben — je Pruefung eine
+   Zeitleiste vom Lernstart bis zum Pruefungstag (24.09.2026). Kein Kaestchen:
+   man bereitet sich auf sie vor, abhaken kann man sie nicht. Die Farbe ist die
+   des Fachs (--pf, im Attribut gesetzt), ohne Fachfarbe Rot. */
+.hw-pruef-kopf { display: flex; align-items: baseline; gap: 8px; }
+.hw-pruef-kopf > span:first-child { flex: 1 1 auto; }
+.hw-pruef-naechste { color: var(--red); font-weight: 700; white-space: nowrap; }
 .hw-pruefung {
-  display: flex; align-items: center; gap: 10px;
-  background: var(--row); border-radius: 12px; padding: 8px 10px;
-  box-shadow: inset 3px 0 0 0 var(--accent);
+  --pf: var(--red);
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--row); border-radius: 12px; padding: 10px 12px;
 }
+.hw-pruef-oben { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.hw-pruef-rund {
+  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--pf) 16%, transparent);
+  color: color-mix(in srgb, var(--pf) 80%, var(--text));
+}
+/* BEIDE Elementarten: /icons.js ersetzt das <i> nachtraeglich durch ein <svg>. */
+.hw-pruef-rund i, .hw-pruef-rund svg { width: 14px; height: 14px; }
+.hw-pruefung .hw-name { font-size: 15px; font-weight: 700; }
+/* Die Fachfarbe als SCHRIFT braucht Kontrast: helle Fachfarben (Rosa, Gelb)
+   waeren auf der Zeile kaum lesbar. Also mit der Textfarbe gemischt — hell
+   bleibt hell im dunklen Thema, dunkel wird dunkler im hellen. */
+.hw-pruef-stand {
+  font-size: 12px; font-weight: 700; color: color-mix(in srgb, var(--pf) 68%, var(--text));
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hw-pruef-balken {
+  height: 8px; border-radius: 999px; overflow: hidden;
+  background: var(--surface2, rgba(128,128,128,.18));
+}
+.hw-pruef-balken > span {
+  display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pf) 45%, transparent), var(--pf));
+}
+.hw-pruef-enden { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; font-weight: 600; }
+.hw-pruef-enden > span { display: flex; flex-direction: column; min-width: 0; }
+.hw-pruef-enden > span:last-child { align-items: flex-end; text-align: right; }
+.hw-pruef-enden small { font-size: 11px; font-weight: 500; color: var(--muted); }
 .hw-pruefung.entfallen { opacity: .62; }
 .hw-pruefung.entfallen .hw-name { text-decoration: line-through; }
-.hw-pruefung .hw-faellig { color: var(--accent); }
-/* BEIDE Elementarten: /icons.js ersetzt das <i> nachtraeglich durch ein <svg>. */
-.hw-pruef-sym, svg.hw-pruef-sym { width: 12px; height: 12px; margin-right: 6px; opacity: .75; vertical-align: -1px; }
 
 /* ── Familientafel: eine Zeile je Mitglied, sieben Spalten ──────────────────
    Praefix ct-, weil cal- schon der Agenda gehoert (cal-card, cal-event,
@@ -13039,6 +13069,11 @@ function hwListeHtml(ids, mitAvatar) {
 /**
  * Die anstehenden Pruefungen aus WebUntis, als Block ueber den Hausaufgaben.
  *
+ * Je Pruefung eine ZEITLEISTE (Wunsch 24.09.2026): vom Lernstart bis zum
+ * Pruefungstag, darueber „6 Tag(e) bis Prüfung · 25%". Der Lernstart kommt vom
+ * Gateway (learnFrom: so viele Tage vorher, wie die Lern-Erinnerung vorausgeht).
+ * Die Farbe ist die des Fachs — so sieht Englisch aus wie Englisch im Plan.
+ *
  * Eigene Klassen und KEIN .hw-zeile oder data-hw: an diesen Merkmalen haengt
  * hwBinden Abhaken, Oeffnen und Wischen — und eine Pruefung ist nichts
  * davon. Gelesen wird nur ab heute: der Stand kann aelter sein als der Tag.
@@ -13046,55 +13081,94 @@ function hwListeHtml(ids, mitAvatar) {
 function hwPruefungenHtml(ids, mitAvatar, subjects) {
   const heute = localDayStr(new Date());
   const liste = (Array.isArray(hausaufgaben.exams) ? hausaufgaben.exams : [])
-    .filter(p => p && ids.includes(String(p.childId)) && String(p.date || '') >= heute);
+    .filter(p => p && ids.includes(String(p.childId)) && String(p.date || '') >= heute)
+    /* Selbst sortiert, nach Tag und Uhrzeit: der Server tut es zwar, aber die
+       „naechste Pruefung" im Kopf darf nicht an seiner Reihenfolge haengen. */
+    .sort((a, b) => (String(a.date) + ' ' + String(a.start || '')).localeCompare(String(b.date) + ' ' + String(b.start || '')));
   if (liste.length === 0) return '';
-  let html = `<div class="hw-gruppe hw-pruef-kopf">${escapeHtml(translate('Exams'))}</div>`;
+  const naechste = liste.find(p => p.status !== 'entfall');
+  let html = `<div class="hw-gruppe hw-pruef-kopf"><span>${escapeHtml(translate('Exams'))}</span>` +
+    (naechste ? `<span class="hw-pruef-naechste">` +
+      `${escapeHtml(String(translate('Next exam: %1')).replace('%1', pruefDatumLang(naechste.date)))}</span>` : '') +
+    `</div>`;
   liste.forEach(p => {
     const fach = hwFachInfo(p.subject, subjects);
-    const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}"` : '';
+    // Nur eine echte Farbe kommt in den Stil — sie steht als Variable im Attribut.
+    const farbe = /^#[0-9a-f]{3,8}$/i.test(String(fach.color || '')) ? String(fach.color) : '';
     const weg = p.status === 'entfall';
-    const titel = String(p.title || '').trim();
-    // Der Titel sagt, WAS geschrieben wird — das Fach steht dann darunter.
-    const mitTitel = titel !== '' && titel.toLowerCase() !== String(fach.name).toLowerCase();
-    const unten = [mitTitel ? fach.name : '', pruefDatumText(p.date), String(p.start || '')]
-      .filter(x => x).join(' · ');
-    html += `<div class="hw-pruefung${weg ? ' entfallen' : ''}"` +
-      ` title="${escapeHtml([mitTitel ? titel : fach.name, unten, [p.room, p.teacher].filter(x => x).join(' · ')]
-        .filter(x => x).join(' — '))}">` +
-      `<span class="hw-fach"${farbe}>` +
-        (fach.icon ? `<i class="fa-light ${escapeHtml(fach.icon)}"></i>` : '') +
-      `</span>` +
-      `<span class="hw-text">` +
-        `<span class="hw-name"><i class="fa-light fa-file-pen hw-pruef-sym"></i>` +
-          `${escapeHtml(mitTitel ? titel : fach.name)}</span>` +
-        `<span class="hw-notiz">${escapeHtml(unten)}</span>` +
-      `</span>` +
-      `<span class="hw-faellig">${escapeHtml(weg ? translate('cancelled') : pruefAbstandText(p.date))}</span>` +
-      (mitAvatar ? `<span class="cal-side"><span class="cal-chips">` +
-        `${renderAvatarStack([String(p.childId)])}</span></span>` : '') +
+    const name = pruefName(fach.name, String(p.title || ''));
+    const zeit = pruefZeitleiste(p, heute);
+    const stand = weg ? translate('cancelled')
+      : (zeit.tage <= 0 ? translate('Exam today')
+        : String(translate('%1 day(s) until the exam')).replace('%1', String(zeit.tage))) + ' · ' + zeit.prozent + '%';
+    const wann = pruefDatumLang(p.date) + (p.start ? ', ' + p.start : '');
+    html += `<div class="hw-pruefung${weg ? ' entfallen' : ''}"${farbe ? ` style="--pf:${escapeHtml(farbe)}"` : ''}` +
+      ` title="${escapeHtml([name, wann, [p.room, p.teacher].filter(x => x).join(' · ')].filter(x => x).join(' — '))}">` +
+      `<div class="hw-pruef-oben">` +
+        `<span class="hw-pruef-rund"><i class="fa-light ${escapeHtml(fach.icon || 'fa-file-pen')}"></i></span>` +
+        `<span class="hw-text">` +
+          `<span class="hw-name">${escapeHtml(name)}</span>` +
+          `<span class="hw-pruef-stand">${escapeHtml(stand)}</span>` +
+        `</span>` +
+        (mitAvatar ? `<span class="cal-side"><span class="cal-chips">` +
+          `${renderAvatarStack([String(p.childId)])}</span></span>` : '') +
+      `</div>` +
+      /* Die Leiste nur, solange die Pruefung stattfindet — eine entfallene hat
+         keinen Weg mehr vor sich. */
+      (weg ? '' :
+        `<div class="hw-pruef-balken" role="progressbar" aria-valuemin="0" aria-valuemax="100"` +
+        ` aria-valuenow="${zeit.prozent}"><span style="width:${zeit.prozent}%"></span></div>` +
+        `<div class="hw-pruef-enden">` +
+          `<span><small>${escapeHtml(translate('Study start'))}</small>${escapeHtml(pruefDatumLang(zeit.start))}</span>` +
+          `<span><small>${escapeHtml(translate('Exam'))}</small>${escapeHtml(wann)}</span>` +
+        `</div>`) +
     `</div>`;
   });
   return html;
 }
 
-/** „Do 08.10." */
-function pruefDatumText(iso) {
-  const d = new Date(String(iso || '') + 'T12:00:00');
-  if (isNaN(d.getTime())) return String(iso || '');
-  const wochentage = [translate('Sun'), translate('Mon'), translate('Tue'), translate('Wed'),
-    translate('Thu'), translate('Fri'), translate('Sat')];
-  return wochentage[d.getDay()] + ' ' + stundenplanDatumKurz(iso);
+/**
+ * Wie die Pruefung heisst: der Titel, wenn er das Fach schon nennt („KA 1. KA
+ * Englisch"), sonst Fach und Titel („Deutsch · KA Briefe schreiben"), ohne
+ * Titel das Fach.
+ */
+function pruefName(fach, titel) {
+  const f = String(fach || '').trim();
+  const t = String(titel || '').trim();
+  const norm = s => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  if (t === '' || norm(t) === norm(f)) return f;
+  if (f === '' || norm(t).includes(norm(f))) return t;
+  return f + ' · ' + t;
 }
 
-/** „heute", „morgen", „in 14 Tagen" — ab heute. */
-function pruefAbstandText(iso) {
-  const d = new Date(String(iso || '') + 'T12:00:00');
-  const h = new Date(localDayStr(new Date()) + 'T12:00:00');
-  if (isNaN(d.getTime())) return '';
-  const n = Math.round((d.getTime() - h.getTime()) / 86400000);
-  if (n <= 0) return translate('Today');
-  if (n === 1) return translate('Tomorrow');
-  return String(translate('in %d days')).replace('%d', String(n));
+/**
+ * Die Zeitleiste einer Pruefung: Tage bis dahin, verstrichener Anteil der
+ * Lernphase, ihr Anfang. Vor dem Lernstart 0 %, am Pruefungstag 100 %.
+ * Gerechnet wird mit ganzen Tagen zur Mittagszeit — so verschiebt keine
+ * Sommerzeit den Balken um eine Stunde und damit um einen Tag.
+ */
+function pruefZeitleiste(p, heute) {
+  const TAG = 86400000;
+  const tag = s => { const d = new Date(String(s || '') + 'T12:00:00'); return isNaN(d.getTime()) ? null : d; };
+  const ziel = tag(p && p.date);
+  const jetzt = tag(heute);
+  if (!ziel || !jetzt) return { tage: 0, prozent: 0, start: String((p && p.date) || '') };
+  let start = tag(p.learnFrom);
+  // Fehlt der Lernstart oder liegt er nicht davor: eine Woche, wie im Gateway.
+  if (!start || start >= ziel) start = new Date(ziel.getTime() - 7 * TAG);
+  const gesamt = Math.max(1, Math.round((ziel - start) / TAG));
+  const vorbei = Math.min(gesamt, Math.max(0, Math.round((jetzt - start) / TAG)));
+  return {
+    tage: Math.max(0, Math.round((ziel - jetzt) / TAG)),
+    prozent: Math.round(vorbei / gesamt * 100),
+    start: localDayStr(start)
+  };
+}
+
+/** „06.10.2026" */
+function pruefDatumLang(iso) {
+  const t = String(iso || '').split('-');
+  return t.length === 3 ? t[2] + '.' + t[1] + '.' + t[0] : String(iso || '');
 }
 
 /**

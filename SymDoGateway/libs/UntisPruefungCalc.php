@@ -418,6 +418,24 @@ class UntisPruefungCalc
         return $n >= 1 && $n <= $tage;
     }
 
+    /** So lang ist die Lernphase der Zeitleiste, wenn die Lern-Erinnerung aus ist. */
+    public const LERN_ANZEIGE_TAGE = 7;
+
+    /**
+     * Der Lernstart der Zeitleiste: so viele Tage vor der Pruefung, wie die
+     * Lern-Erinnerung vorausgeht (UntisExamStudyDays) — ist sie aus, eine Woche.
+     * Dieselbe Zahl wie beim Anlegen der Erinnerung, sonst begaenne die Leiste
+     * an einem anderen Tag als das Lernen.
+     */
+    public static function LernStart(string $datum, int $tage): string
+    {
+        $t = strtotime($datum . ' 12:00:00');
+        if ($t === false) {
+            return $datum;
+        }
+        return date('Y-m-d', $t - ($tage > 0 ? $tage : self::LERN_ANZEIGE_TAGE) * 86400);
+    }
+
     /** Fällig ist die Lern-Erinnerung am Vortag — frühestens heute. */
     public static function LernDue(string $datum, string $heute): string
     {

@@ -445,10 +445,12 @@ und datierte Tage sehen genau dasselbe wie vorher.
 - **Im Stundenplan** trägt die Stunde ein eigenes Zeichen, einen hellen Rahmen
   und den Titel. Eine Prüfung schlägt „Vertretung"; entfällt sie, erscheint
   sie als entfallene Prüfung. Die Wochenvorlage trägt nie eine Prüfung.
-- **Über den Hausaufgaben** stehen die anstehenden Prüfungen des Kindes mit
-  Fach, Tag, Uhrzeit und Abstand („in 14 Tagen"), entfallene durchgestrichen —
-  in der Web-App, im Abschnitt unter dem Wochenraster und in der
-  Hausaufgaben-Kachel.
+- **Über den Hausaufgaben** stehen die anstehenden Prüfungen des Kindes, je
+  Prüfung eine Zeitleiste vom Lernstart bis zum Prüfungstag mit „n Tag(e) bis
+  Prüfung · x %", entfallene durchgestrichen — in der Web-App, im Abschnitt
+  unter dem Wochenraster und in der Hausaufgaben-Kachel. Den Lernstart liefert
+  das Gateway (`learnFrom`): so viele Tage vorher, wie `UntisExamStudyDays`
+  sagt, ist die Lern-Erinnerung aus, eine Woche.
 - **Das Briefing** nennt die Prüfung des Tages in der Schulzeile und die der
   folgenden sieben Tage in einem eigenen Block (höchstens vier), den Abstand
   ab heute gerechnet — auch in der Abendvorschau stimmt „in drei Tagen".

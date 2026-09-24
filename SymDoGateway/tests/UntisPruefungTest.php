@@ -154,6 +154,9 @@ pruefe('Lern-Erinnerung faellig ab Datum−7 bis zum Vortag, nicht entfallen',
     [false, true, true, false, false, false]);
 pruefe('Faellig am Vortag, frueestens heute', [UntisPruefungCalc::LernDue($tag(5), $HEUTE), UntisPruefungCalc::LernDue($tag(1), $HEUTE)],
     [$tag(4), $HEUTE]);
+pruefe('Lernstart der Zeitleiste: N Tage vorher, ohne Lern-Erinnerung eine Woche',
+    [UntisPruefungCalc::LernStart('2026-09-30', 8), UntisPruefungCalc::LernStart('2026-10-06', 7),
+     UntisPruefungCalc::LernStart('2026-10-06', 0)], ['2026-09-22', '2026-09-29', '2026-09-29']);
 
 // ══ 2. Lesen ═══════════════════════════════════════════════════════════════
 function untisPos(string $typ, string $kurz, string $lang, string $status = 'REGULAR'): array
@@ -495,6 +498,10 @@ pruefe('Hausaufgaben-Endpunkt: exams (ab heute, mit Kind) und examRev',
     [array_column($liste['exams'], 'subject'), $liste['exams'][0]['childId'], $liste['examRev'] === (int)$pf->pStand()['rev']],
     [['Deutsch', 'Chemie'], 'k1', true]);
 pruefe('… nach Kind gefiltert', $pf->pAktion(['action' => 'list', 'childId' => 'k2'])['exams'], []);
+pruefe('… mit Lernstart (UntisExamStudyDays = 7)', $liste['exams'][0]['learnFrom'], $tag(4 - 7));
+$pf->cfg['UntisExamStudyDays'] = 3;
+pruefe('… der Lernstart folgt der Einstellung', $pf->pAktion(['action' => 'list'])['exams'][0]['learnFrom'], $tag(4 - 3));
+$pf->cfg['UntisExamStudyDays'] = 7;
 
 // ══ 4. Vorabend-Meldung, Schulzeile, Briefing ═══════════════════════════════
 final class VorabendProbe extends IPSModuleStrict
