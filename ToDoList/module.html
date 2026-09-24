@@ -13500,13 +13500,15 @@ function hwKarteHtml() {
   if (!homeworkMoeglich() || offen.length === 0) return '';
   const subjects = (stundenplan && stundenplan.subjects) || [];
   const heute = localDayStr(new Date());
-  /* Nur was überfällig, heute oder morgen fällig ist: die Übersicht ist ein
-     Blick, keine Liste. Was später kommt, steht im Stundenplan-Bereich. */
+  /* Alle offenen mit Faelligkeit, die dringendsten zuerst — hoechstens
+     DASH_HW_MAX (Wunsch 24.09.2026: der Filter auf heute und morgen liess den
+     Kasten leer, sobald alles Offene erst spaeter faellig war). */
   const gruppen = hwGruppen(offen, heute);
   const bloecke = [
     ['ueberfaellig', translate('Overdue'), false],
     ['heute', translate('Today'), true],
-    ['morgen', translate('Tomorrow'), false]
+    ['morgen', translate('Tomorrow'), false],
+    ['spaeter', translate('Later'), false]
   ];
   const gesamt = bloecke.reduce((s, [k]) => s + gruppen[k].length, 0);
   if (gesamt === 0) return '';
