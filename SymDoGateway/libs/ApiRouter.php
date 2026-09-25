@@ -190,7 +190,8 @@ trait ApiRouter
                 // und so trifft dieselbe Anfrage Browser, App und Kachel.
                 if (($route[2] ?? '') === 'proposals') {
                     if ($method === 'GET') {
-                        $this->SendJson(['ok' => true, 'proposals' => $this->MailProposalsPublic()]);
+                        $this->SendJson(['ok' => true, 'proposals' => $this->MailProposalsPublic(),
+                            'intake' => $this->MailIntakeSicher()]);
                         return;
                     }
                     if ($method === 'POST') {

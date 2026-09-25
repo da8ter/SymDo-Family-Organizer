@@ -2402,7 +2402,9 @@ trait MailScan
         $id     = trim((string)($body['id'] ?? ''));
         switch ($aktion) {
             case 'list':
-                return ['ok' => true, 'proposals' => $this->MailProposalsPublic(($body['withTaken'] ?? false) === true)];
+                return ['ok' => true, 'proposals' => $this->MailProposalsPublic(($body['withTaken'] ?? false) === true),
+                        // Wohin man Mails weiterleitet — fuer die Hinweise der KI-Inbox.
+                        'intake' => $this->MailIntakeSicher()];
             case 'dismiss':
                 return ['ok' => $id !== '' && $this->MailDismiss($id)];
             case 'taken':
@@ -2677,6 +2679,91 @@ trait MailScan
         return (bool)$this->MailProp('MailHookEnabled', false)
             && (bool) $this->AiProp('AiEnabled')
             && $this->AiPrivacyAccepted();
+    }
+
+    /**
+     * Die Empfangsadressen fuer die Hinweise der KI-Inbox (25.09.2026): wohin
+     * man eine Schul- oder Kita-Mail weiterleitet, damit sie ausgewertet wird.
+     *
+     * Zwei Quellen, je nach Eingang:
+     *  - Webhook (Mailgun): die Adressliste `MailAddresses`, eine je Mitglied
+     *    und eine allgemeine (UserID leer).
+     *  - IMAP: der Anmeldename der Postfach-Instanz, WENN er eine Adresse ist.
+     *    Das Kennwort der Instanz wird dabei nicht angefasst.
+     * Zeilen verschwundener Mitglieder fallen weg; jede Adresse steht einmal.
+     *
+     * @return array{mail: bool, addresses: list<array{userId: string, name: string, address: string}>}
+     */
+    private function MailIntakePublic(): array
+    {
+        $namen = [];
+        foreach ($this->LoadUsers() as $u) {
+            $namen[(string)($u['id'] ?? '')] = (string)($u['name'] ?? '');
+        }
+        $roh = [];
+        $dazu = static function (string $uid, string $adresse) use (&$roh, $namen): void {
+            $adresse = strtolower(trim($adresse));
+            $uid = trim($uid);
+            if (filter_var($adresse, FILTER_VALIDATE_EMAIL) === false || ($uid !== '' && !isset($namen[$uid]))) {
+                return;
+            }
+            foreach ($roh as $r) {
+                if ($r['address'] === $adresse) {
+                    return;
+                }
+            }
+            $roh[] = ['userId' => $uid, 'address' => $adresse];
+        };
+        $hook = (bool)$this->MailProp('MailHookEnabled', false);
+        if ($hook) {
+            foreach ((array)json_decode((string)$this->MailProp('MailAddresses', '[]'), true) as $z) {
+                if (is_array($z)) {
+                    $dazu((string)($z['UserID'] ?? ''), (string)($z['Address'] ?? ''));
+                }
+            }
+        }
+        $imap = (bool)$this->MailProp('MailEnabled', false);
+        if ($imap) {
+            $name = static function (int $id): string {
+                if ($id <= 0 || !IPS_InstanceExists($id)) {
+                    return '';
+                }
+                $cfg = json_decode((string)@IPS_GetConfiguration($id), true);
+                return is_array($cfg) ? (string)($cfg['Username'] ?? '') : '';
+            };
+            $dazu('', $name((int)$this->MailProp('MailBoxGeneral', 0)));
+            foreach ((array)json_decode((string)$this->MailProp('MailBoxes', '[]'), true) as $z) {
+                if (is_array($z)) {
+                    $dazu((string)($z['UserID'] ?? ''), $name((int)($z['InstanceID'] ?? 0)));
+                }
+            }
+        }
+        // Die allgemeine zuerst, dann in der Reihenfolge der Mitglieder.
+        $rang = array_flip(array_keys($namen));
+        usort($roh, static fn(array $a, array $b): int
+            => [$a['userId'] === '' ? -1 : ($rang[$a['userId']] ?? 999)]
+            <=> [$b['userId'] === '' ? -1 : ($rang[$b['userId']] ?? 999)]);
+        return [
+            'mail'      => $hook || $imap,
+            'addresses' => array_map(static fn(array $r): array
+                => $r + ['name' => $r['userId'] === '' ? '' : (string)$namen[$r['userId']]], $roh),
+        ];
+    }
+
+    /**
+     * Die Adressliste darf die Vorschlagsliste nie mitreissen: scheitert sie,
+     * kommt eine leere, und die Inbox zeigt ihre Funde wie bisher.
+     *
+     * @return array{mail: bool, addresses: list<array{userId: string, name: string, address: string}>}
+     */
+    private function MailIntakeSicher(): array
+    {
+        try {
+            return $this->MailIntakePublic();
+        } catch (\Throwable $e) {
+            $this->SendDebug('Mail', 'Adressliste: ' . $e->getMessage(), 0);
+            return ['mail' => false, 'addresses' => []];
+        }
     }
 
     /** @return list<int> Allgemeines Postfach zuerst, dann die der Mitglieder. */

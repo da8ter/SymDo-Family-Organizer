@@ -180,6 +180,8 @@ final class OriginalProbe extends IPSModuleStrict
     use MailScan;
     use Originale;
 
+    // Die Adressliste der KI-Inbox (MailIntakePublic) fragt die Mitglieder.
+    private function LoadUsers(): array { return []; }
     public array $attr = [];
     public array $kaputt = [];            // Attribute, deren Lesen scheitert
     public string $originalDir = '';

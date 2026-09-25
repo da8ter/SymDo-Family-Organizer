@@ -758,7 +758,21 @@
             "Nothing new": "Nichts Neues",
             "New on the class pages": "Neu auf den Klassenseiten",
             "Nothing due — only overdue ones below.": "Nichts fällig — nur Überfälliges unten.",
-            "Topics": "Themen"
+            "Topics": "Themen",
+            "Copy": "Kopieren",
+            "General family address": "Allgemeine Familien-Adresse",
+            "For mails that do not belong to one person — e.g. parents' council, school news or parent information. Everyone in the family sees what arrives here.": "Für Mails, die zu keiner bestimmten Person gehören — z. B. Elternbeirat, Schul-News oder Eltern-Infos. Alle in der Familie sehen, was hier ankommt.",
+            "Per person": "Je Person",
+            "Mails to a person's address are assigned to that person automatically — handy for class mailing lists or different schools.": "Mails an die Adresse einer Person werden ihr automatisch zugeordnet — praktisch für Klassen-Verteiler oder unterschiedliche Schulen.",
+            "Photos and documents": "Fotos und Dokumente",
+            "Parent letters, invitations, lists: take a photo or choose a PDF, a document or text with the magic wand button below — the AI suggests tasks, appointments, notes and homework from it. Nothing is created until you confirm.": "Elternbriefe, Einladungen, Listen: Mit dem Zauberstab-Knopf unten ein Foto aufnehmen oder ein PDF, ein Dokument oder einen Text wählen — die KI schlägt daraus Aufgaben, Termine, Notizen und Hausaufgaben vor. Angelegt wird erst, wenn du bestätigst.",
+            "Mail analysis": "Mail-Auswertung",
+            "Mail analysis is not set up yet. It is switched on in the Symcon gateway under „Mail analysis“ — via an IMAP mailbox or forwarding addresses.": "Die Mail-Auswertung ist noch nicht eingerichtet. Sie wird im Symcon-Gateway unter „Mail-Analyse“ eingeschaltet — über ein IMAP-Postfach oder Weiterleitungs-Adressen.",
+            "How mails and documents get here": "So kommen Mails und Dokumente hierher",
+            "No analysed mails yet": "Noch keine ausgewerteten Mails",
+            "Forward school or daycare mails to one of these addresses — the AI turns them into appointments, tasks and notes.": "Leite Schul- oder Kita-Mails an eine dieser Adressen weiter — die KI macht daraus Termine, Aufgaben und Notizen.",
+            "Here you will find what the AI has recognised in mails and documents.": "Hier erscheint, was die KI in Mails und Dokumenten erkannt hat.",
+            "Address copied": "Adresse kopiert"
         },
         "en": {
             "SymDo ToDo List": "SymDo - ToDo List",

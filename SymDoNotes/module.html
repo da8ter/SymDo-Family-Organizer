@@ -3199,6 +3199,31 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
    Breite, Icon-Mitte bei 35px gegen eine Container-Mitte bei 245px. */
 .empty-state i,
 .empty-state svg { font-size: 34px; margin: 0 auto 10px; display: block; }
+/* Hinweise der KI-Inbox: wohin Mails weitergeleitet werden, was Dokumente
+   koennen. Die Knoepfe nach dem Hausrezept der Web-App (Flaeche 7 %, Radius 12). */
+.ki-hinweise { display: flex; flex-direction: column; gap: 12px; margin: 4px 0 16px; }
+.ki-hinweise .ki-intro { text-align: center; color: var(--muted); font-size: 14px; line-height: 1.45; margin: 0 8px; }
+.ki-hinweise .ki-intro b { display: block; color: var(--text); font-size: 18px; margin-bottom: 6px; }
+.ki-karte { background: var(--surface); border-radius: 16px; padding: 14px 16px; }
+.ki-karte h4 { margin: 0 0 4px; font-size: 15px; display: flex; gap: 8px; align-items: center; }
+.ki-karte h4 i, .ki-karte h4 svg { width: 16px; height: 16px; }
+.ki-karte p { margin: 0 0 10px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.ki-adresse { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid color-mix(in srgb, currentColor 8%, transparent); }
+.ki-adresse:first-of-type { border-top: 0; }
+.ki-adresse .wer { font-weight: 600; font-size: 14px; }
+.ki-adresse .mail { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow-wrap: anywhere; }
+.ki-adresse .text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ki-kopieren {
+  flex: 0 0 auto; border: 0; border-radius: 12px; padding: 8px 12px; cursor: pointer;
+  background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--accent);
+  font: inherit; font-size: 13px; display: inline-flex; gap: 6px; align-items: center;
+}
+.ki-kopieren:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.ki-kopieren i, .ki-kopieren svg { width: 14px; height: 14px; }
+details.ki-mehr > summary { cursor: pointer; color: var(--muted); font-size: 13px; list-style: none;
+  display: flex; gap: 6px; align-items: center; justify-content: center; padding: 6px 0; }
+details.ki-mehr > summary::-webkit-details-marker { display: none; }
+details.ki-mehr[open] > summary { margin-bottom: 8px; }
 .empty-state .empty-hint {
   display: block;
   font-size: 13px;
@@ -4529,6 +4554,9 @@ html.web-app #ladeschirm.geht { opacity: 0; }
              Baender je Sorte, in denen dieselbe Mail dreimal auftauchte. -->
         <div id="kiFinds" class="mail-ai" style="display:none;"></div>
         <div id="kiEmpty" class="empty-state" style="display:none;"><i class="fa-light fa-sparkles"></i><span id="kiEmptyText"></span></div>
+        <!-- Wie Mails und Dokumente hierher kommen (25.09.2026): ausfuehrlich,
+             solange nichts da ist, danach eingeklappt unter den Funden. -->
+        <div id="kiHinweise"></div>
       </div>
         <!-- Wie die Eingabeleisten der anderen Bereiche, nur ohne Eingabefeld:
              hier gibt es nichts einzutippen, der Knopf oeffnet die Quellen-Wahl. -->
@@ -11628,8 +11656,81 @@ function renderMailAlle() {
   const leer = document.getElementById('kiEmpty');
   if (!leer) return;
   const el = document.getElementById('kiFinds');
-  leer.style.display = (el && el.style.display !== 'none') ? 'none' : '';
+  const hatFunde = !!(el && el.style.display !== 'none');
+  /* Solange nichts da ist, ersetzen die Hinweise den knappen Leersatz; mit
+     Funden stehen sie eingeklappt darunter. */
+  leer.style.display = (hatFunde || mailIntake) ? 'none' : '';
+  const hin = document.getElementById('kiHinweise');
+  if (hin) hin.innerHTML = mailIntake ? kiHinweiseHtml(mailIntake, hatFunde) : '';
 }
+
+/* Was das Gateway zum Mail-Eingang sagt (Feld `intake` der Vorschlagsliste);
+   null = altes Gateway ohne das Feld, dann bleibt der knappe Leersatz. */
+let mailIntake = null;
+
+/**
+ * Die Hinweise der KI-Inbox (25.09.2026): wohin Schul- und Kita-Mails
+ * weitergeleitet werden und dass auch Fotos, PDFs und Dokumente gehen.
+ * `kompakt`: es gibt schon Funde — dann eingeklappt unter ihnen.
+ */
+function kiHinweiseHtml(intake, kompakt) {
+  const adressen = Array.isArray(intake.addresses) ? intake.addresses : [];
+  const allgemein = adressen.filter(a => !a.userId);
+  const personen = adressen.filter(a => a.userId);
+  const zeile = a => `<div class="ki-adresse"><span class="text">` +
+    (a.userId ? `<span class="wer">${escapeHtml(a.name || '')}</span>` : '') +
+    `<span class="mail">${escapeHtml(a.address)}</span></span>` +
+    `<button type="button" class="ki-kopieren" data-kopieren="${escapeHtml(a.address)}">` +
+    `<i class="fa-light fa-copy"></i>${escapeHtml(translate('Copy'))}</button></div>`;
+  let karten = '';
+  if (allgemein.length) {
+    karten += `<div class="ki-karte"><h4><i class="fa-light fa-house"></i>${escapeHtml(translate('General family address'))}</h4>` +
+      `<p>${escapeHtml(translate('For mails that do not belong to one person — e.g. parents\' council, school news or parent information. Everyone in the family sees what arrives here.'))}</p>` +
+      allgemein.map(zeile).join('') + `</div>`;
+  }
+  if (personen.length) {
+    karten += `<div class="ki-karte"><h4><i class="fa-light fa-user-group"></i>${escapeHtml(translate('Per person'))}</h4>` +
+      `<p>${escapeHtml(translate('Mails to a person\'s address are assigned to that person automatically — handy for class mailing lists or different schools.'))}</p>` +
+      personen.map(zeile).join('') + `</div>`;
+  }
+  const doku = `<div class="ki-karte"><h4><i class="fa-light fa-file-magnifying-glass"></i>${escapeHtml(translate('Photos and documents'))}</h4>` +
+    `<p>${escapeHtml(translate('Parent letters, invitations, lists: take a photo or choose a PDF, a document or text with the magic wand button below — the AI suggests tasks, appointments, notes and homework from it. Nothing is created until you confirm.'))}</p></div>`;
+  const ohneMail = !intake.mail || !adressen.length
+    ? `<div class="ki-karte"><h4><i class="fa-light fa-envelope"></i>${escapeHtml(translate('Mail analysis'))}</h4>` +
+      `<p>${escapeHtml(translate('Mail analysis is not set up yet. It is switched on in the Symcon gateway under „Mail analysis“ — via an IMAP mailbox or forwarding addresses.'))}</p></div>`
+    : '';
+  const inhalt = karten + ohneMail + doku;
+  if (kompakt) {
+    return `<details class="ki-mehr ki-hinweise"><summary><i class="fa-light fa-circle-info"></i>` +
+      `${escapeHtml(translate('How mails and documents get here'))}</summary>` +
+      `<div class="ki-hinweise">${inhalt}</div></details>`;
+  }
+  return `<div class="ki-hinweise"><div class="ki-intro"><b>${escapeHtml(translate('No analysed mails yet'))}</b>` +
+    `${escapeHtml(intake.mail && adressen.length
+      ? translate('Forward school or daycare mails to one of these addresses — the AI turns them into appointments, tasks and notes.')
+      : translate('Here you will find what the AI has recognised in mails and documents.'))}</div>${inhalt}</div>`;
+}
+
+/** Eine Adresse in die Zwischenablage — mit Rueckfall fuer unsichere Seiten. */
+function kiAdresseKopieren(text) {
+  const fertig = () => showToast(translate('Address copied'));
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(fertig).catch(() => kiAdresseKopierenAlt(text, fertig));
+  } else {
+    kiAdresseKopierenAlt(text, fertig);
+  }
+}
+function kiAdresseKopierenAlt(text, fertig) {
+  const f = document.createElement('textarea');
+  f.value = text; f.setAttribute('readonly', ''); f.style.position = 'fixed'; f.style.opacity = '0';
+  document.body.appendChild(f); f.select();
+  try { document.execCommand('copy'); fertig(); } catch (e) { showToast(text); }
+  f.remove();
+}
+document.addEventListener('click', ev => {
+  const k = ev.target.closest && ev.target.closest('[data-kopieren]');
+  if (k) { ev.preventDefault(); kiAdresseKopieren(k.getAttribute('data-kopieren') || ''); }
+});
 
 /** Nur mit Gateway: die Vorschlaege entstehen und liegen dort. */
 function mailAiAvailable() {
@@ -11654,6 +11755,7 @@ function loadMailProposals() {
     // Kein Gateway, alte Version, KI-Route unbekannt: still nichts anzeigen.
     if (!j || j.ok !== true || !Array.isArray(j.proposals)) return;
     mailProposals = j.proposals;
+    mailIntake = (j.intake && typeof j.intake === 'object') ? j.intake : null;
     // Alle drei Baender: Termine haengen am Kalenderbereich, Notizen am
     // Notizbereich — ohne das erschienen sie dort erst beim naechsten Tab-Wechsel.
     renderMailAlle();

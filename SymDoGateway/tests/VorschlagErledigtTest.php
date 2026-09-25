@@ -32,6 +32,8 @@ final class VorschlagProbe extends IPSModuleStrict
     use MailScan;
     use Originale;
 
+    // Die Adressliste der KI-Inbox (MailIntakePublic) fragt die Mitglieder.
+    private function LoadUsers(): array { return []; }
     public string $originalDir = '';
     private function OriginalVerzeichnis(): string
     {
