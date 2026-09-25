@@ -229,6 +229,27 @@ final class AiProvider
      *
      * @return array{ok:false,code:string,grund:string,detail:string}
      */
+    /**
+     * Sagt die Fehlerantwort „kein Guthaben"? Dann hilft Warten nicht.
+     *
+     * OpenAI nennt es in ZWEI Feldern, und nicht immer im selben: frueher
+     * `code: insufficient_quota`, am 25.09.2026 gemessen `type:
+     * insufficient_quota` mit `code: credit_balance_exhausted`. Nur das
+     * Feld `code` zu pruefen liess das leere Konto wieder als „Ratenlimit"
+     * durch — drei vergebliche Versuche je Briefing, und die falsche Meldung.
+     */
+    public static function keinGuthaben(string $body): bool
+    {
+        $d = json_decode($body, true);
+        if (!is_array($d) || !is_array($d['error'] ?? null)) {
+            return false;
+        }
+        $typ  = (string)($d['error']['type'] ?? '');
+        $code = (string)($d['error']['code'] ?? '');
+        return $typ === 'insufficient_quota'
+            || in_array($code, ['insufficient_quota', 'credit_balance_exhausted', 'billing_hard_limit_reached'], true);
+    }
+
     private static function fehler(string $code, string $grund = '', string $detail = ''): array
     {
         return ['ok' => false, 'code' => $code, 'grund' => $grund, 'detail' => $detail];
@@ -399,8 +420,7 @@ final class AiProvider
                Gegenteil: Warten hilft nicht. Der Anbieter unterscheidet es im
                Feld `code` — ohne diese Zeile stand tagelang „versuch es
                spaeter nochmal" an einem Konto ohne Guthaben. */
-            $d = json_decode((string)($resp['body'] ?? ''), true);
-            if (is_array($d) && (string)($d['error']['code'] ?? '') === 'insufficient_quota') {
+            if (self::keinGuthaben((string)($resp['body'] ?? ''))) {
                 return self::fehler('ai_no_credit');
             }
             return self::fehler('ai_rate_limited');

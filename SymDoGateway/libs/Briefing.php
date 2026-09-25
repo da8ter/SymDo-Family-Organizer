@@ -1405,6 +1405,11 @@ trait Briefing
                 . 'Fach und Uhrzeit. Direkt nach den Schulzeiten, wenn KOMMENDE '
                 . 'PRÜFUNGEN angegeben sind: je Prüfung ein kurzer Satz mit Kind, Fach, '
                 . 'Tag und dem Abstand genau so, wie er dort steht („in drei Tagen"). '
+                // Stunden-Notizen (25.09.2026): der „Vokabeltest" stand in der
+                // Schulzeile und fiel beim Kuerzen weg — dieselbe Lehre.
+                . 'Endet eine Schulzeile mit einem HINWEIS der Lehrkraft (etwa „Hinweis '
+                . 'zu Englisch: …"), MUSS er kurz in den Satz — Fach und worum es geht '
+                . '(„in Englisch steht ein Vokabeltest an"). '
                 . 'Steht unten ein ABENDESSEN, erwähne es in einem kurzen Satz '
                 . '(„Heute Abend gibt es …" bzw. in der Vorschau „Morgen gibt es …"). '
                 . 'VIERTENS zum Schluss ein kurzer Hinweis, wie viele Artikel auf der '
@@ -1429,6 +1434,10 @@ trait Briefing
                 . 'und Uhrzeit. Stehen unten KOMMENDE PRÜFUNGEN, MUSST du jede davon '
                 . 'nennen — mit Kind, Fach, Tag und dem Abstand genau so, wie er dort '
                 . 'steht („morgen", „in drei Tagen"). '
+                // Stunden-Notizen (25.09.2026): sonst fallen sie beim Zusammenfassen weg.
+                . 'Endet eine Schulzeile mit einem HINWEIS der Lehrkraft (etwa „Hinweis '
+                . 'zu Englisch: …"), MUSS er in den Text — mit Fach und worum es geht '
+                . '(„in Englisch steht ein Vokabeltest an", „Materialien mitbringen"). '
                 // Siehe oben: ohne die ausdrueckliche Pflicht faellt die Aenderung
                 // beim Zusammenfassen als Erstes weg.
                 . 'Nennt die Zeile eine Änderung — entfallene Stunden, eine Vertretung, '

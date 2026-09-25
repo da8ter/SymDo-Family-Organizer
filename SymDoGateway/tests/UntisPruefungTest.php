@@ -709,5 +709,9 @@ foreach (['detailed', 'compact'] as $stil) {
          str_contains($sys, 'Die EINZIGE Ausnahme davon sind die KOMMENDEN PRÜFUNGEN')], [true, true, true]);
 }
 
+$briefQuelle = (string)file_get_contents(__DIR__ . '/../libs/Briefing.php');
+pruefe('Beide Prompt-Fassungen verlangen den Hinweis der Lehrkraft (MUSS)',
+    substr_count($briefQuelle, 'Endet eine Schulzeile mit einem HINWEIS der Lehrkraft'), 2);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

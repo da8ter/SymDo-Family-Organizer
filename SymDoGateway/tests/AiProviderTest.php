@@ -204,6 +204,10 @@ pruefe('Zu viele Anfragen', $fall(['status' => 429])['code'], 'ai_rate_limited')
    spaeter nochmal" an einem Konto ohne Guthaben. */
 pruefe('Leeres Guthaben ist etwas anderes als ein Rate-Limit',
     $fall(['status' => 429, 'body' => '{"error":{"code":"insufficient_quota"}}'])['code'], 'ai_no_credit');
+pruefe('Leeres Guthaben in der Form vom 25.09.2026 (type statt code)',
+    $fall(['status' => 429, 'body' => '{"error":{"message":"You have no credits remaining.","type":"insufficient_quota","param":null,"code":"credit_balance_exhausted"}}'])['code'], 'ai_no_credit');
+pruefe('Ein echtes Ratenlimit bleibt eines',
+    $fall(['status' => 429, 'body' => '{"error":{"type":"requests","code":"rate_limit_exceeded"}}'])['code'], 'ai_rate_limited');
 pruefe('Anderer Fehler des Dienstes', $fall(['status' => 500])['code'], 'ai_upstream');
 pruefe('Mit dem Status als Detail', $fall(['status' => 500])['detail'], '500');
 pruefe('Kein JSON zurueck', $fall(['body' => 'kaputt'])['code'], 'ai_bad_response');

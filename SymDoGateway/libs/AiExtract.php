@@ -1172,10 +1172,9 @@ trait AiExtract
                nennen schickt auf die falsche Faehrte — genau das ist am
                04.09.2026 passiert. Der Anbieter nennt den Unterschied im
                Feld `code`. */
-            $anbieterCode = is_array($daten) ? (string)($daten['error']['code'] ?? '') : '';
             $code   = match (true) {
                 $status === 401 || $status === 403 => 'ai_unauthorized',
-                $anbieterCode === 'insufficient_quota' => 'ai_no_credit',
+                AiProvider::keinGuthaben((string)($resp['body'] ?? '')) => 'ai_no_credit',
                 $status === 429                    => 'ai_rate_limited',
                 default                            => 'ai_upstream',
             };
