@@ -950,9 +950,11 @@ trait AppCore
         // Connect-Host erreichbar (root-absolut). Nur den Web-Kopf ANHÄNGEN, statt
         // den Icon-Kit zu ersetzen. (Sollte /icons.js über Connect wider Erwarten
         // nicht erreichbar sein, wird hier später ein gebündeltes Icon-Set ergänzt.)
+        // Anker ist das Ende des Icon-Bausteins (symcon-icons-shared): er lädt /icons.js hier,
+        // oben im Fenster, wie bisher selbst; der Web-Kopf folgt direkt dahinter.
         $html = str_replace(
-            '<script src="/icons.js"></script>',
-            '<script src="/icons.js"></script>' . $this->BuildWebHead(),
+            '<!-- /symcon-icons-shared -->',
+            '<!-- /symcon-icons-shared -->' . $this->BuildWebHead(),
             $html
         );
         /* Die Seite ist gross (rund 650 kB) und aendert sich nur, wenn das Modul

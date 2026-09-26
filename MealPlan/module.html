@@ -1,4 +1,139 @@
-<script src="/icons.js"></script>
+<!-- symcon-icons-shared: Quelle visu-messung/baustein/tile-icons-shared.js, verteilt per verteilen.py -->
+    <script>
+/* symcon-icons-shared v2: Symcons /icons.js läuft einmal im Visu-Hauptfenster statt in jeder Kachel.
+   Ersetzt das Script-Tag für /icons.js im head einer Kachel. Ohne erreichbares Hauptfenster
+   (Symcon-App, direkter Aufruf, PWA) lädt die Kachel icons.js wie bisher. Symcon bleibt unverändert.
+   Steht inline in einem script-Element: niemals ein schließendes Script-Tag in diesen Text schreiben.
+   Quelle: visu-messung/baustein/tile-icons-shared.js, verteilt per verteilen.py - Kopien nicht von Hand ändern. */
+(function () {
+  var w = window, d = document, host = null;
+  try {
+    // Fremder Ursprung wirft schon beim Zugriff auf top.document.
+    if (w.top !== w && w.top.document.head) host = w.top;
+  } catch (e) {
+    host = null;
+  }
+  var slot = host ? host.__symconIcons : null;
+  if (slot && slot.v >= 1 && slot.fa) {
+    teilen(slot.fa, slot.css);
+    return;
+  }
+  // Kein Hauptfenster, oder es lädt icons.js gerade erst: für sich laden wie bisher - synchron,
+  // damit die Kachel-Skripte FontAwesome wie gewohnt vorfinden.
+  d.write('<script src="/icons.js" crossorigin="anonymous"><\/script>'); // sicher: fester Text ohne Eingabe, das bisherige icons.js-Tag
+  if (!host) return;
+  if (!slot) {
+    // Einmal im Hauptfenster nachladen, ohne dass FontAwesome dort das Flutter-DOM anfasst.
+    try {
+      slot = host.__symconIcons = { v: 1, fa: null, css: '', fehler: false };
+      host.FontAwesomeConfig = { autoReplaceSvg: false, observeMutations: false, autoAddCss: false };
+      var s = host.document.createElement('script');
+      s.src = '/icons.js';
+      s.onload = function () {
+        if (host.FontAwesome && host.FontAwesome.dom) {
+          slot.css = host.FontAwesome.dom.css();
+          slot.fa = host.FontAwesome;
+        } else {
+          slot.fehler = true;
+        }
+      };
+      s.onerror = function () {
+        slot.fehler = true;
+      };
+      host.document.head.appendChild(s);
+    } catch (e) {
+      return; // Hauptfenster nimmt kein Skript an: die Kachel bleibt beim eigenen icons.js.
+    }
+  }
+  // Kacheln kommen beim ersten Laden fast gleichzeitig: bis das Hauptfenster bereit ist, arbeitet
+  // die eigene Kopie, danach wechselt die Kachel auf die geteilte und gibt ihre eigene frei.
+  var versuche = 0;
+  var abwarten = function () {
+    if (slot.fa && d.readyState !== 'loading') {
+      wechseln(slot);
+    } else if (!slot.fehler && ++versuche <= 100) {
+      setTimeout(abwarten, 100);
+    }
+  };
+  setTimeout(abwarten, 100);
+
+  function wechseln(slot) {
+    var eigen = w.FontAwesome;
+    if (!eigen || eigen === slot.fa) return;
+    try {
+      eigen.noAuto(); // stoppt den Beobachter der eigenen Kopie
+    } catch (e) {
+      return; // eigene Kopie lässt sich nicht anhalten: bei ihr bleiben statt doppelt zu wandeln
+    }
+    // Alle drei Globalen von icons.js lösen, sonst hält FontAwesomeConfig (Getter/Setter) die Kopie fest
+    var namen = ['FontAwesome', '___FONT_AWESOME___', 'FontAwesomeConfig'];
+    for (var i = 0; i < namen.length; i++) {
+      try {
+        delete w[namen[i]];
+      } catch (e) {
+        w[namen[i]] = undefined;
+      }
+    }
+    teilen(slot.fa, slot.css);
+  }
+
+  function teilen(fa, css) {
+    w.FontAwesome = fa; // findIconDefinition/i2svg der Kachel-Skripte laufen unverändert weiter
+    var st = d.createElement('style');
+    st.textContent = css;
+    (d.head || d.documentElement).appendChild(st);
+    var wandeln = function (knoten) {
+      try {
+        fa.dom.i2svg({ node: knoten });
+      } catch (e) {
+        // Knoten schon entfernt oder Hauptfenster weg: nichts zu zeichnen.
+      }
+    };
+    // Eigener Beobachter im Fenster der Kachel: er endet mit ihr (dom.watch im Hauptfenster hielte
+    // alte Kachel-Dokumente fest). Wie bei icons.js: neue Knoten und Klassenwechsel am gezeichneten SVG.
+    var start = function () {
+      wandeln(d.body);
+      new MutationObserver(function (liste) {
+        var ziele = [];
+        for (var i = 0; i < liste.length; i++) {
+          var m = liste[i], t = m.target;
+          if (m.type === 'childList') {
+            if (m.addedNodes.length && ziele.indexOf(t) < 0) ziele.push(t);
+          } else if (t.getAttribute && t.getAttribute('data-fa-i2svg') !== null && anderesIcon(t)) {
+            neuZeichnen(t);
+          }
+        }
+        for (var j = 0; j < ziele.length; j++) {
+          if (ziele[j].isConnected) wandeln(ziele[j]);
+        }
+      }).observe(d.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    };
+    if (d.body) {
+      start();
+    } else {
+      d.addEventListener('DOMContentLoaded', start);
+    }
+  }
+
+  // Nennen die Klassen des SVG ein anderes Icon als das gezeichnete (data-icon)?
+  function anderesIcon(svg) {
+    return (' ' + (svg.getAttribute('class') || '') + ' ').indexOf(' fa-' + svg.getAttribute('data-icon') + ' ') < 0;
+  }
+
+  // SVG durch ein <i> mit seinen Klassen ersetzen; der Beobachter zeichnet es neu.
+  function neuZeichnen(svg) {
+    if (!svg.parentNode) return;
+    var klassen = (svg.getAttribute('class') || '').replace(/(^|\s)svg-inline--fa(?=\s|$)/g, ' ').trim();
+    if (!/(^|\s)(fa-(light|brands|kit|solid|regular|thin|duotone|sharp)|fa[lbkrstd])(\s|$)/.test(klassen)) {
+      klassen += ' ' + (svg.getAttribute('data-prefix') || 'fal'); // icons.js lässt die Stilklasse am SVG weg
+    }
+    var ersatz = d.createElement('i');
+    ersatz.className = klassen;
+    svg.parentNode.replaceChild(ersatz, svg);
+  }
+})();
+    </script>
+    <!-- /symcon-icons-shared -->
 <style>
 /* Symcon injiziert --card-color, --content-color und --accent-color je nach
    Visu-Design. Alles hier leitet sich daraus ab. Einziges Fremd-Asset ist
