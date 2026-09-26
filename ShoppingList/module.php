@@ -11,6 +11,7 @@ require_once __DIR__ . '/../libs/ListSource.php';
 require_once __DIR__ . '/../libs/ExternalListSync.php';
 require_once __DIR__ . '/../libs/KachelStand.php';
 require_once __DIR__ . '/../libs/KachelApp.php';
+require_once __DIR__ . '/../libs/EinkaufsUebersicht.php';
 require_once __DIR__ . '/../libs/AiRecipePage.php';
 require_once __DIR__ . '/libs/ExtListHooksShopping.php';
 
@@ -792,6 +793,50 @@ class SymDoShoppingList extends IPSModuleStrict
            Byte kein gueltiges UTF-8, gaebe json_encode `false` zurueck — die App
            bekaeme eine leere Zeichenkette und zeigte eine leere Liste. Das
            Ersatzzeichen ist die kleinere Stoerung. */
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
+    /**
+     * Was die Übersichtskachel (ShoppingListOverview) braucht — und nur das: die
+     * offenen Artikel, die Kategorien-Reihenfolge, die Bild-Basis und aus Bild-
+     * und Markenkarte nur, was diese Artikel treffen können
+     * (libs/EinkaufsUebersicht.php). Dieselben Schlüssel wie unter `state` in
+     * GetAppState, aber ohne Vorschläge, Favoriten, Käufe und Stile — die kostet
+     * GetAppState bei jedem Aufruf, und die Übersicht fragt nach jeder Änderung.
+     *
+     * Eine neue Präfix-Funktion registriert erst der nächste Kernel-Neustart;
+     * bis dahin nimmt die Übersicht SL_GetAppState und siebt selbst.
+     */
+    public function GetOverviewState(): string
+    {
+        $offen = [];
+        foreach ($this->LoadItems() as $item) {
+            if (($item['inCart'] ?? false) === true) {
+                continue;
+            }
+            $offen[] = [
+                'id'       => (string)($item['id'] ?? ''),
+                'name'     => (string)($item['name'] ?? ''),
+                'amount'   => (string)($item['amount'] ?? ''),
+                'imageUrl' => (string)($item['imageUrl'] ?? ''),
+                'category' => (string)($item['category'] ?? ''),
+            ];
+        }
+        $bilder = $this->ReadPropertyBoolean('ShowProductImages') ? $this->GetAvailableProductImages() : [];
+        $karten = EinkaufsUebersicht::Bildkarten($offen, $bilder,
+            $bilder === [] ? [] : $this->GetAvailableBrandImages($bilder));
+        return (string)json_encode([
+            'revision' => $this->ReadAttributeInteger('AppRevision'),
+            'kind'     => 'shopping',
+            'state'    => [
+                'items'           => $offen,
+                'categoryOrder'   => $this->LadenAktiv()
+                    ? $this->LadenReihenfolge(time())
+                    : $this->GetCategoryOrderFlat(),
+                'imageBase'       => $this->GetTileImageBase(),
+                'availableImages' => $karten['bilder'],
+                'availableBrands' => $karten['marken'],
+            ],
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 

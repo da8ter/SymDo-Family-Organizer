@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../libs/KachelPush.php';
+require_once __DIR__ . '/../libs/EinkaufsUebersicht.php';
+
 /**
  * Kompakte Kachel: die offenen Artikel einer Einkaufsliste als horizontal
  * scrollbare Bild-Leiste — Nachbildung der Einkaufsvorschau aus dem
@@ -9,6 +12,8 @@ declare(strict_types=1);
  */
 class SymDoShoppingListOverview extends IPSModuleStrict
 {
+    use KachelPushWeg;
+
     // GUID des Quell-Moduls Shopping List (Filter/Validierung)
     private const SHOPPINGLIST_MODULE_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';
 
@@ -96,7 +101,8 @@ class SymDoShoppingListOverview extends IPSModuleStrict
 
         $this->WriteAttributeString('SubscribedVarIDs', json_encode($subscribed));
 
-        // 3. Initialwerte an die Kachel senden
+        // 3. Initialwerte an die Kachel senden — Erstaufbau: in jedem Fall
+        $this->KachelErstaufbau();
         $this->PushState();
     }
 
@@ -107,7 +113,13 @@ class SymDoShoppingListOverview extends IPSModuleStrict
                 $this->ApplyChanges();
                 return;
             case VM_UPDATE:
-                $this->PushState();
+                /* BEWUSST ohne $Data[1]-Filter: die Liste setzt beide Zähler bei
+                   JEDEM Speichern, sie sind hier nur der Auslöser. Umbenennen,
+                   Menge oder Kategorie ändern lässt beide gleich — und genau dann
+                   zeigt der Streifen etwas Neues. Ob sich etwas geändert hat,
+                   entscheidet der Prüfwert der Nutzlast; der Einmal-Timer macht
+                   aus den zwei Zählern eines Speicherns einen Abruf. */
+                $this->KachelNachziehen();
                 return;
         }
     }
@@ -167,19 +179,36 @@ class SymDoShoppingListOverview extends IPSModuleStrict
      */
     public function RequestAction(string $Ident, mixed $Value): void
     {
+        if ($Ident === KachelPush::TIMER) {
+            // Der Einmal-Timer aus MessageSink: gebündelter Abruf
+            $this->PushState();
+            return;
+        }
         if ($Ident !== 'Check') {
             parent::RequestAction($Ident, $Value);
             return;
         }
+        /* Die Kachel hat den Artikel schon ausgeblendet (optimistisch). Bis eine
+           Nachricht deutlich nach dem Tipp hinausging, geht deshalb JEDER Stand
+           hinaus — auch ein unveränderter: er ist die Korrektur, falls das
+           Abhaken scheitert (libs/KachelPush.php, Regel 3). */
+        $this->KachelAktion();
         $id = trim((string) $Value);
         $instanceID = $this->ReadPropertyInteger('ShoppingListInstanceID');
-        if ($id === '' || $instanceID <= 0 || !IPS_InstanceExists($instanceID)) {
-            return;
+        $ok = false;
+        if ($id !== '' && $instanceID > 0 && IPS_InstanceExists($instanceID)) {
+            try {
+                // Symcon warnt statt zu werfen (unbekannte Kennung, Liste im Neuaufbau) und
+                // antwortet dann false — nur das ist das Scheitern.
+                $ok = @IPS_RequestAction($instanceID, 'ToggleCart', json_encode(['id' => $id, 'inCart' => true])) !== false;
+            } catch (\Throwable $e) {
+                $this->SendDebug('Check', $e->getMessage(), 0);
+            }
         }
-        try {
-            IPS_RequestAction($instanceID, 'ToggleCart', json_encode(['id' => $id, 'inCart' => true]));
-        } catch (\Throwable $e) {
-            $this->SendDebug('Check', $e->getMessage(), 0);
+        if (!$ok) {
+            // Gescheitert: ohne Speichern kommt von der Liste kein Ereignis — der
+            // Stand holt den ausgeblendeten Artikel zurück.
+            $this->PushState();
         }
     }
 
@@ -192,30 +221,46 @@ class SymDoShoppingListOverview extends IPSModuleStrict
             return '';
         }
 
-        // Initial-Payload inline mitgeben, damit die Kachel sofort rendert
+        // Initial-Payload inline mitgeben, damit die Kachel sofort rendert.
+        // Antwortet die Liste gerade nicht, zeichnet die Kachel den leeren Streifen —
+        // einen vorigen Stand, den sie behalten koennte, hat eine neue Kachel nicht.
         /* JSON_HEX_TAG ist hier PFLICHT: die Nutzlast steht in einem <script>-Block,
            und mit JSON_UNESCAPED_SLASHES bliebe ein „</script>" in einem Namen oder
            Titel woertlich stehen — der Block endete dort, handleMessage liefe nie, und
            der Rest landete als HTML in der Visu. */
-        $payload = json_encode($this->BuildPayload(), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_UNESCAPED_UNICODE);
+        $payload = json_encode($this->BuildPayload() ?? $this->Grundstand(),
+            JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         $html .= '<script>handleMessage(' . $payload . ');</script>';
 
         return $html;
     }
 
+    /**
+     * Den Stand an die offenen Kacheln — nur wenn er sich geaendert hat
+     * (libs/KachelPush.php). Antwortet die Liste gerade nicht, geht NICHTS
+     * hinaus: bisher kam dann ein leerer Streifen an, eine falsche Auskunft bis
+     * zum naechsten Ereignis. Das naechste Ereignis kommt von selbst — die Liste
+     * setzt ihre Zaehler in ihrem ApplyChanges, sobald sie wieder steht.
+     */
     private function PushState(): void
     {
-        $this->UpdateVisualizationValue(
-            json_encode($this->BuildPayload(), JSON_UNESCAPED_SLASHES)
-        );
+        $payload = $this->BuildPayload();
+        if ($payload === null) {
+            return;
+        }
+        $this->KachelSenden((string)json_encode($payload,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+            KachelPush::Pruefwert($payload));
     }
 
-    private function BuildPayload(): array
+    /** Die Nutzlast ohne Artikel — Einstellungen und Texte der Kachel. */
+    private function Grundstand(): array
     {
-        $payload = [
+        return [
             'type'          => 'state',
             'items'         => [],
             'productImages' => new \stdClass(),
+            'productBrands' => new \stdClass(),
             'imageBase'     => '',
             'openObjectId'  => $this->ReadPropertyInteger('OpenObjectID'),
             'imageHeight'   => max(24, $this->ReadPropertyInteger('ImageHeight')),
@@ -224,69 +269,78 @@ class SymDoShoppingListOverview extends IPSModuleStrict
             // Beschriftung unter der Zahl im Zaehler.
             'itemsLabel'    => $this->Translate('Items'),
         ];
+    }
 
+    /**
+     * Die volle Nutzlast der Kachel — null, wenn die eingestellte Liste gerade
+     * nicht antworten kann. Ohne eingestellte Liste ist der leere Streifen die
+     * richtige Auskunft.
+     *
+     * Die Bildkarten gehen NUR mit den Eintraegen hinaus, die ein offener Artikel
+     * treffen kann (libs/EinkaufsUebersicht.php) — vorher war es die ganze Karte
+     * mit rund 3 300 Eintraegen (100 KB), bei jedem Push an jede Kachel.
+     */
+    private function BuildPayload(): ?array
+    {
+        $payload = $this->Grundstand();
         $instanceID = $this->ReadPropertyInteger('ShoppingListInstanceID');
         if ($instanceID <= 0 || !IPS_InstanceExists($instanceID)) {
             return $payload;
         }
-
-        try {
-            $raw = json_decode((string) SL_GetAppState($instanceID), true);
-            $state = is_array($raw) ? ($raw['state'] ?? []) : [];
-            $payload['items'] = $this->OpenItemsInCategoryOrder(is_array($state) ? $state : []);
-            $images = $state['availableImages'] ?? [];
-            $payload['productImages'] = (is_array($images) && $images !== []) ? $images : new \stdClass();
-            $brands = $state['availableBrands'] ?? [];
-            $payload['productBrands'] = (is_array($brands) && $brands !== []) ? $brands : new \stdClass();
-            $payload['imageBase'] = (string) SL_GetTileImageBase($instanceID);
-        } catch (\Throwable $e) {
-            $this->SendDebug('BuildPayload', $e->getMessage(), 0);
+        $state = $this->QuelleLesen($instanceID);
+        if ($state === null) {
+            return null;
         }
-
+        $payload['items'] = EinkaufsUebersicht::OffeneArtikel($state);
+        $images = is_array($state['availableImages'] ?? null) ? $state['availableImages'] : [];
+        $brands = is_array($state['availableBrands'] ?? null) ? $state['availableBrands'] : [];
+        $karten = EinkaufsUebersicht::Bildkarten($payload['items'], $images, $brands);
+        $payload['productImages'] = $karten['bilder'] !== [] ? $karten['bilder'] : new \stdClass();
+        $payload['productBrands'] = $karten['marken'] !== [] ? $karten['marken'] : new \stdClass();
+        // Die Bild-Basis steht im Zustand — ein zweiter Ruf in die Liste
+        // (SL_GetTileImageBase) war ueberfluessig.
+        $payload['imageBase'] = (string)($state['imageBase'] ?? '');
         return $payload;
     }
 
     /**
-     * Offene Artikel in der Reihenfolge der Kategorien-Sortierung — identisch
-     * zur Einkaufslisten-Kachel und zur App.
+     * Der Zustand der Einkaufsliste, soweit die Uebersicht ihn braucht — oder null,
+     * wenn die Liste gerade nicht antworten kann.
      *
-     * @return array<int, array{name: string, amount: string, imageUrl: string}>
+     * Das Symcon-Log zeigte hier „InstanceInterface is not available": beim
+     * Kernel-Hochlauf und beim Neuladen der Bibliothek entsteht die Schnittstelle
+     * der Liste neu, waehrend diese Instanz schon fragt. Symcon WARNT dann (kein
+     * try/catch faengt das) und liefert keinen Text. Deshalb der Runlevel vorab,
+     * `@` und die Typprobe — der Instanzstatus taugt nicht als Probe, Symcon setzt
+     * ihn bei der Erzeugung und berechnet ihn nie neu (SymDoWebApp::IsInstanceReady).
+     * Beim Neuladen bleibt der Runlevel auf KR_READY; dort faengt die Typprobe.
+     *
+     * Schlank ueber SL_GetOverviewState — die Funktion ist neu und erst nach
+     * einem Kernel-Neustart registriert; bis dahin der volle Zustand, gesiebt wird
+     * hier wie dort.
      */
-    private function OpenItemsInCategoryOrder(array $state): array
+    private function QuelleLesen(int $instanceID): ?array
     {
-        $items = [];
-        foreach (($state['items'] ?? []) as $item) {
-            if (!is_array($item) || !empty($item['inCart'])) {
-                continue;
-            }
-            $category = trim((string) ($item['category'] ?? ''));
-            $items[$category === '' ? 'Sonstiges' : $category][] = [
-                // Die Kennung braucht die Kachel zum Abhaken; ohne sie koennte
-                // sie den Artikel nur ueber den Namen benennen, und der ist
-                // nicht eindeutig.
-                'id'       => (string) ($item['id'] ?? ''),
-                'name'     => (string) ($item['name'] ?? ''),
-                'amount'   => (string) ($item['amount'] ?? ''),
-                'imageUrl' => (string) ($item['imageUrl'] ?? ''),
-            ];
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            return null;
         }
-
-        $order = [];
-        foreach (($state['categoryOrder'] ?? []) as $category) {
-            $order[] = (string) $category;
+        $funktion = function_exists('SL_GetOverviewState') ? 'SL_GetOverviewState'
+            : (function_exists('SL_GetAppState') ? 'SL_GetAppState' : '');
+        if ($funktion === '') {
+            return null;
         }
-        foreach (array_keys($items) as $category) {
-            if (!in_array($category, $order, true)) {
-                $order[] = $category;
-            }
+        try {
+            $roh = @$funktion($instanceID);
+        } catch (\Throwable $e) {
+            $this->SendDebug('Quelle', $e->getMessage(), 0);
+            return null;
         }
-
-        $sorted = [];
-        foreach ($order as $category) {
-            foreach ($items[$category] ?? [] as $item) {
-                $sorted[] = $item;
-            }
+        $daten = is_string($roh) && $roh !== '' ? json_decode($roh, true) : null;
+        $state = is_array($daten) ? ($daten['state'] ?? null) : null;
+        if (!is_array($state)) {
+            $this->SendDebug('Quelle', 'Liste #' . $instanceID . ' antwortet gerade nicht — Stand bleibt', 0);
+            return null;
         }
-        return $sorted;
+        return $state;
     }
 }
