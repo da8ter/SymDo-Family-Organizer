@@ -54,7 +54,7 @@ pruefe('Web-App merkt den Wert VOR jeder Umformung und schickt ihn beim Abgleich
      str_contains($web, "requestAction('CheckRevisions', JSON.stringify({ revisions, hash: kachelStateHash }));"),
      str_contains($web, "requestAction('GetState', JSON.stringify({ hash: kachelStateHash }));")],
     [true, true, true]);
-pruefe('Testweise: kein 15-s-Takt, wo der Stand einen Pruefwert traegt; der Abgleich beim Sichtbarwerden bleibt',
+pruefe('Kein 15-s-Takt, wo der Stand einen Pruefwert traegt; der Abgleich beim Sichtbarwerden bleibt',
     [str_contains($web, "    if (kachelStateHash) return;\n    if (document.visibilityState === 'visible') checkRevisions();\n  }, 15000);"),
      str_contains($web, "if (document.visibilityState === 'visible') { checkRevisions(); gatewayNachladen(); }")], [true, true]);
 foreach (['ToDoList', 'ShoppingList', 'SymDoNotes', 'SymDoHomework', 'SymDoEdumaps'] as $m) {
