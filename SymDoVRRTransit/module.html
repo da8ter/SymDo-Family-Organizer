@@ -1728,9 +1728,16 @@ function symboleErsetzen() {
    steht sie hier, weil nachfassen() sie braucht. */
 let melden = null;
 
+/* Pruefwert des gezeigten Stands (26.09.2026). Jede Meldung schickt ihn mit,
+   und das Modul sendet nur, was die Kachel nicht schon hat — bisher schob
+   jede offene Kachel jede Minute den ganzen Stand an alle. Die Minuten laufen
+   trotzdem: der Pruefwert rechnet `now` minutengenau mit. */
+let kachelStateHash = '';
+
 function handleMessage(daten) {
   if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
   if (!daten || typeof daten !== 'object') { return; }
+  if (typeof daten.stateHash === 'string') { kachelStateHash = daten.stateHash; }
   zustand = daten;
   zeichne();
   nachfassen();
@@ -1780,10 +1787,13 @@ function nachfassen() {
    selbst kommen geschoben (UpdateVisualizationValue → handleMessage).
 
    Nur bei sichtbarer Kachel: eine, die hinter einer anderen Seite liegt, soll
-   keine fremde Schnittstelle beschäftigen. Und die Antwort auf jede Meldung
-   zeichnet mit, was ohnehin nötig ist — die Minuten laufen weiter. */
+   keine fremde Schnittstelle beschäftigen. Geantwortet wird nur, wenn die
+   Kachel den Stand nicht schon hat (Pruefwert) — mit jeder neuen Minute ist
+   das so, die Minuten laufen also weiter. */
 if (typeof requestAction === 'function') {
-  melden = () => { try { requestAction('GetState', ''); } catch (e) { /* außerhalb der Visu */ } };
+  melden = () => {
+    try { requestAction('GetState', JSON.stringify({ hash: kachelStateHash })); } catch (e) { /* außerhalb der Visu */ }
+  };
   melden();
   /* Jede Meldung aus dem Takt oder vom Zurueckkommen beginnt eine neue Runde
      Nachfragen — sonst waere das Kontingent nach einer Stoerung fuer immer

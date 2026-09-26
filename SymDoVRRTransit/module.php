@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/libs/TransitStore.php';
+require_once __DIR__ . '/../libs/KachelPush.php';
 
 /**
  * SymDo VRR Transit — Abfahrten, Strecken und der Schulweg als HTML-Kachel.
@@ -26,6 +27,7 @@ require_once __DIR__ . '/libs/TransitStore.php';
 class SymDoVRRTransit extends IPSModuleStrict
 {
     use TransitStore;
+    use KachelPushWeg;
 
     private const GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
@@ -78,6 +80,8 @@ class SymDoVRRTransit extends IPSModuleStrict
         $this->TransitTaktVergessen();
         $this->TransitZeitenWandern();
         $this->TransitTaktSetzen(time());
+        // Erstaufbau: der Stand geht in jedem Fall hinaus.
+        $this->KachelErstaufbau();
         $this->PushState();
     }
 
@@ -107,10 +111,12 @@ class SymDoVRRTransit extends IPSModuleStrict
                 return;
 
             case 'GetState':
-                /* Die Kachel fragt beim Öffnen, und das Gateway stößt seine
-                   Kacheln hiermit an. Beides heißt: jemand sieht hin. */
+                /* Die Kachel fragt beim Öffnen, im Minutentakt und beim
+                   Sichtbarwerden. Das heißt: jemand sieht hin — der Stempel gilt
+                   auch dann, wenn die Kachel den Stand schon hat. Sie schickt
+                   seinen Prüfwert mit; gesendet wird nur, was sie nicht kennt. */
                 $this->TransitTaktSetzen($jetzt, $this->TransitGesehen($jetzt));
-                $this->PushState();
+                $this->PushState($Value);
                 return;
 
             case 'ModesReset':
@@ -194,16 +200,49 @@ class SymDoVRRTransit extends IPSModuleStrict
         }
         /* JSON_HEX_TAG ist PFLICHT: die Nutzlast steht in einem <script>-Block,
            und ein „</script>" in einem Haltestellennamen beendete ihn —
-           handleMessage liefe nie, der Rest landete als HTML in der Visu. */
-        $zustand = json_encode($this->TransitPayload(time()),
+           handleMessage liefe nie, der Rest landete als HTML in der Visu.
+           Mit Prüfwert: den schickt die Kachel bei jeder Meldung zurück. */
+        $zustand = json_encode($this->MitPruefwert($this->TransitPayload(time())),
             JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         return $html . '<script>handleMessage(' . $zustand . ');</script>';
     }
 
-    private function PushState(): void
+    /**
+     * Den Stand an die Kachel — nur, was sie noch nicht hat.
+     *
+     * Ohne `$kachel` (Abruf-Takt, Refresh, ApplyChanges): nur wenn er sich
+     * gegenüber dem zuletzt gesendeten geändert hat (libs/KachelPush.php).
+     * Mit `$kachel` (GetState, der Herzschlag der Kachel alle 60 s): sie
+     * schickt den Prüfwert ihres Stands mit, und bei Gleichheit geht nichts
+     * hinaus (KachelStand). Bisher schob JEDE offene Kachel jede Minute den
+     * ganzen Stand an ALLE — jetzt geht er einmal je Minute hinaus.
+     *
+     * Die Minuten laufen trotzdem: `now` zählt minutengenau mit, und die
+     * Abfahrtsminuten (`countdown`, `leaveIn`) stehen fertig im Stand — jede neue
+     * Minute ist ein neuer Prüfwert und damit ein Push. Die Strecken rechnen
+     * „in x Minuten" in der Kachel aus `now`; auch das rückt so jede Minute.
+     */
+    private function PushState(mixed $kachel = null): void
     {
-        $this->UpdateVisualizationValue((string)json_encode($this->TransitPayload(time()),
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+        $daten = $this->MitPruefwert($this->TransitPayload(time()));
+        $nachricht = (string)json_encode($daten,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($kachel === null) {
+            $this->KachelSenden($nachricht, $daten['stateHash']);
+            return;
+        }
+        if (KachelStand::Kennt($daten['stateHash'], $kachel)) {
+            return;
+        }
+        // Diese Kachel hat ihn nicht (oder ist eine alte ohne Prüfwert): senden.
+        $this->KachelSenden($nachricht, $daten['stateHash'], true);
+    }
+
+    /** Der Stand mit seinem Prüfwert; `now` zählt minutengenau (libs/KachelPush.php). */
+    private function MitPruefwert(array $daten): array
+    {
+        $daten['stateHash'] = KachelPush::Pruefwert($daten, [], ['now']);
+        return $daten;
     }
 
     // ------------------------------------------------------------------
