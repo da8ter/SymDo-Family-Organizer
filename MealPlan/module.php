@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/libs/MealStore.php';
+require_once __DIR__ . '/../libs/KachelPush.php';
 
 /**
  * SymDo Meal Plan — der Essensplan als HTML-Kachel.
@@ -17,12 +18,16 @@ require_once __DIR__ . '/libs/MealStore.php';
 class SymDoMealPlan extends IPSModuleStrict
 {
     use MealStore;
+    use KachelPushWeg;
 
     private const SHOPPING_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';
     private const GATEWAY_GUID  = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
     // Änderungen dieser Variablen der Quelle stoßen den Kachel-Push an
     private const SRC_IDENTS = ['ItemCount', 'LastUsed'];
+
+    /** Das „heute" des zuletzt gebauten Stands — für den Datumswechsel in MessageSink. */
+    private const PUFFER_TAG = 'KachelPushTag';
 
 
     /**
@@ -112,6 +117,8 @@ class SymDoMealPlan extends IPSModuleStrict
         // Einmalig: früher hier erzeugte Gerichtsbilder ans Gateway übergeben.
         $this->DishUebergeben();
 
+        // Erstaufbau: der Stand geht in jedem Fall hinaus.
+        $this->KachelErstaufbau();
         $this->PushState();
     }
 
@@ -127,7 +134,17 @@ class SymDoMealPlan extends IPSModuleStrict
                 }
                 return;
             case VM_UPDATE:
-                $this->PushState();
+                /* Nur ein geaenderter Zaehler zaehlt (libs/KachelPush.php, Regel 1):
+                   der Plan haengt an den Favoritenlisten, nicht an den Artikeln —
+                   ein Umbenennen im Einkauf aendert hier nichts, kostete aber jedes
+                   Mal den vollen Zustand der Liste und bis zu vierzehn Miniaturen.
+                   Ausnahme Datumswechsel: „heute" und die Wochen ruecken, und ohne
+                   eigenen Takt ist das naechste Ereignis der einzige Anlass.
+                   Gebuendelt, weil ein Abhaken beide Zaehler aendert. */
+                if ($this->KachelVmBeachten($Data)
+                    || $this->GetBuffer(self::PUFFER_TAG) !== date('Y-m-d')) {
+                    $this->KachelNachziehen();
+                }
                 return;
         }
     }
@@ -136,6 +153,12 @@ class SymDoMealPlan extends IPSModuleStrict
     {
         switch ($Ident) {
             case 'GetState':
+                // Ausdrückliche Anfrage (die Kachel stellt sie nicht, Skripte schon): immer senden.
+                $this->PushState(true);
+                return;
+
+            case KachelPush::TIMER:
+                // Der Einmal-Timer aus MessageSink
                 $this->PushState();
                 return;
 
@@ -374,9 +397,18 @@ class SymDoMealPlan extends IPSModuleStrict
     // Intern
     // ------------------------------------------------------------------
 
-    private function PushState(): void
+    /**
+     * Den Wochen-Stand an die Kachel — nur wenn er sich geändert hat
+     * (libs/KachelPush.php). Antworten wie cartDone oder mealDetail gehen über
+     * Push() und immer hinaus: sie sind keine Stände, sondern Antworten.
+     */
+    private function PushState(bool $immer = false): void
     {
-        $this->Push($this->PayloadBauen(time()));
+        $daten = $this->PayloadBauen(time());
+        $this->SetBuffer(self::PUFFER_TAG, (string)$daten['today']);
+        $this->KachelSenden((string)json_encode($daten,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+            KachelPush::Pruefwert($daten), $immer);
     }
 
     private function Push(array $daten): void
