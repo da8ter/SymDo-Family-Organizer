@@ -6,6 +6,7 @@ require_once __DIR__ . '/libs/TimetableCalc.php';
 require_once __DIR__ . '/libs/TimetableSubjects.php';
 require_once __DIR__ . '/libs/TimetableStore.php';
 require_once __DIR__ . '/libs/HolidaySource.php';
+require_once __DIR__ . '/../libs/KachelStand.php';
 
 /**
  * Stundenplan der Kinder: eine Wochenvorlage, gepflegt im Backend, gezeigt als
@@ -150,7 +151,7 @@ class SymDoTimetable extends IPSModuleStrict
         // Und danach: sind die Kinder umsortiert worden, wandern ihre Stunden mit.
         $this->StundenAbgleichen();
 
-        $this->PushState();
+        $this->PushState(true);
     }
 
     public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
@@ -979,21 +980,35 @@ class SymDoTimetable extends IPSModuleStrict
                 return;
             case 'GetState':
                 // Nur zeigen, nichts aendern — die Kachel fragt beim Oeffnen.
-                $this->PushState();
+                $this->PushState(true);
                 return;
         }
         parent::RequestAction($Ident, $Value);
     }
 
-    private function PushState(): void
+    /** @param bool $immer auch einen unveränderten Plan senden (Öffnen der Kachel, Übernehmen) */
+    private function PushState(bool $immer = false): void
     {
         /* Fuer die Kachel ohne UNESCAPED_UNICODE — siehe unten. GetPlan()
            selbst bleibt unveraendert, es ist die oeffentliche Auskunft fuer
            Skripte und soll dort lesbar bleiben. */
         $plan = json_decode($this->GetTilePlan(), true);
-        $this->UpdateVisualizationValue(is_array($plan)
-            ? (string)json_encode($plan, JSON_UNESCAPED_SLASHES)
-            : $this->GetTilePlan());
+        if (!is_array($plan)) {
+            $this->UpdateVisualizationValue($this->GetTilePlan());
+            return;
+        }
+        /* Der Fuenf-Minuten-Takt schickte jedes Mal den ganzen Plan (~50 KB),
+           auch wenn sich nur die Minute bewegt hatte. Die rechnet die Kachel
+           zwischen zwei Sendungen selbst weiter (jetztMinute) — im Pruefwert
+           steht nur, OB es eine gibt. So geht der Plan nur noch hinaus, wenn
+           sich etwas daran geaendert hat: Datum, naechste Stunde,
+           Hausaufgaben, Ferien, Jetzt-Strich an oder aus. */
+        $pruefwert = KachelStand::Pruefwert(['now' => isset($plan['now'])] + $plan);
+        if (!$immer && $pruefwert === $this->GetBuffer('TilePlanHash')) {
+            return;
+        }
+        $this->SetBuffer('TilePlanHash', $pruefwert);
+        $this->UpdateVisualizationValue((string)json_encode($plan, JSON_UNESCAPED_SLASHES));
     }
 
     /**
