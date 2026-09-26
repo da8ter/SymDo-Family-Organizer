@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <!-- symcon-icons-shared: Quelle visu-messung/baustein/tile-icons-shared.js, verteilt per verteilen.py -->
     <script>
-/* symcon-icons-shared v2: Symcons /icons.js läuft einmal im Visu-Hauptfenster statt in jeder Kachel.
+/* symcon-icons-shared v3: Symcons /icons.js läuft einmal im Visu-Hauptfenster statt in jeder Kachel.
    Ersetzt das Script-Tag für /icons.js im head einer Kachel. Ohne erreichbares Hauptfenster
    (Symcon-App, direkter Aufruf, PWA) lädt die Kachel icons.js wie bisher. Symcon bleibt unverändert.
    Steht inline in einem script-Element: niemals ein schließendes Script-Tag in diesen Text schreiben.
@@ -29,8 +29,20 @@
   if (!slot) {
     // Einmal im Hauptfenster nachladen, ohne dass FontAwesome dort das Flutter-DOM anfasst.
     try {
-      slot = host.__symconIcons = { v: 1, fa: null, css: '', fehler: false };
-      host.FontAwesomeConfig = { autoReplaceSvg: false, observeMutations: false, autoAddCss: false };
+      // Slot und Konfiguration als Objekte des Hauptfensters: ein Objekt dieser Kachel hielte sie
+      // (samt Dokument) fest, solange das Hauptfenster lebt. Aus demselben Grund lösen die Lade-Handler
+      // sich nach dem Laden selbst.
+      slot = new host.Object();
+      slot.v = 1;
+      slot.fa = null;
+      slot.css = '';
+      slot.fehler = false;
+      host.__symconIcons = slot;
+      var config = new host.Object();
+      config.autoReplaceSvg = false;
+      config.observeMutations = false;
+      config.autoAddCss = false;
+      host.FontAwesomeConfig = config;
       var s = host.document.createElement('script');
       s.src = '/icons.js';
       s.onload = function () {
@@ -40,9 +52,11 @@
         } else {
           slot.fehler = true;
         }
+        s.onload = s.onerror = null;
       };
       s.onerror = function () {
         slot.fehler = true;
+        s.onload = s.onerror = null;
       };
       host.document.head.appendChild(s);
     } catch (e) {
