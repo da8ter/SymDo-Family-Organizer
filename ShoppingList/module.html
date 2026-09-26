@@ -5006,6 +5006,11 @@ html.web-app #ladeschirm.geht { opacity: 0; }
           <label id="lblTodoLead"></label>
           <select id="tdLeadTime"></select>
         </div>
+        <!-- Nur in der ToDo-Kachel sichtbar: die Web-App kennt recurrenceResetLeadTime nicht. -->
+        <div id="tdReopenSection" class="form-row inline" style="display:none;">
+          <label id="lblTodoReopen"></label>
+          <select id="tdReopen"></select>
+        </div>
       </div>
       <div class="form-row"><label id="lblTodoAssign"></label><div id="tdAssignList" class="assign-list"></div></div>
       <div class="form-row inline">
@@ -5508,6 +5513,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 
 <div class="toast" id="toast"></div>
 
+<script>window.__SYMDO_KACHEL__ = { art: 'shopping' };</script>
 <script>
 // In einer IIFE gekapselt: die Symcon-Tile-Visu injiziert selbst globale
 // Bindungen (const translate, const requestAction …). Ohne Kapselung würden
@@ -5598,58 +5604,69 @@ function escapeHtml(s) {
     .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
-/* ── Kachel-Adapter ────────────────────────────────────────────────────────────
-   Diese Datei IST die Web-App, wortgleich uebernommen — damit die Einkaufsliste in
-   der Kachel genauso aussieht und sich genauso verhaelt. Sie laeuft hier aber in
-   der Kachel EINER ShoppingList-Instanz statt am Gateway:
+/* ── Kachel-Modus ──────────────────────────────────────────────────────────────
+   Dieselbe App läuft auch als Visu-Kachel EINER Liste (ToDoList- oder ShoppingList-
+   Instanz) statt am Gateway. Das Kachel-Modul setzt dafür vor diesem Skript
+   window.__SYMDO_KACHEL__ = { art: 'todo' | 'shopping' }. Ohne den Schalter (Web-App,
+   Kacheln von SymDoWebApp, Notizen, Hausaufgaben, Klassenseiten) ist KACHEL null und
+   alles bleibt wie bisher. Früher setzten die Übernahme-Skripte diese Stellen als
+   Textersatz in Kopien der Datei um; als Schalter können alle Kacheln denselben
+   Skripttext laden (einmal kompiliert, vom Browser geteilt).
 
+   In der Listen-Kachel gilt:
    - kein Payload mit mehreren Instanzen, sondern der Zustand dieser einen Liste,
-   - kein Call-Relay mit instanceID, sondern requestAction direkt an diese Instanz,
-   - keine Dashboard-, Aufgaben-, Kalender-, Notiz- und KI-Bereiche.
-
-   Der Adapter setzt genau diese Beruehrungspunkte um; alles darueber bleibt
-   unangetastet, damit die naechste Uebernahme wieder wortgleich moeglich ist
-   (siehe ShoppingList/tools/uebernahme-webapp.py). Die anderen Bereiche werden
-   NICHT herausgeschnitten, sondern ueber tabs abgeschaltet:
-   applyTabVisibility() blendet Knopf und Bereich aus und laesst bei nur einem
-   Bereich die Leiste ganz weg. Herausschneiden haette in 15000 Zeilen mit hoher
-   Wahrscheinlichkeit Behaltenes mitgerissen.
-
-   AppCall des Moduls delegiert intern an RequestAction — dieselben Aktionsnamen
-   und dieselben Nutzlasten. Deshalb genuegt in sdCall ein direkter
-   requestAction. */
+   - kein Call-Relay mit instanceID, sondern requestAction direkt an diese Instanz
+     (AppCall des Moduls delegiert an RequestAction: gleiche Aktionen, gleiche Nutzlasten),
+   - nur der eigene Bereich; die anderen schaltet tabs ab (applyTabVisibility blendet
+     Knopf und Bereich aus), statt sie herauszuschneiden. */
+const KACHEL = (() => {
+  const k = window.__SYMDO_KACHEL__;
+  return k && (k.art === 'todo' || k.art === 'shopping') ? { art: k.art } : null;
+})();
 const SELF_ID = 'self';
 
-/** Zustand dieser Liste in die Form bringen, die die Web-App erwartet. */
+/** Zustand der Listen-Kachel in die Form bringen, die die Web-App erwartet. */
 function kachelZustand(daten) {
-  const bilder = daten.availableImages || {};
+  if (KACHEL && KACHEL.art === 'shopping') {
+    const bilder = daten.availableImages || {};
+    return {
+      type: 'state',
+      // Die Nutzer liefert die Kachel im Zustand mit (GetTileUsers); einen
+      // "aktuellen Nutzer" wie in der App gibt es in der Visu nicht.
+      users: daten.users || [],
+      defaultUserID: '',
+      gatewayAvailable: false,
+      // Keine KI in der Kachel: sie lief in der Web-App ueber das Gateway.
+      aiEnabled: false,
+      tabs: { dashboard: false, shopping: true, todos: false, calendar: false, notes: false, ki: false },
+      hiddenIDs: [],
+      instances: [{ id: SELF_ID, kind: 'shopping', name: daten.listName || '' }],
+      states: { [SELF_ID]: { kind: 'shopping', revision: 0, state: daten } },
+      images: bilder,
+      brands: daten.availableBrands || {},
+      /* Die Basis-URLs kommen AUS DEM ZUSTAND. Das injizierte window.__imageHookUrl
+         ist nur noch Rueckfall fuer aeltere Modulfassungen. imagesEnabled leitet sich
+         aus dem Bestand ab: ist "Produktbilder anzeigen" aus, kommt eine leere Bildliste. */
+      shoppingExtras: { [SELF_ID]: {
+        imagesEnabled: Object.keys(bilder).length > 0,
+        imageBase: daten.imageBase || window.__imageHookUrl || '',
+        extApiBase: daten.extApiBase || window.__extApiHookUrl || '',
+      } },
+    };
+  }
   return {
     type: 'state',
-    // Die Nutzer liefert die Kachel im Zustand mit (GetTileUsers); einen
-    // "aktuellen Nutzer" wie in der App gibt es in der Visu nicht.
     users: daten.users || [],
     defaultUserID: '',
     gatewayAvailable: false,
-    // Keine KI in der Kachel: sie lief in der Web-App ueber das Gateway.
     aiEnabled: false,
-    tabs: { dashboard: false, shopping: true, todos: false, calendar: false, notes: false, ki: false },
+    tabs: { dashboard: false, shopping: false, todos: true },
     hiddenIDs: [],
-    instances: [{ id: SELF_ID, kind: 'shopping', name: daten.listName || '' }],
-    states: { [SELF_ID]: { kind: 'shopping', revision: 0, state: daten } },
-    images: bilder,
-    brands: daten.availableBrands || {},
-    /* Die Basis-URLs kommen AUS DEM ZUSTAND. Das injizierte window.__imageHookUrl
-       ist nur noch Rueckfall fuer aeltere Modulfassungen: syncCompat() setzt die
-       Variable selbst, und traf der erste Zustand ein, bevor das an das HTML
-       angehaengte <script> gelaufen war, schrieb sie sich dauerhaft leer — die
-       Kachel zeigte dann bis zum naechsten Push keine Produktbilder.
-       imagesEnabled leitet sich aus dem Bestand ab: ist "Produktbilder anzeigen"
-       aus, kommt eine leere Bildliste. */
-    shoppingExtras: { [SELF_ID]: {
-      imagesEnabled: Object.keys(bilder).length > 0,
-      imageBase: daten.imageBase || window.__imageHookUrl || '',
-      extApiBase: daten.extApiBase || window.__extApiHookUrl || '',
-    } },
+    instances: [{ id: SELF_ID, kind: 'todo', name: daten.listName || '' }],
+    states: { [SELF_ID]: { kind: 'todo', revision: 0, state: daten } },
+    images: {},
+    brands: {},
+    shoppingExtras: {},
   };
 }
 
@@ -5711,12 +5728,13 @@ function aiPostRoh(path, payload) {
     return fetch(base + path, { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify(payload) })
       .then(r => r.json().then(j => ({ status: r.status, json: j })).catch(() => ({ status: r.status, json: null })));
   }
-  // In DIESER Kachel gibt es kein Gateway: das ShoppingList-Modul kennt den Ident
-  // 'AiCall' nicht und wuerde "Ungueltiger Ident" werfen. Deshalb hier still
+  // In der Listen-Kachel gibt es kein Gateway: das Listen-Modul kennt den Ident
+  // 'AiCall' nicht und wuerde "Ungueltiger Ident" werfen. Deshalb dort still
   // scheitern statt zu relayen; die Aufrufer behandeln ein leeres Ergebnis (status 0).
-  if (!window.__symdoApiPost && !window.__SYMDO__) {
+  if (KACHEL) {
     return Promise.resolve({ status: 0, json: null });
   }
+  // Visu-Kachel (kein Token): über requestAction relayen; Antwort kommt via handleMessage('aiResult').
   const txn = 'ai' + (++__aiTxn);
   return new Promise((resolve) => {
     const eintrag = { fertig: resolve, uhr: 0, nachfrage: 0 };
@@ -7084,10 +7102,15 @@ function recurrenceLabel(r, unit, val) {
 // ── Protokoll: Call/GetState/CheckRevisions ────────────────────────────────
 let txnCounter = 0;
 function sdCall(instanceID, action, payload) {
-  // instanceID ist in der Kachel bedeutungslos — es gibt genau diese eine Liste.
-  // Skalare Nutzlasten gehen unveraendert durch: DeleteItem erwartet im Modul
-  // einen String, kein Objekt.
-  requestAction(action, typeof payload === 'string' ? payload : JSON.stringify(payload || {}));
+  if (KACHEL) {
+    // instanceID ist in der Kachel bedeutungslos — es gibt genau diese eine Liste.
+    // Skalare Nutzlasten gehen unveraendert durch: DeleteItem erwartet im Modul
+    // einen String, kein Objekt.
+    requestAction(action, typeof payload === 'string' ? payload : JSON.stringify(payload || {}));
+    return;
+  }
+  const txn = 'tx' + (++txnCounter);
+  requestAction('Call', JSON.stringify({ instanceID, action, payload, txn }));
 }
 function requestState() { requestAction('GetState', 0); }
 /* Pruefwert des zuletzt empfangenen Stands (26.09.2026). Die Kachel-Module
@@ -7096,9 +7119,23 @@ function requestState() { requestAction('GetState', 0); }
    Modul nichts. Das Gateway kennt ihn nicht — dort bleibt er leer. */
 let kachelStateHash = '';
 function checkRevisions() {
-  // Kein Revisionsabgleich ueber mehrere Instanzen: die Kachel fragt den Stand
-  // ihrer eigenen Liste ab — mit dem Pruefwert, das Modul sendet nur Neues.
-  requestAction('GetState', JSON.stringify({ hash: kachelStateHash }));
+  if (KACHEL) {
+    // Kein Revisionsabgleich ueber mehrere Instanzen: die Kachel fragt den Stand
+    // ihrer eigenen Liste ab — mit dem Pruefwert, das Modul sendet nur Neues.
+    requestAction('GetState', JSON.stringify({ hash: kachelStateHash }));
+    return;
+  }
+  const revisions = {};
+  for (const inst of store.instances) {
+    if (inst.hidden) continue;
+    const entry = store.states[String(inst.id)];
+    revisions[String(inst.id)] = entry ? entry.revision : -1;
+  }
+  if (Object.keys(revisions).length > 0) {
+    requestAction('CheckRevisions', JSON.stringify({ revisions, hash: kachelStateHash }));
+  } else {
+    requestAction('GetState', JSON.stringify({ hash: kachelStateHash }));
+  }
 }
 
 /* ── Ladeschirm ─────────────────────────────────────────────────────────────
@@ -7202,10 +7239,10 @@ function handleMessage(data) {
   // Vor jeder Umformung merken: die Kachel-Adapter bauen den Stand danach um.
   if (data && typeof data === 'object' && typeof data.stateHash === 'string') kachelStateHash = data.stateHash;
   if (!data || typeof data !== 'object') return;
-  // Die Kachel bekommt den Zustand ihrer Liste flach (items, categories, …), die
-  // Web-App erwartet ihn in store-Form. Erkennungsmerkmal ist items: das Gateway
+  // Die Listen-Kachel bekommt den Zustand ihrer Liste flach (items, categories, …),
+  // die Web-App erwartet ihn in store-Form. Erkennungsmerkmal ist items: das Gateway
   // schickt an dieser Stelle instances/states.
-  if (data.type === 'state' && Array.isArray(data.items)) {
+  if (KACHEL && data.type === 'state' && Array.isArray(data.items)) {
     data = kachelZustand(data);
   }
   if (data.type === 'briefingPlay') {
@@ -18793,6 +18830,14 @@ function renderFavPicker() {
 
 // ── ToDo-Editor ────────────────────────────────────────────────────────────
 const LEAD_TIMES = [0, 300, 600, 1800, 3600, 18000, 43200];
+// Nur in der ToDo-Kachel: Vorlauf, mit dem eine erledigte Serie wieder geoeffnet wird.
+const REOPEN_TIMES = [0, 1800, 3600, 21600, 43200, 86400, 172800, 259200, 604800, 1209600, 2592000];
+function reopenLabel(sec) {
+  if (sec === 0) return translate('Do not reopen');
+  if (sec < 3600) return String(sec / 60) + ' ' + translate('minutes before');
+  if (sec < 86400) return String(sec / 3600) + ' ' + translate('hours before');
+  return String(sec / 86400) + ' ' + translate('days before');
+}
 let todoCtx = null; // {instanceID, itemId|null}
 let tdAssigned = [];
 let tdPriority = 'normal';
@@ -18880,6 +18925,12 @@ function openTodoEditor(instanceID, item) {
   unitSel.value = item && item.recurrenceCustomUnit ? String(item.recurrenceCustomUnit) : 'w';
   document.getElementById('tdCustomValue').value = item && item.recurrenceCustomValue ? String(item.recurrenceCustomValue) : '1';
 
+  const reopenSel = document.getElementById('tdReopen');
+  reopenSel.innerHTML = REOPEN_TIMES.map(s => `<option value="${s}">${reopenLabel(s)}</option>`).join('');
+  const reopen = item && item.recurrenceResetLeadTime !== undefined
+    ? parseInt(item.recurrenceResetLeadTime) : 604800;
+  reopenSel.value = String(REOPEN_TIMES.includes(reopen) ? reopen : 604800);
+
   document.getElementById('tdNotification').checked = !!(item && item.notification === true);
   const leadSel = document.getElementById('tdLeadTime');
   leadSel.innerHTML = LEAD_TIMES.map(s => `<option value="${s}">${leadTimeLabel(s)}</option>`).join('');
@@ -18918,6 +18969,9 @@ function syncTodoEditorVisibility() {
     (hasDue && document.getElementById('tdRecurrence').value === 'custom') ? 'flex' : 'none';
   document.getElementById('tdLeadSection').style.display =
     (hasDue && document.getElementById('tdNotification').checked) ? 'flex' : 'none';
+  // Wieder-Oeffnen gibt es nur in der ToDo-Kachel und nur bei einer Wiederholung.
+  document.getElementById('tdReopenSection').style.display =
+    (KACHEL && KACHEL.art === 'todo' && hasDue && document.getElementById('tdRecurrence').value !== 'none') ? 'flex' : 'none';
 }
 /**
  * Mitglieder-Auswahl. Aufgaben und Termine benutzen dieselbe Liste — gleiche
@@ -19025,6 +19079,10 @@ function saveTodoEditor() {
     }
     fields.notification = document.getElementById('tdNotification').checked;
     fields.notificationLeadTime = parseInt(document.getElementById('tdLeadTime').value) || 0;
+    if (KACHEL && KACHEL.art === 'todo') {
+      fields.recurrenceResetLeadTime = (fields.recurrence && fields.recurrence !== 'none')
+        ? (parseInt(document.getElementById('tdReopen').value) || 0) : 0;
+    }
   } else {
     fields.due = 0;
     fields.dueAllDay = false;
@@ -19868,6 +19926,7 @@ function initCaptions() {
   set('lblTodoCustom', translate('Every'));
   set('lblTodoNotification', translate('Notification'));
   set('lblTodoLead', translate('Lead time'));
+  set('lblTodoReopen', translate('Reopen'));
   set('lblTodoAssign', translate('Assigned to'));
   set('lblTodoPriority', translate('Priority'));
   set('lblTodoQuantity', translate('Quantity'));
