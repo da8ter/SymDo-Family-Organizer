@@ -15,7 +15,7 @@ Kommentar an der Zeile, warum etwas sicher ist, gilt als Ausnahme.
   das die 24-Hex-Kennung kennt.
 - Tokenlos: `lists/webapp` (Seite + `window.__SYMDO__`: Schalter, eigene
   Adressen wie `localBase`, VAPID-Key, Weckwort — keine Mitglieder-, Bestands-
-  oder Instanzdaten), `lists/ws` (nur `{"t":"dirty"}`/`{"t":"job","id"}`),
+  oder Instanzdaten), `lists/webapp/app.js` (nur Kachel-Skript), `lists/ws` (nur `{"t":"dirty"}`/`{"t":"job","id"}`),
   `lists/pwa`, OAuth-Rückrufe `todogateway_google/_microsoft` (nur `state`),
   `shoppinglist/assets/<id>` (eigener `WebHookToken` in `?t=`).
 - Mail-Webhook: Pfadgeheimnis (`hash_equals`) UND HMAC über `timestamp.token`

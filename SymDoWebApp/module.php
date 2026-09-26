@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../libs/KachelApp.php';
+
 require_once __DIR__ . '/../libs/Bereiche.php';
 
 /**
@@ -684,6 +686,8 @@ class SymDoWebApp extends IPSModuleStrict
             $this->LogMessage('GetVisualizationTile: module.html nicht lesbar, Pfad=' . $path, KL_WARNING);
             return '';
         }
+        // Das App-Skript kommt als eine gecachte Datei vom Gateway, wenn es gleich ist (libs/KachelApp.php).
+        $html = KachelApp::Auslagern($html, KachelApp::GatewaySkript(dirname(__DIR__)));
 
         /* Gesprächskern und Blase VOR dem Dokument — dieselbe Quelle wie in der
            ausgelieferten Web-App und in der Sprach-Kachel, damit nichts von Hand

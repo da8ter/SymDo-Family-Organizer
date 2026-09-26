@@ -9,6 +9,7 @@ require_once __DIR__ . '/libs/MicrosoftToDoSync.php';
 require_once __DIR__ . '/../libs/ListSource.php';
 require_once __DIR__ . '/../libs/ExternalListSync.php';
 require_once __DIR__ . '/../libs/KachelStand.php';
+require_once __DIR__ . '/../libs/KachelApp.php';
 require_once __DIR__ . '/libs/ExtListHooksTodo.php';
 
 class SymDoToDoList extends IPSModuleStrict
@@ -705,6 +706,8 @@ class SymDoToDoList extends IPSModuleStrict
         if (strlen($html) < 200) {
             $this->LogMessage('GetVisualizationTile: module.html gelesen, aber auffaellig kurz. Bytes=' . strlen($html) . ' head=' . substr($html, 0, 80), KL_WARNING);
         }
+        // Das App-Skript kommt als eine gecachte Datei vom Gateway, wenn es gleich ist (libs/KachelApp.php).
+        $html = KachelApp::Auslagern($html, KachelApp::GatewaySkript(dirname(__DIR__)));
         /* Anfangszustand INLINE, wie es die Web-App-Kachel tut. Ohne ihn startet
            die Oberflaeche mit ihrer Vorbelegung — und die kennt alle Bereiche und
            faellt auf die Uebersicht zurueck. Deren Karten blitzten deshalb bei

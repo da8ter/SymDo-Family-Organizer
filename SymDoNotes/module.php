@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../libs/KachelStand.php';
+require_once __DIR__ . '/../libs/KachelApp.php';
 
 /**
  * SymDoNotes — der Notizbereich der SymDo-App als eigene Kachel.
@@ -118,6 +119,8 @@ class SymDoNotes extends IPSModuleStrict
         }
         // Anfangszustand inline: die Kachel zeigt sofort etwas, ohne auf den
         // ersten Push zu warten.
+        // Das App-Skript kommt als eine gecachte Datei vom Gateway, wenn es gleich ist (libs/KachelApp.php).
+        $html = KachelApp::Auslagern($html, KachelApp::GatewaySkript(dirname(__DIR__)));
         return $html . '<script>handleMessage(' . $this->Zustand() . ');</script>';
     }
 

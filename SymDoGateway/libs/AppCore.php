@@ -897,6 +897,9 @@ trait AppCore
             // Web-App-Seite: eigener Hook, liefert HTML (kein Token nötig — die
             // Seite authentifiziert sich danach selbst gegen die JSON-API).
             if (str_starts_with($path, '/hook/' . self::WEBAPP_HOOK_PATH)) {
+                if ($this->ServeWebAppScript($path)) {
+                    return;
+                }
                 if ($this->ServeWebAppIcon($path)) {
                     return;
                 }
@@ -1072,6 +1075,55 @@ trait AppCore
      *
      * @return bool true, wenn die Anfrage ein Icon war und beantwortet wurde
      */
+    /**
+     * Das gemeinsame App-Skript der SymDo-Kacheln (libs/KachelApp.php) als eigene Datei: die Kacheln
+     * verweisen mit ?v=<Version> darauf, der Browser cacht es und kompiliert es einmal für alle.
+     * Ohne Token - derselbe Skripttext steht in der tokenlosen Web-App-Seite. Lange cachebar nur unter
+     * der aktuellen Version; eine alte Adresse bekommt den aktuellen Text ungecacht.
+     */
+    private function ServeWebAppScript(string $path): bool
+    {
+        if (basename($path) !== 'app.js') {
+            return false;
+        }
+        $html = @file_get_contents(dirname(__DIR__, 2) . '/SymDoWebApp/module.html');
+        $js = is_string($html) ? KachelApp::Skript($html) : '';
+        if ($js === '') {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Script not found.';
+            return true;
+        }
+        $version = KachelApp::Version($js);
+        $aktuell = (string) ($_GET['v'] ?? '') === $version;
+        $gz = $this->GzipErlaubt() ? @gzencode($js, self::WEBAPP_GZIP) : false;
+        $gepackt = is_string($gz) && $gz !== '' && strlen($gz) < strlen($js);
+        $etag = '"' . $version . ($gepackt ? '-gz' : '') . '"';
+        header('Content-Type: text/javascript; charset=utf-8');
+        header('Cache-Control: ' . ($aktuell ? 'public, max-age=31536000, immutable' : 'no-cache'));
+        header('Vary: Accept-Encoding');
+        header('ETag: ' . $etag);
+        header('X-Content-Type-Options: nosniff');
+        if ($this->IfNoneMatchHits($etag)) {
+            http_response_code(304);
+            return true;
+        }
+        $rumpf = $gepackt ? (string) $gz : $js;
+        if (strlen($rumpf) > $this->OutputLimit()) {
+            // Symcon ersetzte die Antwort sonst still durch einen Fehlertext (bei HTTP 200).
+            http_response_code(503);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Script too large for ScriptOutputBufferLimit.';
+            return true;
+        }
+        http_response_code(200);
+        if ($gepackt) {
+            header('Content-Encoding: gzip');
+        }
+        echo $rumpf;
+        return true;
+    }
+
     private function ServeWebAppIcon(string $path): bool
     {
         $name = basename($path);

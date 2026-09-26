@@ -10,6 +10,7 @@ require_once __DIR__ . '/libs/StoreOrder.php';
 require_once __DIR__ . '/../libs/ListSource.php';
 require_once __DIR__ . '/../libs/ExternalListSync.php';
 require_once __DIR__ . '/../libs/KachelStand.php';
+require_once __DIR__ . '/../libs/KachelApp.php';
 require_once __DIR__ . '/../libs/AiRecipePage.php';
 require_once __DIR__ . '/libs/ExtListHooksShopping.php';
 
@@ -706,6 +707,8 @@ class SymDoShoppingList extends IPSModuleStrict
         if (strlen($html) < 200) {
             $this->LogMessage('GetVisualizationTile: module.html gelesen, aber auffaellig kurz. Bytes=' . strlen($html) . ' head=' . substr($html, 0, 80), KL_WARNING);
         }
+        // Das App-Skript kommt als eine gecachte Datei vom Gateway, wenn es gleich ist (libs/KachelApp.php).
+        $html = KachelApp::Auslagern($html, KachelApp::GatewaySkript(dirname(__DIR__)));
         // Dieselbe Basis wie GetTileImageBase(), inklusive Versionsstempel — sonst
         // zeigte die Kachel nach einem Bildersatz weiter die zwischengespeicherte
         // alte Fassung.
