@@ -2,8 +2,12 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../libs/KachelPush.php';
+
 class SymDoToDoOverview extends IPSModuleStrict
 {
+    use KachelPushWeg;
+
     // GUID des Quell-Moduls ToDoList (Filter im SelectInstance des Formulars)
     private const TODOLIST_MODULE_GUID = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
 
@@ -96,7 +100,8 @@ class SymDoToDoOverview extends IPSModuleStrict
 
         $this->WriteAttributeString('SubscribedVarIDs', json_encode($subscribed));
 
-        // 3. Initialwerte an die Kachel senden
+        // 3. Initialwerte an die Kachel senden — Erstaufbau: in jedem Fall
+        $this->KachelErstaufbau();
         $this->PushState();
     }
 
@@ -107,7 +112,14 @@ class SymDoToDoOverview extends IPSModuleStrict
                 $this->ApplyChanges();
                 return;
             case VM_UPDATE:
-                $this->PushState();
+                /* Die drei Zaehler SIND die Anzeige: ohne neuen Wert nichts Neues.
+                   Die Liste setzt sie bei jedem Speichern und nach jedem Abgleich,
+                   meist unveraendert (libs/KachelPush.php, Regel 1). Bleiben nach
+                   einer Aenderung gleiche Staende uebrig (drei Zaehler, drei
+                   Meldungen), faengt sie der Pruefwert ab. */
+                if ($this->KachelVmBeachten($Data)) {
+                    $this->PushState();
+                }
                 return;
         }
     }
@@ -135,11 +147,11 @@ class SymDoToDoOverview extends IPSModuleStrict
     // Kein RequestAction-Override: Die Kachel ruft kein requestAction auf
     // (Klick nutzt direkt openObject, Initialwerte kommen inline aus GetVisualizationTile).
 
+    /** Nur senden, was die Kachel noch nicht hat (libs/KachelPush.php). */
     private function PushState(): void
     {
-        $this->UpdateVisualizationValue(
-            json_encode($this->BuildPayload(), JSON_UNESCAPED_SLASHES)
-        );
+        $payload = $this->BuildPayload();
+        $this->KachelSenden((string)json_encode($payload, JSON_UNESCAPED_SLASHES), KachelPush::Pruefwert($payload));
     }
 
     private function BuildPayload(): array
