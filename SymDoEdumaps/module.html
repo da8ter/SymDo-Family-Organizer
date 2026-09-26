@@ -21398,6 +21398,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Revision-Poll (15 s, nur bei sichtbarem Dokument) + Minuten-Tick für
   // zeitabhängige Anzeigen (Fälligkeits-Chips, Dashboard)
   setInterval(() => {
+    /* TESTWEISE (26.09.2026): Die Kachel-Module (ToDoList, Einkauf, Notizen,
+       Hausaufgaben, Klassenseiten) pushen jede Änderung selbst an alle offenen
+       Kacheln; erkennbar sind sie am Prüfwert im Stand. Dort genügt der
+       Abgleich beim Sichtbarwerden (verpasste Pushes). Gateway-Kachel und
+       Web-App fragen weiter im Takt. */
+    if (kachelStateHash) return;
     if (document.visibilityState === 'visible') checkRevisions();
   }, 15000);
   document.addEventListener('visibilitychange', () => {
