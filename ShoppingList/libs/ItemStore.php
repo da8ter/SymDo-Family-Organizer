@@ -93,11 +93,14 @@ trait ItemStore
         $this->PushCurrentState();
     }
 
-    private function PushCurrentState(): void
+    /** @param mixed $kachel Was die Kachel mitschickt (`{"hash": …}`); ohne = immer senden. */
+    private function PushCurrentState(mixed $kachel = null): void
     {
-        $this->UpdateVisualizationValue(
-            json_encode($this->BuildStatePayload(), JSON_UNESCAPED_SLASHES)
-        );
+        $daten = KachelStand::MitPruefwert($this->BuildStatePayload());
+        if (KachelStand::Kennt($daten['stateHash'], $kachel)) {
+            return;
+        }
+        $this->UpdateVisualizationValue(json_encode($daten, JSON_UNESCAPED_SLASHES));
     }
 
     private function GenerateItemID(): string

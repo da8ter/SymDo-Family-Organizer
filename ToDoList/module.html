@@ -6947,10 +6947,15 @@ function sdCall(instanceID, action, payload) {
   requestAction(action, typeof payload === 'string' ? payload : JSON.stringify(payload || {}));
 }
 function requestState() { requestAction('GetState', 0); }
+/* Pruefwert des zuletzt empfangenen Stands (26.09.2026). Die Kachel-Module
+   (ToDoList, Einkauf, Notizen, Hausaufgaben, Klassenseiten) schicken ihn mit
+   jedem Stand; beim Abgleich geht er zurueck, und bei Gleichheit sendet das
+   Modul nichts. Das Gateway kennt ihn nicht — dort bleibt er leer. */
+let kachelStateHash = '';
 function checkRevisions() {
-  // Kein Revisionsabgleich ueber mehrere Instanzen: die Kachel holt schlicht den
-  // Zustand ihrer eigenen Liste.
-  requestState();
+  // Kein Revisionsabgleich ueber mehrere Instanzen: die Kachel fragt den Stand
+  // ihrer eigenen Liste ab — mit dem Pruefwert, das Modul sendet nur Neues.
+  requestAction('GetState', JSON.stringify({ hash: kachelStateHash }));
 }
 
 /* ── Ladeschirm ─────────────────────────────────────────────────────────────
@@ -7051,6 +7056,8 @@ function handleMessage(data) {
   if (typeof data === 'string') {
     try { data = JSON.parse(data); } catch (e) { return; }
   }
+  // Vor jeder Umformung merken: die Kachel-Adapter bauen den Stand danach um.
+  if (data && typeof data === 'object' && typeof data.stateHash === 'string') kachelStateHash = data.stateHash;
   if (!data || typeof data !== 'object') return;
   // Die Kachel bekommt den Zustand ihrer Liste flach (items, sortMode, …), die
   // Web-App erwartet ihn in store-Form. Erkennungsmerkmal ist items: das Gateway

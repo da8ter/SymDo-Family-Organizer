@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../libs/KachelStand.php';
+
 /**
  * SymDoNotes — der Notizbereich der SymDo-App als eigene Kachel.
  *
@@ -74,12 +76,13 @@ class SymDoNotes extends IPSModuleStrict
     {
         switch ($Ident) {
             case 'GetState':
-                $this->PushState();
+                $this->PushState($Value);
                 return;
             /* Die Web-App fragt beim Wiederverbinden nach Revisionen ihrer
                Listen. Hier gibt es keine — der Zustand ist die Antwort. */
             case 'CheckRevisions':
-                $this->PushState();
+                // Nur senden, wenn die Kachel den Stand nicht schon hat.
+                $this->PushState($Value);
                 return;
             case 'AiCall':
                 $this->NotizenRelay((string)$Value);
@@ -128,7 +131,8 @@ class SymDoNotes extends IPSModuleStrict
     private function Zustand(): string
     {
         $gw = $this->GatewayID();
-        return (string)json_encode([
+        // Mit Pruefwert: die Kachel schickt ihn beim Abgleich zurueck (KachelStand).
+        return (string)json_encode(KachelStand::MitPruefwert([
             'type'             => 'state',
             'users'            => $this->Mitglieder(),
             'defaultUserID'    => $this->ReadPropertyString('DefaultUserID'),
@@ -153,12 +157,18 @@ class SymDoNotes extends IPSModuleStrict
            gehaengt (GetVisualizationTile), und mit JSON_UNESCAPED_SLASHES bliebe
            ein „</script>" in einem Mitgliedsnamen woertlich stehen — der Block
            endete dort. */
-        ], JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        ]), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
-    private function PushState(): void
+    /** @param mixed $kachel Was die Kachel mitschickt (`{"hash": …}`); ohne = immer senden. */
+    private function PushState(mixed $kachel = null): void
     {
-        $this->UpdateVisualizationValue($this->Zustand());
+        $zustand = $this->Zustand();
+        $pruef = json_decode($zustand, true);
+        if (KachelStand::Kennt(is_array($pruef) ? (string)($pruef['stateHash'] ?? '') : '', $kachel)) {
+            return;
+        }
+        $this->UpdateVisualizationValue($zustand);
     }
 
     private function Push(array $payload): void

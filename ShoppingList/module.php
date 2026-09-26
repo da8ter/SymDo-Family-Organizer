@@ -9,6 +9,7 @@ require_once __DIR__ . '/libs/PurchaseStore.php';
 require_once __DIR__ . '/libs/StoreOrder.php';
 require_once __DIR__ . '/../libs/ListSource.php';
 require_once __DIR__ . '/../libs/ExternalListSync.php';
+require_once __DIR__ . '/../libs/KachelStand.php';
 require_once __DIR__ . '/../libs/AiRecipePage.php';
 require_once __DIR__ . '/libs/ExtListHooksShopping.php';
 
@@ -283,7 +284,8 @@ class SymDoShoppingList extends IPSModuleStrict
             case 'GetState':
                 // Read-only push to the tile — must not bump AppRevision, otherwise
                 // every tile open would invalidate the app clients' state caches.
-                $this->PushCurrentState();
+                // Mit dem Pruefwert der Kachel: nur senden, was sie nicht kennt.
+                $this->PushCurrentState($Value);
                 return;
             case 'StoreOrderReset':
                 // Der Formular-Knopf: falsch Gelerntes verwerfen (z. B. nach
@@ -717,7 +719,7 @@ class SymDoShoppingList extends IPSModuleStrict
            <script>-Block, und mit JSON_UNESCAPED_SLASHES bleibt ein „</script>" in
            einem Namen oder Titel woertlich stehen — der Block endet dort, handleMessage
            laeuft nie, und der Rest landet als HTML in der Visu. */
-        $zustand = (string)json_encode($this->BuildStatePayload(),
+        $zustand = (string)json_encode(KachelStand::MitPruefwert($this->BuildStatePayload()),
             JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_INVALID_UTF8_SUBSTITUTE);
         return $html . '<script>window.__imageHookUrl=' . json_encode($hookUrl)
             . ';window.__extApiHookUrl=' . json_encode($extApiHookUrl) . ';'

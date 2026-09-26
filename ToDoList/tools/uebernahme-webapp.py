@@ -90,13 +90,13 @@ EDITS = [
         "    revisions[String(inst.id)] = entry ? entry.revision : -1;\n"
         "  }\n"
         "  if (Object.keys(revisions).length > 0) {\n"
-        "    requestAction('CheckRevisions', JSON.stringify({ revisions }));\n"
+        "    requestAction('CheckRevisions', JSON.stringify({ revisions, hash: kachelStateHash }));\n"
         "  } else {\n"
-        "    requestState();\n"
+        "    requestAction('GetState', JSON.stringify({ hash: kachelStateHash }));\n"
         "  }",
-        "  // Kein Revisionsabgleich ueber mehrere Instanzen: die Kachel holt schlicht den\n"
-        "  // Zustand ihrer eigenen Liste.\n"
-        "  requestState();",
+        "  // Kein Revisionsabgleich ueber mehrere Instanzen: die Kachel fragt den Stand\n"
+        "  // ihrer eigenen Liste ab — mit dem Pruefwert, das Modul sendet nur Neues.\n"
+        "  requestAction('GetState', JSON.stringify({ hash: kachelStateHash }));",
         'checkRevisions vereinfacht',
     ),
     (

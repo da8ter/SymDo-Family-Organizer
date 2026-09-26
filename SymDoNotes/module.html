@@ -6893,6 +6893,11 @@ function sdCall(instanceID, action, payload) {
   requestAction('Call', JSON.stringify({ instanceID, action, payload, txn }));
 }
 function requestState() { requestAction('GetState', 0); }
+/* Pruefwert des zuletzt empfangenen Stands (26.09.2026). Die Kachel-Module
+   (ToDoList, Einkauf, Notizen, Hausaufgaben, Klassenseiten) schicken ihn mit
+   jedem Stand; beim Abgleich geht er zurueck, und bei Gleichheit sendet das
+   Modul nichts. Das Gateway kennt ihn nicht — dort bleibt er leer. */
+let kachelStateHash = '';
 function checkRevisions() {
   const revisions = {};
   for (const inst of store.instances) {
@@ -6901,9 +6906,9 @@ function checkRevisions() {
     revisions[String(inst.id)] = entry ? entry.revision : -1;
   }
   if (Object.keys(revisions).length > 0) {
-    requestAction('CheckRevisions', JSON.stringify({ revisions }));
+    requestAction('CheckRevisions', JSON.stringify({ revisions, hash: kachelStateHash }));
   } else {
-    requestState();
+    requestAction('GetState', JSON.stringify({ hash: kachelStateHash }));
   }
 }
 
@@ -7005,6 +7010,8 @@ function handleMessage(data) {
   if (typeof data === 'string') {
     try { data = JSON.parse(data); } catch (e) { return; }
   }
+  // Vor jeder Umformung merken: die Kachel-Adapter bauen den Stand danach um.
+  if (data && typeof data === 'object' && typeof data.stateHash === 'string') kachelStateHash = data.stateHash;
   if (!data || typeof data !== 'object') return;
   if (data.type === 'briefingPlay') {
     briefingFernstart();

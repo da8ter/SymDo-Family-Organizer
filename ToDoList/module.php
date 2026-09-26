@@ -8,6 +8,7 @@ require_once __DIR__ . '/libs/GoogleTasksSync.php';
 require_once __DIR__ . '/libs/MicrosoftToDoSync.php';
 require_once __DIR__ . '/../libs/ListSource.php';
 require_once __DIR__ . '/../libs/ExternalListSync.php';
+require_once __DIR__ . '/../libs/KachelStand.php';
 require_once __DIR__ . '/libs/ExtListHooksTodo.php';
 
 class SymDoToDoList extends IPSModuleStrict
@@ -622,7 +623,8 @@ class SymDoToDoList extends IPSModuleStrict
             case 'GetState':
                 // Read-only push to the tile — must not bump AppRevision, otherwise
                 // every tile open would invalidate the app clients' state caches.
-                $this->PushCurrentState();
+                // Mit dem Pruefwert der Kachel: nur senden, was sie nicht kennt.
+                $this->PushCurrentState($Value);
                 return;
             case 'SetSortPrefs':
                 $this->SetSortPrefs($this->DecodeValue($Value));
@@ -715,7 +717,7 @@ class SymDoToDoList extends IPSModuleStrict
            <script>-Block, und mit JSON_UNESCAPED_SLASHES bleibt ein „</script>" in
            einem Namen oder Titel woertlich stehen — der Block endet dort, handleMessage
            laeuft nie, und der Rest landet als HTML in der Visu. */
-        $zustand = (string)json_encode($this->BuildStatePayload(),
+        $zustand = (string)json_encode(KachelStand::MitPruefwert($this->BuildStatePayload()),
             JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_INVALID_UTF8_SUBSTITUTE);
         return $html . '<script>handleMessage(' . $zustand . ');</script>';
     }
@@ -2516,9 +2518,14 @@ class SymDoToDoList extends IPSModuleStrict
         $this->PushCurrentState();
     }
 
-    private function PushCurrentState(): void
+    /** @param mixed $kachel Was die Kachel mitschickt (`{"hash": …}`); ohne = immer senden. */
+    private function PushCurrentState(mixed $kachel = null): void
     {
-        $this->UpdateVisualizationValue(json_encode($this->BuildStatePayload(), JSON_UNESCAPED_SLASHES));
+        $daten = KachelStand::MitPruefwert($this->BuildStatePayload());
+        if (KachelStand::Kennt($daten['stateHash'], $kachel)) {
+            return;
+        }
+        $this->UpdateVisualizationValue(json_encode($daten, JSON_UNESCAPED_SLASHES));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
