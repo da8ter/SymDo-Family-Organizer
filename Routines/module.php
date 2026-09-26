@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/libs/RoutineStore.php';
+require_once __DIR__ . '/../libs/KachelPush.php';
 
 /**
  * SymDo Routines — tägliche Häkchenlisten für Kinder als HTML-Kachel.
@@ -16,12 +17,18 @@ require_once __DIR__ . '/libs/RoutineStore.php';
 class SymDoRoutines extends IPSModuleStrict
 {
     use RoutineStore;
+    use KachelPushWeg;
 
     private const GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
     private const TODO_GUID    = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
 
     // Änderungen an diesen Variablen der ToDo-Listen stoßen den Kachel-Push an
     private const TODO_TRIGGER_IDENTS = ['OpenTasks', 'OverdueTasks', 'DueTodayTasks'];
+
+    /** Ein gemeldetes Ereignis verlangt den Neuaufbau (Zähler geändert, Korrekturzustand). */
+    private const PUFFER_NOETIG = 'KachelPushNoetig';
+    /** Revisionen der ToDo-Listen beim letzten Aufbau (ListenRevisionen() als JSON). */
+    private const PUFFER_REV = 'KachelPushListen';
 
     /**
      * Vorschlagsliste der Konsole beim Anlegen: sie bietet ein vorhandenes
@@ -118,6 +125,8 @@ class SymDoRoutines extends IPSModuleStrict
         // 4. Tagesreset zur eingestellten Uhrzeit
         $this->SetTimerInterval('DailyReset', $this->NaechsteResetMs(time()));
 
+        // Erstaufbau: der Stand geht in jedem Fall hinaus.
+        $this->KachelErstaufbau();
         $this->PushState();
     }
 
@@ -133,7 +142,18 @@ class SymDoRoutines extends IPSModuleStrict
                 }
                 return;
             case VM_UPDATE:
-                $this->PushState();
+                /* Bis zu drei Meldungen je Liste und Speichern — und bei JEDEM
+                   Abgleich einer Liste dieselben drei ohne neuen Wert. Deshalb:
+                   ein geänderter Zähler (libs/KachelPush.php, Regel 1) verlangt
+                   den Neuaufbau; eine Meldung ohne neuen Wert nur, wenn sich eine
+                   Liste inhaltlich geändert hat — Umbenennen oder Zuweisen lässt
+                   die Zähler gleich, ändert aber die Heute-Aufgaben. Das prüft
+                   der Einmal-Timer an den Revisionen, gebündelt für alle Listen. */
+                if ($this->KachelVmBeachten($Data)) {
+                    // Ein eigener Wert je Meldung: der Timer loescht nur, was er gesehen hat.
+                    $this->SetBuffer(self::PUFFER_NOETIG, sprintf('%.6F', microtime(true)));
+                }
+                $this->KachelNachziehen();
                 return;
         }
     }
@@ -145,7 +165,26 @@ class SymDoRoutines extends IPSModuleStrict
                 $this->FormularAbgleichen((string)$Value);
                 return;
 
+            case KachelPush::TIMER:
+                /* Der Einmal-Timer aus MessageSink. MessageSink laeuft in einem
+                   eigenen Thread, auch waehrend dieser Aufbau laeuft: geloescht wird
+                   die Markierung nur, wenn keine neue dazukam — deren Timer baut
+                   sonst umsonst an, und ihre Aenderung ginge verloren. */
+                $noetig = $this->GetBuffer(self::PUFFER_NOETIG);
+                if ($noetig !== '' || $this->ListenRevisionenText() !== $this->GetBuffer(self::PUFFER_REV)) {
+                    $this->PushState();
+                }
+                if ($noetig !== '' && $this->GetBuffer(self::PUFFER_NOETIG) === $noetig) {
+                    $this->SetBuffer(self::PUFFER_NOETIG, '');
+                }
+                return;
+
             case 'Check':
+                /* Die Kachel zeigt das Häkchen sofort (optimistisch): bis eine
+                   Nachricht deutlich nach dem Tipp hinausging, geht jeder Stand
+                   hinaus — auch ein unveränderter ist die Korrektur, falls das
+                   Häkchen nicht gilt (libs/KachelPush.php, Regel 3). */
+                $this->KachelAktion();
                 $daten = is_array($Value) ? $Value : json_decode((string)$Value, true);
                 if (is_array($daten)) {
                     $this->Abhaken(
@@ -161,7 +200,9 @@ class SymDoRoutines extends IPSModuleStrict
             case 'TodoCheck':
                 // Abhaken einer Heute-Aufgabe: durchgereicht an die ToDo-Liste,
                 // mit Zielzustand. Die GUID-Probe verhindert, dass die Kachel
-                // eine beliebige Instanz anspricht.
+                // eine beliebige Instanz anspricht. Auch hier zeigt die Kachel
+                // den Haken sofort — Korrekturzustand wie bei 'Check'.
+                $this->KachelAktion();
                 $daten = is_array($Value) ? $Value : json_decode((string)$Value, true);
                 $liste = is_array($daten) ? (int)($daten['list'] ?? 0) : 0;
                 $id    = is_array($daten) ? (int)($daten['id'] ?? 0) : 0;
@@ -447,9 +488,26 @@ class SymDoRoutines extends IPSModuleStrict
     // Intern
     // ------------------------------------------------------------------
 
+    /**
+     * Den Stand an die Kachel — nur wenn er sich geändert hat (libs/KachelPush.php).
+     * `now` zählt dabei nicht: die Kachel geht nach der eigenen Uhr (Minuten-Tick
+     * alle 30 s), der Wert wechselte sonst jede Minute den Prüfwert.
+     *
+     * Die Revisionen VOR dem Aufbau merken: eine Änderung dazwischen trägt dann
+     * eine neuere Revision, und die nächste Meldung baut noch einmal auf.
+     */
     private function PushState(): void
     {
-        $this->UpdateVisualizationValue(json_encode($this->PayloadBauen(time()), JSON_UNESCAPED_SLASHES));
+        $this->SetBuffer(self::PUFFER_REV, $this->ListenRevisionenText());
+        $daten = $this->PayloadBauen(time());
+        $this->KachelSenden((string)json_encode($daten, JSON_UNESCAPED_SLASHES),
+            KachelPush::Pruefwert($daten, ['now']));
+    }
+
+    /** ListenRevisionen() als vergleichbarer Text. */
+    private function ListenRevisionenText(): string
+    {
+        return (string)json_encode($this->ListenRevisionen());
     }
 
     /**

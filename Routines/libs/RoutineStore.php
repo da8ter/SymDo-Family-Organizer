@@ -415,6 +415,47 @@ trait RoutineStore
     // ------------------------------------------------------------------
 
     /**
+     * Revision jeder ToDo-Liste — woran der Einmal-Timer erkennt, ob eine Meldung
+     * OHNE neuen Zählerwert trotzdem etwas Neues bedeutet (Umbenennen, Zuweisen).
+     * Die Liste zählt ihre Revision beim Speichern hoch, BEVOR sie die Zähler
+     * setzt — beim Eintreffen der Meldung ist sie also schon neu. Ein Abgleich
+     * ohne Änderung lässt sie stehen.
+     *
+     * null, wenn die Heute-Aufgaben an keiner Liste hängen (ausgeschaltet oder
+     * keine Routine mit Kind — dieselben Bedingungen wie HeutigeTodos): dann ist
+     * keine Listenänderung ein Grund zum Neuaufbau.
+     *
+     * @return array<string,int>|null Listen-Instanz => Revision
+     */
+    private function ListenRevisionen(): ?array
+    {
+        if (!(bool)@IPS_GetProperty($this->InstanceID, 'IdleTodos') || !function_exists('TDL_GetAppRevision')) {
+            return null;
+        }
+        $mitKind = false;
+        foreach ($this->RoutinenLesen() as $r) {
+            $mitKind = $mitKind || $r['memberId'] !== '';
+        }
+        if (!$mitKind) {
+            return null;
+        }
+        $revisionen = [];
+        foreach ((array)@IPS_GetInstanceListByModuleID(self::TODO_GUID) as $listID) {
+            try {
+                // Symcon warnt statt zu werfen, wenn die Liste gerade neu entsteht.
+                $rev = @TDL_GetAppRevision((int)$listID);
+            } catch (\Throwable $e) {
+                $rev = null;
+            }
+            if (is_int($rev)) {
+                $revisionen[(string)$listID] = $rev;
+            }
+        }
+        ksort($revisionen);
+        return $revisionen;
+    }
+
+    /**
      * Offene Aufgaben der Routine-Kinder, fällig heute oder überfällig — aus
      * allen ToDo-Listen des Systems. Angezeigt, wenn gerade keine Routine im
      * Zeitfenster liegt.
