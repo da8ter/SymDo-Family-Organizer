@@ -83,17 +83,21 @@ function pruefe(string $name, mixed $ist, mixed $soll): void
 }
 
 /* Zwei Aemtchen: „tisch" steht an jedem Tag an (also auch heute, wann immer
-   der Pruefstand laeuft), „garten" nie — er hat keinen Tag. */
+   der Pruefstand laeuft), „garten" nur uebermorgen — nie heute, auch nicht
+   zwischen Mitternacht und der Tagesgrenze um 3 Uhr, wenn fuer das Modul noch
+   gestern ist. Ganz ohne Tage bekaeme es den ersten Tag der Woche (Rueckfall
+   in TageEinesAemtchens) und haette montags doch einen Platz. */
 function harness(array $teilnehmer): WuerfelHarness
 {
     $h = new WuerfelHarness(12345);
     $alleTage = ['d1' => true, 'd2' => true, 'd3' => true, 'd4' => true, 'd5' => true, 'd6' => true, 'd7' => true];
+    $uebermorgen = 'd' . ((((int)date('N') - 1 + 2) % 7) + 1);
     $h->cfg = [
         'Members'   => json_encode($teilnehmer),
         'Chores'    => json_encode([
             ['id' => 'tisch', 'name' => 'Tischdienst', 'circle' => 'child', 'rotate' => 'day', 'coins' => 2] + $alleTage,
             ['id' => 'muell', 'name' => 'Muell', 'circle' => 'all', 'coins' => 5] + $alleTage,
-            ['id' => 'garten', 'name' => 'Garten', 'circle' => 'all', 'perWeek' => 0],
+            ['id' => 'garten', 'name' => 'Garten', 'circle' => 'all', $uebermorgen => true],
         ]),
         'WeekStart' => 1,
         'ResetTime' => '{"hour":3,"minute":0,"second":0}',
