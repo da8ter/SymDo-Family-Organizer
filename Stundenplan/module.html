@@ -684,7 +684,8 @@
      steckt, greift die Ellipse dort nicht mehr. Sie steht jetzt am inneren
      Element, fuer den Fall ohne Bewegung (siehe unten). */
   .termin-lauf { display: inline-block; }
-  .termin-titel.laeuft .termin-lauf { animation: termin-pingpong 6s ease-in-out infinite; }
+  .termin-titel.laeuft .termin-lauf { animation: termin-pingpong 6s ease-in-out 2; }
+  .termin-titel.laeuft.ruht .termin-lauf { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
   @keyframes termin-pingpong {
     0%, 15%   { transform: translateX(0); }
     45%, 55%  { transform: translateX(var(--lauf-weg, -30px)); }
@@ -1315,7 +1316,7 @@
         m.classList.remove('flip', 'oben', 'unten', 'ueberlappt');
         // Vor dem Messen zuruecksetzen: ein noch laufender Titel wuerde sonst
         // seine alte Weglaenge behalten, wenn die Kachel schmaler geworden ist.
-        label.classList.remove('laeuft');
+        label.classList.remove('laeuft', 'ruht');
         label.style.removeProperty('--lauf-weg');
         m.style.right = 'auto';
         const anteil  = (parseFloat(m.dataset.p) || 0) / 100;
@@ -1618,6 +1619,25 @@
      diese Unterscheidung setzte die Vorauswahl unten ihn bei jedem Push
      zurueck. */
   let wocheGewaehlt = false;
+
+  // Laufschrift: zwei Durchlaeufe, dann ruht sie mit Ellipse; Antippen startet sie erneut.
+  // Eine Dauer-Animation hielte die ganze Visu im 60-Hz-Takt (~0,2 CPU-Kerne, gemessen).
+  document.addEventListener('animationend', function (e) {
+    if (e.animationName !== 'termin-pingpong') { return; }
+    const box = e.target.closest && e.target.closest('.termin-titel');
+    if (box) { box.classList.add('ruht'); }
+  }, true);
+  document.addEventListener('pointerdown', function (e) {
+    const halter = e.target.closest && e.target.closest('.termin');
+    const box = halter && halter.querySelector('.termin-titel.laeuft.ruht');
+    if (!box) { return; }
+    box.classList.remove('ruht');
+    const lauf = box.querySelector('.termin-lauf');
+    if (!lauf) { return; }
+    lauf.style.animation = 'none';
+    void lauf.offsetWidth;
+    lauf.style.animation = '';
+  }, { capture: true, passive: true });
 
   function handleMessage(daten) {
     if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }

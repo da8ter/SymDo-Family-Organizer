@@ -959,16 +959,9 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .nv-zeiten { display: flex; align-items: baseline; gap: 8px; font-size: 12px; margin-bottom: 4px; }
 .nv-zeiten .nv-stark { font-weight: 800; font-size: 14px; }
 .nv-zeiten .nv-grund { color: var(--muted); }
-/* Zu spaet an der Schule: rot, und es blinkt, damit man es im Vorbeigehen
-   sieht. Ruhig genug, dass man daneben noch lesen kann — zwei Sekunden je
-   Takt und nur bis 35 Prozent herunter. Wer keine Bewegung will, bekommt
-   keine; das Rot bleibt. */
-.nv-spaet { color: #f87171 !important; animation: nvSpaetBlinken 2s ease-in-out infinite; }
-@keyframes nvSpaetBlinken {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: .35; }
-}
-@media (prefers-reduced-motion: reduce) { .nv-spaet { animation: none; } }
+/* Zu spaet an der Schule: rot. Kein Blinken mehr — eine Dauer-Animation hielte
+   die ganze Visu im 60-Hz-Takt (Nutzerentscheid 28.09.2026: nur die Farbe). */
+.nv-spaet { color: #f87171 !important; }
 /* Der Balken bildet die Tour SCHEMATISCH ab, nicht nach Dauer. Vorher waren die
    Stuecke breit nach Minuten — dabei blieben dem Fussweg 54 Pixel, von denen
    Symbol und Polsterung 39 frassen, und „4 min" wurde abgeschnitten. Jetzt
@@ -1299,7 +1292,7 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    fuer den Fall ohne Bewegung. */
 .plan-termin-lauf { display: inline-block; }
 .plan-termin-titel.laeuft .plan-termin-lauf {
-  animation: marquee-pingpong 6s ease-in-out infinite;
+  animation: marquee-pingpong 6s ease-in-out 2;
 }
 @media (prefers-reduced-motion: reduce) {
   .plan-termin-titel.laeuft .plan-termin-lauf { animation: none; }
@@ -1993,7 +1986,14 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   overflow: hidden;
 }
 .strip-name .marquee-inner { display: inline-block; }
-.strip-name.marquee .marquee-inner { animation: marquee-pingpong 6s ease-in-out infinite; }
+.strip-name.marquee .marquee-inner { animation: marquee-pingpong 6s ease-in-out 2; }
+/* Laufschrift nur zwei Durchlaeufe, dann steht der Anfang mit Ellipse (Klasse ruht,
+   gesetzt bei animationend); Antippen startet sie erneut. Eine Dauer-Animation hielte
+   die ganze Visu im 60-Hz-Takt: gemessen ~0,2 CPU-Kerne, egal wie klein sie ist. */
+.strip-name.marquee.ruht .marquee-inner,
+.plan-termin-titel.laeuft.ruht .plan-termin-lauf {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom;
+}
 @keyframes marquee-pingpong {
   0%, 15%  { transform: translateX(0); }
   45%, 55% { transform: translateX(var(--marquee-shift, -30px)); }
@@ -7806,6 +7806,25 @@ function openMenu(anchor, entries) {
   }, 0);
 }
 
+// Laufschrift: nach ihren zwei Durchlaeufen ruht sie (Anfang mit Ellipse), Antippen
+// des Artikels bzw. Termins startet sie erneut.
+document.addEventListener('animationend', (e) => {
+  if (e.animationName !== 'marquee-pingpong') return;
+  const box = e.target.closest && e.target.closest('.strip-name, .plan-termin-titel');
+  if (box) box.classList.add('ruht');
+}, true);
+document.addEventListener('pointerdown', (e) => {
+  const halter = e.target.closest && e.target.closest('.strip-item, .plan-termin');
+  const box = halter && halter.querySelector('.strip-name.marquee.ruht, .plan-termin-titel.laeuft.ruht');
+  if (!box) return;
+  box.classList.remove('ruht');
+  const lauf = box.firstElementChild;
+  if (!lauf) return;
+  lauf.style.animation = 'none';
+  void lauf.offsetWidth;          // neu starten: Animation einmal entfernen und wieder setzen
+  lauf.style.animation = '';
+}, { capture: true, passive: true });
+
 // Marquee für abgeschnittene Namen (Ping-Pong wie in der App)
 function applyMarquees(container) {
   container.querySelectorAll('.strip-name').forEach(el => {
@@ -9095,7 +9114,7 @@ function planTermineBeschriften() {
       m.classList.remove('flip', 'oben', 'unten', 'ueberlappt');
       // Vor dem Messen zuruecksetzen: ein noch laufender Titel behielte sonst
       // seine alte Weglaenge, wenn die Karte schmaler geworden ist.
-      label.classList.remove('laeuft');
+      label.classList.remove('laeuft', 'ruht');
       label.style.removeProperty('--marquee-shift');
       m.style.right = 'auto';
       const anteil  = (parseFloat(m.dataset.p) || 0) / 100;

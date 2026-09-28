@@ -137,7 +137,8 @@
      dort nicht mehr — sie steht jetzt am inneren Element, fuer den Fall ohne
      Bewegung. */
   .iname .lauf { display: inline-block; }
-  .iname.laeuft .lauf { animation: name-pingpong 6s ease-in-out infinite; }
+  .iname.laeuft .lauf { animation: name-pingpong 6s ease-in-out 2; }
+  .iname.laeuft.ruht .lauf { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
   @keyframes name-pingpong {
     0%, 15%   { transform: translateX(0); }
     45%, 55%  { transform: translateX(var(--lauf-weg, -30px)); }
@@ -328,11 +329,30 @@
        in der staendig etwas wackelt, ist unruhiger als eine mit ein paar
        gekuerzten Namen. Gemessen wird NACH dem Einfuegen: vorher hat der Text
        keine Breite. */
+    // Laufschrift: zwei Durchlaeufe, dann ruht sie mit Ellipse; Antippen startet sie erneut.
+    // Eine Dauer-Animation hielte die ganze Visu im 60-Hz-Takt (~0,2 CPU-Kerne, gemessen).
+    document.addEventListener('animationend', function (e) {
+      if (e.animationName !== 'name-pingpong') { return; }
+      const box = e.target.closest && e.target.closest('.iname');
+      if (box) { box.classList.add('ruht'); }
+    }, true);
+    document.addEventListener('pointerdown', function (e) {
+      const halter = e.target.closest && e.target.closest('.item');
+      const box = halter && halter.querySelector('.iname.laeuft.ruht');
+      if (!box) { return; }
+      box.classList.remove('ruht');
+      const lauf = box.querySelector('.lauf');
+      if (!lauf) { return; }
+      lauf.style.animation = 'none';
+      void lauf.offsetWidth;
+      lauf.style.animation = '';
+    }, { capture: true, passive: true });
+
     function namenLaufen(strip) {
       strip.querySelectorAll('.iname').forEach(function (el) {
         const innen = el.querySelector('.lauf');
         if (!innen) { return; }
-        el.classList.remove('laeuft');
+        el.classList.remove('laeuft', 'ruht');
         el.style.removeProperty('--lauf-weg');
         const ueber = innen.scrollWidth - el.clientWidth;
         if (ueber > 4) {

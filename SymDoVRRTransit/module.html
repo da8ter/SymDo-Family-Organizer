@@ -389,19 +389,11 @@ body {
 .fahrt .zeilen .stark { font-weight: 800; font-size: 12px; }
 .fahrt .zeilen .grund { color: var(--dezent); }
 /* Zu spaet an der Schule. Rot, weil es genau eine Bedeutung hat: dieser
-   Schulweg kommt nach Unterrichtsbeginn an — und es blinkt, damit man es im
-   Vorbeigehen sieht. Ruhig genug, dass man daneben noch lesen kann: zwei
-   Sekunden je Takt und nur bis 35 Prozent herunter. */
-.spaet { color: #f87171; animation: spaetblinken 2s ease-in-out infinite; }
+   Schulweg kommt nach Unterrichtsbeginn an. Kein Blinken mehr — eine
+   Dauer-Animation hielte die ganze Visu im 60-Hz-Takt (Nutzerentscheid
+   28.09.2026: nur die Farbe). */
+.spaet { color: #f87171; }
 .tl-wert.spaet .zahl, .tl-wert.spaet .sinn { color: #f87171; }
-@keyframes spaetblinken {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: .35; }
-}
-/* Wer keine Bewegung will, bekommt keine — das Rot bleibt. */
-@media (prefers-reduced-motion: reduce) {
-  .spaet { animation: none; }
-}
 /* Der Balken bildet die Tour SCHEMATISCH ab, nicht nach Dauer.
    Vorher waren die Stücke breit nach Minuten — dabei blieben dem Fußweg 54
    Pixel, von denen Symbol und Polsterung 39 fraßen, und „4 min" wurde
