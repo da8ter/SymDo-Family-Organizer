@@ -407,6 +407,8 @@ function erzeuge(behaelter, kern) {
   /* Schlaf: seit wann kein Gespräch läuft, wie tief es schläft (0 wach … 1
      schläft, je Bild weich nachgeführt) und wann die „z" zu fliegen begannen. */
   var ruheSeit = 0, schlaf = 0, zzzStart = 0;
+  /* Takt im tiefen Schlaf (ms je Bild) und der dafür laufende Zeitgeber. */
+  var SCHLAF_TAKT = 66, schlafUhr = 0;
   var zzz = Array.prototype.slice.call(svg.querySelectorAll('.zzz .zz'));
   var ZZ_MASS = [.8, 1, 1.2];   // Grundgröße der drei Partikel
   /* Je Partikel die Phase der letzten Runde: sinkt sie, hat eine neue begonnen
@@ -656,6 +658,18 @@ function erzeuge(behaelter, kern) {
        sich das Auge zur Linie, die unter der Kuppel verschwindet. */
     setz('--augeAuf', lerp(1 - energie * .12, .07, lidJetzt).toFixed(3));
     zzzZeichnen(t);
+
+    /* Im tiefen Schlaf reichen rund 15 Bilder je Sekunde: Atem und „z" sind langsam, und
+       jedes Bild zwingt die Visu, die ganze Seite neu zusammenzusetzen (60 Bilder je
+       Sekunde kosten gemessen ~0,2 CPU-Kerne). Ein Gespräch weckt nach höchstens einem Takt. */
+    if (schlaf > .98 && !kernOffen && raf) {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      schlafUhr = setTimeout(function () {
+        schlafUhr = 0;
+        if (laeuft && !raf) { raf = requestAnimationFrame(bild); }
+      }, SCHLAF_TAKT);
+    }
   }
 
   /* Lider je Bild nachführen: Blinzeln zieht sie ganz zu, sonst folgen sie der
@@ -833,7 +847,11 @@ function erzeuge(behaelter, kern) {
     blinzelUhr = setTimeout(blinzeln, 2200 + Math.random() * 4500);
   }
 
-  function anhalten() { laeuft = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
+  function anhalten() {
+    laeuft = false;
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    if (schlafUhr) { clearTimeout(schlafUhr); schlafUhr = 0; }
+  }
   function anwerfen() {
     if (!aktiv || laeuft || dok.hidden) { return; }
     laeuft = true; raf = requestAnimationFrame(bild);
