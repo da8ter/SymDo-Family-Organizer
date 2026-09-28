@@ -93,10 +93,14 @@ trait ItemStore
         $this->PushCurrentState();
     }
 
-    /** @param mixed $kachel Was die Kachel mitschickt (`{"hash": …}`); ohne = immer senden. */
+    /**
+     * Stand an die eigene Kachel — mit der Bildkarte als Adresse (BuildStatePayload(true)).
+     *
+     * @param mixed $kachel Was die Kachel mitschickt (`{"hash": …}`); ohne = immer senden.
+     */
     private function PushCurrentState(mixed $kachel = null): void
     {
-        $daten = KachelStand::MitPruefwert($this->BuildStatePayload());
+        $daten = KachelStand::MitPruefwert($this->BuildStatePayload(true));
         if (KachelStand::Kennt($daten['stateHash'], $kachel)) {
             return;
         }

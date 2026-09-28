@@ -64,4 +64,98 @@ final class KachelApp
         $html = @file_get_contents($listenOrdner . '/SymDoWebApp/module.html');
         return is_string($html) ? self::Skript($html) : '';
     }
+
+    /* ── Versionierte Dateien aus einem Hook ─────────────────────────────────────────────────────────
+       Dasselbe Muster wie app.js am Gateway (AppCore::ServeWebAppScript), IPS-frei und ohne header():
+       Datei() liefert Status, Kopfzeilen und Rumpf, der Hook gibt sie nur noch aus. So lässt sich die
+       Antwort ohne Webserver prüfen - im CLI hinterlässt header() nichts. */
+
+    /** Lange cachebar nur unter der aktuellen Version; eine alte Adresse bekommt den aktuellen Inhalt ungecacht. */
+    public const EWIG = 'max-age=31536000, immutable';
+    /** gzip-Stufe: die Dateien werden selten geholt (ein Jahr im Cache), also lieber klein als schnell. */
+    private const GZIP_STUFE = 6;
+
+    /**
+     * Darf gepackt werden? Nur wenn der Client gzip ANBIETET (Symcon packt Hook-Antworten nicht selbst);
+     * `gzip;q=0` heißt ausdrücklich nein. Dieselbe Regel wie AppCore::GzipErlaubt.
+     */
+    public static function GzipErlaubt(string $acceptEncoding): bool
+    {
+        if (!function_exists('gzencode')) {
+            return false;
+        }
+        $angebot = strtolower(trim($acceptEncoding));
+        if ($angebot === '' || !str_contains($angebot, 'gzip')) {
+            return false;
+        }
+        return preg_match('/gzip\s*;\s*q\s*=\s*0(?:\.0+)?(?![.\d])/', $angebot) !== 1;
+    }
+
+    /** Passt einer der mitgeschickten ETags? Proxys schwächen auf `W/"…"` ab, ein Client darf mehrere schicken. */
+    public static function EtagTrifft(string $etag, string $ifNoneMatch): bool
+    {
+        foreach (explode(',', $ifNoneMatch) as $kandidat) {
+            $kandidat = trim($kandidat);
+            if (str_starts_with($kandidat, 'W/')) {
+                $kandidat = trim(substr($kandidat, 2));
+            }
+            if ($kandidat !== '' && ($kandidat === $etag || $kandidat === '*')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Größte Ausgabe, die Symcon unverändert ausliefert: ScriptOutputBufferLimit (ab Werk 1 MiB), abzüglich
+     * Luft für die Kopfzeilen. Darüber ERSETZT Symcon die Antwort still durch einen Fehlertext, bei HTTP 200 -
+     * jeder Riegel muss deshalb VOR der Ausgabe greifen. Abgelesen, damit ein höherer Wert auch wirkt.
+     */
+    public static function Ausgabegrenze(): int
+    {
+        $grenze = 1048576;
+        try {
+            $o = function_exists('IPS_GetOption') ? (int) @IPS_GetOption('ScriptOutputBufferLimit') : 0;
+            if ($o > 0) {
+                $grenze = $o;
+            }
+        } catch (\Throwable $e) {
+            // Ältere Fassung ohne die Option: bei der Vorgabe bleiben.
+        }
+        return max(200000, $grenze - 100000);
+    }
+
+    /**
+     * Antwort für eine versionierte Datei: `private` für Inhalte hinter einem Token, sonst `public`.
+     * ETag je Auslieferung (die gepackte Fassung trägt `-gz`), deshalb auch immer `Vary: Accept-Encoding`.
+     * Passt der Rumpf nicht unter $grenze, kommt 503 statt einer still ersetzten Antwort.
+     *
+     * @return array{status: int, kopf: list<string>, rumpf: string}
+     */
+    public static function Datei(string $rumpf, string $typ, string $version, bool $aktuell, bool $privat,
+        string $acceptEncoding, string $ifNoneMatch, int $grenze): array
+    {
+        $gz = self::GzipErlaubt($acceptEncoding) ? @gzencode($rumpf, self::GZIP_STUFE) : false;
+        $gepackt = is_string($gz) && $gz !== '' && strlen($gz) < strlen($rumpf);
+        $etag = '"' . $version . ($gepackt ? '-gz' : '') . '"';
+        $kopf = [
+            'Content-Type: ' . $typ,
+            'Cache-Control: ' . ($aktuell ? ($privat ? 'private, ' : 'public, ') . self::EWIG : 'no-cache'),
+            'Vary: Accept-Encoding',
+            'ETag: ' . $etag,
+            'X-Content-Type-Options: nosniff',
+        ];
+        if (self::EtagTrifft($etag, $ifNoneMatch)) {
+            return ['status' => 304, 'kopf' => $kopf, 'rumpf' => ''];
+        }
+        $aus = $gepackt ? (string) $gz : $rumpf;
+        if (strlen($aus) > $grenze) {
+            return ['status' => 503, 'kopf' => ['Content-Type: text/plain; charset=utf-8', 'Cache-Control: no-store'],
+                'rumpf' => 'Too large for ScriptOutputBufferLimit.'];
+        }
+        if ($gepackt) {
+            $kopf[] = 'Content-Encoding: gzip';
+        }
+        return ['status' => 200, 'kopf' => $kopf, 'rumpf' => $aus];
+    }
 }

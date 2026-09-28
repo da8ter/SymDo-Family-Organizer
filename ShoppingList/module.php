@@ -723,7 +723,7 @@ class SymDoShoppingList extends IPSModuleStrict
            <script>-Block, und mit JSON_UNESCAPED_SLASHES bleibt ein „</script>" in
            einem Namen oder Titel woertlich stehen — der Block endet dort, handleMessage
            laeuft nie, und der Rest landet als HTML in der Visu. */
-        $zustand = (string)json_encode(KachelStand::MitPruefwert($this->BuildStatePayload()),
+        $zustand = (string)json_encode(KachelStand::MitPruefwert($this->BuildStatePayload(true)),
             JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_INVALID_UTF8_SUBSTITUTE);
         return $html . '<script>window.__imageHookUrl=' . json_encode($hookUrl)
             . ';window.__extApiHookUrl=' . json_encode($extApiHookUrl) . ';'
@@ -1148,12 +1148,21 @@ class SymDoShoppingList extends IPSModuleStrict
         return $this->ReadPropertyBoolean($name);
     }
 
-    protected function BuildStatePayload(): array
+    /**
+     * @param bool $kachel Fuer die eigene Kachel (Push und Anfangszustand): die
+     *                     Bildkarte als versionierte Adresse statt als Inhalt,
+     *                     dazu der Merker imagesEnabled (siehe BildkarteAdresse).
+     *                     Ohne: unveraendert, fuer GetAppState und alle, die daraus lesen.
+     */
+    protected function BuildStatePayload(bool $kachel = false): array
     {
         // Einmal bauen (Verzeichnis-Scan + Alias-Parse) — Marken-Map leitet
         // sich daraus ab statt erneut zu scannen.
         $knoepfe = $this->ResolveButtonFlags();
-        $productImages = $this->ReadPropertyBoolean('ShowProductImages') ? $this->GetAvailableProductImages() : [];
+        $bilderAn = $this->ReadPropertyBoolean('ShowProductImages');
+        // Kommt die Karte als Adresse, braucht der Zustand sie nicht — sie wird gar nicht erst geladen.
+        $karteUrl = $kachel && $bilderAn ? $this->BildkarteAdresse() : '';
+        $productImages = $bilderAn && $karteUrl === '' ? $this->GetAvailableProductImages() : [];
 
         // Einmal laden und weiterverwenden: aus denselben Daten leiten sich die
         // Kategorienamen ab, die in der Stil-Karte vorkommen muessen (die Oberflaechen
@@ -1174,7 +1183,7 @@ class SymDoShoppingList extends IPSModuleStrict
             }
         }
 
-        return [
+        $zustand = [
             'type'            => 'state',
             'items'           => $items,
             'suggestions'     => $suggestions,
@@ -1219,6 +1228,16 @@ class SymDoShoppingList extends IPSModuleStrict
             'showEditButton'    => $knoepfe['showEditButton'],
             'showDeleteButton'  => $knoepfe['showDeleteButton'],
         ];
+        if ($kachel) {
+            // Ob Produktbilder an sind, sagt der Merker — die Karte kann noch unterwegs
+            // sein, und bis dahin sollen die Bilder nicht als „aus" gelten.
+            $zustand['imagesEnabled'] = $bilderAn;
+            if ($karteUrl !== '') {
+                unset($zustand['availableImages'], $zustand['availableBrands']);
+                $zustand['availableImagesUrl'] = $karteUrl;
+            }
+        }
+        return $zustand;
     }
 
     private function IsExtApiCartReady(): bool
@@ -1241,6 +1260,19 @@ class SymDoShoppingList extends IPSModuleStrict
         return !empty($cart['modifyUrl']);
     }
 
+    /**
+     * Cache-Key aus den mtimes von Asset-Ordner und Alias-Datei: neue/entfernte
+     * Bilder und Alias-Änderungen invalidieren ihn, sonst wird der komplette
+     * Verzeichnis-Scan übersprungen. Zugleich die Version der Bildkarten-Datei
+     * der Kachel (BildkarteVersion) — die Karte hängt nur an Dateinamen und
+     * Aliasen, nicht am Inhalt der Bilder.
+     */
+    private function ImageMapCacheKey(): string
+    {
+        $dir = __DIR__ . '/assets';
+        return (string)@filemtime($dir) . ':' . (string)@filemtime($dir . '/image-aliases.json');
+    }
+
     private function GetAvailableProductImages(): array
     {
         $dir = __DIR__ . '/assets';
@@ -1248,10 +1280,7 @@ class SymDoShoppingList extends IPSModuleStrict
             return [];
         }
 
-        // Cache-Key aus den mtimes von Asset-Ordner und Alias-Datei: neue/entfernte
-        // Bilder und Alias-Änderungen invalidieren ihn, sonst wird der komplette
-        // Verzeichnis-Scan übersprungen.
-        $cacheKey = (string)@filemtime($dir) . ':' . (string)@filemtime($dir . '/image-aliases.json');
+        $cacheKey = $this->ImageMapCacheKey();
         // Defensiv: nach einem Modul-Reload ohne Kernel-Neustart ist das Attribut
         // noch nicht registriert (ReadAttributeString liefert dann false). Der Cache
         // darf in diesem Fall nur entfallen — niemals den State-Bau abbrechen.
@@ -1363,6 +1392,70 @@ class SymDoShoppingList extends IPSModuleStrict
         return $result;
     }
 
+    /* ── Bildkarte der Kachel als versionierte Datei ──────────────────────────
+       Die Produktbild-Karte (availableImages + availableBrands, rund 3 300
+       Namen, ~105 kB) aendert sich nur mit den Bildern des Moduls, reiste aber
+       in JEDEM Kachel-Push und in jedem Kacheldokument mit — gemessen 105 von
+       175 kB je Push. Die eigene Kachel bekommt stattdessen eine Adresse mit
+       Version (availableImagesUrl) und den Merker imagesEnabled; die Datei
+       liefert der Asset-Hook, mit derselben Zugangsregel wie die Bilder selbst
+       (Token), ein Jahr cachebar unter der aktuellen Version.
+       Alle anderen Abnehmer (GetAppState → Gateway, iOS-App, Web-App im
+       Browser, SL_GetOverviewState) bekommen die Karte unveraendert. */
+
+    /** Hochzaehlen, wenn sich die FORM der Datei aendert — sonst hielten Browser die alte ein Jahr lang. */
+    private const BILDKARTE_FORMAT = 1;
+    /** Puffer: "<Version>:<Bytes>" — die Groesse der Datei, einmal je Version gemessen. */
+    private const PUFFER_BILDKARTE = 'BildkarteGroesse';
+
+    private function BildkarteVersion(): string
+    {
+        return substr(md5(self::BILDKARTE_FORMAT . '|' . $this->ImageMapCacheKey()), 0, 16);
+    }
+
+    /** Der Inhalt der Datei: beide Karten, immer als Objekt. '' wenn das Kodieren scheitert. */
+    private function BildkarteRumpf(): string
+    {
+        $bilder = $this->GetAvailableProductImages();
+        $marken = $bilder === [] ? [] : $this->GetAvailableBrandImages($bilder);
+        $json = json_encode(['images' => (object)$bilder, 'brands' => (object)$marken],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        return is_string($json) ? $json : '';
+    }
+
+    /**
+     * Passt die Datei in eine Hook-Antwort, auch ungepackt (ein Client ohne gzip)?
+     * Einmal je Version gemessen, danach nur noch zwei filemtime und der Puffer —
+     * der Push muss die Karte dafuer nicht mehr laden.
+     */
+    private function BildkartePasst(string $version): bool
+    {
+        $gemerkt = explode(':', $this->GetBuffer(self::PUFFER_BILDKARTE), 2);
+        if (count($gemerkt) === 2 && $gemerkt[0] === $version && ctype_digit($gemerkt[1])) {
+            $bytes = (int)$gemerkt[1];
+        } else {
+            $bytes = strlen($this->BildkarteRumpf());
+            $this->SetBuffer(self::PUFFER_BILDKARTE, $version . ':' . $bytes);
+        }
+        return $bytes > 0 && $bytes <= KachelApp::Ausgabegrenze();
+    }
+
+    /**
+     * Adresse der Bildkarte fuer die eigene Kachel — '' heisst Rueckfall: die Karte
+     * bleibt wie bisher im Zustand. Das gilt ohne Token (der Hook liesse niemanden
+     * herein) und fuer eine Karte, die die Ausgabegrenze sprengen wuerde.
+     */
+    private function BildkarteAdresse(): string
+    {
+        $token = $this->ReadAttributeString('WebHookToken');
+        $version = $this->BildkarteVersion();
+        if ($token === '' || !$this->BildkartePasst($version)) {
+            return '';
+        }
+        return '/hook/' . $this->GetAssetHookPath() . '/?t=' . urlencode($token)
+            . '&a=bildkarte&v=' . $version;
+    }
+
     private function NormalizeProductName(string $name): array
     {
         $name = mb_strtolower(trim($name));
@@ -1440,6 +1533,12 @@ class SymDoShoppingList extends IPSModuleStrict
             return;
         }
 
+        // Bildkarte der Kachel (BildkarteAdresse): hinter derselben Token-Pruefung wie die Bilder.
+        if ($action === 'bildkarte') {
+            $this->HandleBildkarteHook();
+            return;
+        }
+
         // Bulk-add all marked items to external cart
         if ($action === 'cart_bulk') {
             $this->HandleCartBulkHook();
@@ -1479,6 +1578,46 @@ class SymDoShoppingList extends IPSModuleStrict
         header('Content-Type: ' . $mime);
         header('Cache-Control: public, max-age=86400');
         readfile($path);
+    }
+
+    /**
+     * Die Bildkarte als Datei: lange cachebar nur unter der aktuellen Version, eine
+     * alte Adresse bekommt die aktuelle Karte ungecacht (KachelApp::Datei). Bei
+     * ausgeschalteten Produktbildern gibt es keine Karte.
+     */
+    private function HandleBildkarteHook(): void
+    {
+        if (!$this->ReadPropertyBoolean('ShowProductImages')) {
+            $this->HookAntworten(['status' => 404, 'kopf' => ['Cache-Control: no-store'], 'rumpf' => '']);
+            return;
+        }
+        $rumpf = $this->BildkarteRumpf();
+        if ($rumpf === '') {
+            $this->HookAntworten(['status' => 500, 'kopf' => ['Cache-Control: no-store'], 'rumpf' => '']);
+            return;
+        }
+        $version = $this->BildkarteVersion();
+        $verlangt = $_GET['v'] ?? '';
+        $this->HookAntworten(KachelApp::Datei($rumpf, 'application/json; charset=utf-8', $version,
+            is_string($verlangt) && $verlangt === $version, true,
+            (string)($_SERVER['HTTP_ACCEPT_ENCODING'] ?? ''), (string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''),
+            KachelApp::Ausgabegrenze()));
+    }
+
+    /**
+     * Status, Kopfzeilen und Rumpf einer Hook-Antwort ausgeben. Eine eigene Methode,
+     * damit der Pruefstand die Antwort ohne Webserver lesen kann: im CLI hinterlaesst
+     * header() nichts.
+     *
+     * @param array{status: int, kopf: list<string>, rumpf: string} $antwort
+     */
+    protected function HookAntworten(array $antwort): void
+    {
+        http_response_code($antwort['status']);
+        foreach ($antwort['kopf'] as $zeile) {
+            header($zeile);
+        }
+        echo $antwort['rumpf'];
     }
 
     private function HandleExtApiHook(): void
