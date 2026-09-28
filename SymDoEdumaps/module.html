@@ -5638,10 +5638,81 @@ const KACHEL = (() => {
 })();
 const SELF_ID = 'self';
 
+/* ── Bildkarte der Einkaufs-Kachel als eigene Datei ─────────────────────────────
+   Die Produktbild-Karte (rund 3 300 Namen, ~105 kB) aendert sich nur mit den
+   Bildern des Moduls. Die Listen-Kachel bekommt sie deshalb nicht mehr in jedem
+   Stand, sondern als versionierte Adresse (availableImagesUrl), die der Browser
+   ein Jahr lang cacht. Geladen wird je Adresse EINMAL: Staende, die waehrenddessen
+   kommen, haengen am selben Versprechen. Bis die Datei da ist, ist die Karte leer
+   (Initialen), die Bilder gelten aber als AN (Merker imagesEnabled) — ein Artikel
+   mit eigenem Bild erscheint sofort. Scheitert das Laden, geht es ohne Bilder
+   weiter; erst ein spaeterer Stand versucht es erneut. Ohne Adresse (Web-App,
+   aeltere Modulfassung, Rueckfall des Moduls) kommt die Karte wie bisher im Stand. */
+const kachelBildkarten = {};     // Adresse → Versprechen der Karte (null bei Fehler)
+let kachelBildkarteSoll = '';    // Adresse des juengsten Stands; '' = Karte im Stand
+let kachelBildkarteDa = null;    // { url, images, brands }: die gezeigte Karte
+/* Das ERSTE Bild der Kachel wartet auf die Karte (html.kachel-warte bleibt): der
+   eingebettete Anfangszustand zeichnet synchron, die Datei kommt aber immer erst
+   danach, auch aus dem Browser-Cache — sonst blitzten bei jedem Oeffnen die
+   Initialen auf. Hoechstens KACHEL_BILDKARTE_WARTE_MS, danach ohne Karte. */
+const KACHEL_BILDKARTE_WARTE_MS = 400;
+let kachelBildkarteHalt = null;  // Zeitgeber, solange das erste Bild wartet
+
+/** Die Karte der Adresse, sobald geladen; bis dahin leer. */
+function kachelBildkarte(url) {
+  kachelBildkarteSoll = url;
+  if (kachelBildkarteDa && kachelBildkarteDa.url === url) return kachelBildkarteDa;
+  if (!kachelBildkarteHalt && document.documentElement.classList.contains('kachel-warte')) {
+    kachelBildkarteHalt = setTimeout(kachelBildkarteLos, KACHEL_BILDKARTE_WARTE_MS);
+  }
+  if (!kachelBildkarten[url]) {
+    let laden;
+    try {
+      laden = fetch(url, { credentials: 'same-origin' }).then((r) => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      });
+    } catch (e) {
+      laden = Promise.reject(e);
+    }
+    const objekt = (o) => (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+    kachelBildkarten[url] = laden.then(
+      (j) => ({ url, images: objekt(j && j.images), brands: objekt(j && j.brands) }),
+      () => { delete kachelBildkarten[url]; return null; });
+  }
+  kachelBildkarten[url].then(kachelBildkarteZeigen);
+  return { images: {}, brands: {} };
+}
+
+/* Eine geladene Karte zeigen — nur die des juengsten Stands (eine alte Adresse
+   kann spaeter fertig werden) und jede nur einmal, auch wenn mehrere Staende
+   auf sie gewartet haben. */
+function kachelBildkarteZeigen(da) {
+  if (da && da.url === kachelBildkarteSoll && da !== kachelBildkarteDa) {
+    kachelBildkarteDa = da;
+    store.images = da.images;
+    store.brands = da.brands;
+    syncCompat();
+    renderAll();
+  }
+  kachelBildkarteLos();
+}
+
+/** Das erste Bild darf gemalt werden — mit Karte, nach einem Fehler oder nach der Frist. */
+function kachelBildkarteLos() {
+  if (!kachelBildkarteHalt) return;
+  clearTimeout(kachelBildkarteHalt);
+  kachelBildkarteHalt = null;
+  document.documentElement.classList.remove('kachel-warte');
+}
+
 /** Zustand der Listen-Kachel in die Form bringen, die die Web-App erwartet. */
 function kachelZustand(daten) {
   if (KACHEL && KACHEL.art === 'shopping') {
-    const bilder = daten.availableImages || {};
+    const url = (typeof daten.availableImagesUrl === 'string' && !daten.availableImages) ? daten.availableImagesUrl : '';
+    if (!url) kachelBildkarteSoll = '';
+    const karte = url ? kachelBildkarte(url) : { images: daten.availableImages || {}, brands: daten.availableBrands || {} };
+    const bilder = karte.images;
     return {
       type: 'state',
       // Die Nutzer liefert die Kachel im Zustand mit (GetTileUsers); einen
@@ -5656,12 +5727,13 @@ function kachelZustand(daten) {
       instances: [{ id: SELF_ID, kind: 'shopping', name: daten.listName || '' }],
       states: { [SELF_ID]: { kind: 'shopping', revision: 0, state: daten } },
       images: bilder,
-      brands: daten.availableBrands || {},
+      brands: karte.brands,
       /* Die Basis-URLs kommen AUS DEM ZUSTAND. Das injizierte window.__imageHookUrl
-         ist nur noch Rueckfall fuer aeltere Modulfassungen. imagesEnabled leitet sich
-         aus dem Bestand ab: ist "Produktbilder anzeigen" aus, kommt eine leere Bildliste. */
+         ist nur noch Rueckfall fuer aeltere Modulfassungen. imagesEnabled sagt der
+         Merker des Moduls ("Produktbilder anzeigen"); aeltere Fassungen ohne ihn
+         schicken bei ausgeschalteten Bildern eine leere Bildliste. */
       shoppingExtras: { [SELF_ID]: {
-        imagesEnabled: Object.keys(bilder).length > 0,
+        imagesEnabled: typeof daten.imagesEnabled === 'boolean' ? daten.imagesEnabled : Object.keys(bilder).length > 0,
         imageBase: daten.imageBase || window.__imageHookUrl || '',
         extApiBase: daten.extApiBase || window.__extApiHookUrl || '',
       } },
@@ -7312,8 +7384,9 @@ function handleMessage(data) {
     applyTabVisibility();
     renderAll();
     applyAiEnabled();
-    // Jetzt steht der richtige Bereich — die Kachel darf gemalt werden.
-    document.documentElement.classList.remove('kachel-warte');
+    // Jetzt steht der richtige Bereich — die Kachel darf gemalt werden. Die
+    // Einkaufs-Kachel wartet noch auf ihre Bildkarte (kachelBildkarteLos).
+    if (!kachelBildkarteHalt) document.documentElement.classList.remove('kachel-warte');
     // Erst hier, nicht beim Start: vorher sind weder gatewayAvailable noch die
     // Nutzer bekannt — die Mitglieder-Zuordnung haette kein Gesicht.
     loadMailProposals();
