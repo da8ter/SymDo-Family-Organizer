@@ -2229,6 +2229,10 @@ class SymDoGateway extends IPSModuleStrict
                 ],
                 $this->GetMailAddressList(),
                 [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Members without an entry get an address automatically. To switch mail off for one member, clear the address and press Apply.')
+                ],
+                [
                     'type'    => 'Button',
                     'caption' => $this->Translate('Generate receiving addresses'),
                     /* Die LEBENDE Liste mitreichen: sonst ersetzte der Knopf gerade

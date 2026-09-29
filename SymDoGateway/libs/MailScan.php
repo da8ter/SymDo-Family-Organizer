@@ -121,7 +121,8 @@ trait MailScan
         $this->RegisterPropertyString('MailHookSecret', '');
         // Mailguns „HTTP webhook signing key" — damit wird die Signatur geprueft.
         $this->RegisterPropertyString('MailHookSigningKey', '');
-        // Basisadresse bei Mailgun, nur fuer die Anzeige und den Eintrag-Knopf.
+        // Domain bei Mailgun (oder eine feste Adresse fuer Plus-Adressen): Grundlage
+        // der Standardadressen.
         $this->RegisterPropertyString('MailHookBase', '');
         $this->RegisterPropertyInteger('MailHookMaxKB', 1024);
         // Nur zum Nachladen der Anhaenge (Basic-Auth „api:<key>").
@@ -306,14 +307,6 @@ trait MailScan
     }
 
     /**
-     * Traegt fuer jedes Familienmitglied eine Plus-Adresse in die Zuordnungsliste ein.
-     *
-     * Rein oertlich: Bei Mailgun muss keine Adresse angelegt werden, die eine
-     * Auffang-Route nimmt ohnehin jede an. Der Knopf erspart nur das Abtippen —
-     * bestehende Zeilen bleiben unberuehrt, damit eine von Hand vergebene Adresse
-     * nicht ueberschrieben wird.
-     */
-    /**
      * Die Zeilen der Adresstabelle: zuerst die allgemeine Familienadresse, dann
      * je Familienmitglied eine.
      *
@@ -322,15 +315,21 @@ trait MailScan
      * Mitglieds-ID; die leere ID ist die allgemeine Adresse (Vorschlaege ohne
      * Mitglied), das Gegenstueck zum Haushalts-Postfach des IMAP-Weges.
      *
+     * Ohne $lebend: der gespeicherte Stand samt Standardadressen (siehe
+     * MailAddressEffective) — so baut das Formular die Tabelle.
+     *
      * @return list<array{UserID: string, Name: string, Address: string, SenderAllow: string}>
      */
     private function MailAddressRows(?array $lebend = null): array
     {
+        if ($lebend === null) {
+            return $this->MailAddressNamen($this->MailAddressEffective());
+        }
         /* $lebend = die Zeilen aus dem OFFENEN Formular. Ohne sie las diese
            Stelle die gespeicherte Eigenschaft und ersetzte damit die Liste im
            Formular — eine gerade getippte Adresse war weg. */
         $vorhanden = [];
-        foreach ($lebend ?? (array)json_decode((string)$this->MailProp('MailAddresses', '[]'), true) as $zeile) {
+        foreach ($lebend as $zeile) {
             if (!is_array($zeile)) {
                 continue;
             }
@@ -367,15 +366,143 @@ trait MailScan
     }
 
     /**
+     * Die wirksamen Zeilen: die gespeicherte Adresse, sonst die Standardadresse.
+     *
+     * Ein Mitglied OHNE gespeicherte Zeile bekommt sie von selbst — auch eines,
+     * das erst nach dem Einrichten dazukam. Mailgun muss davon nichts wissen: die
+     * Route nimmt jede Adresse der Domain an. Eine gespeicherte LEERE Zeile
+     * bleibt leer, das heisst „fuer dieses Mitglied keine Mail" (Ausnahme: siehe
+     * MailAddressSaved). Keine Adresse steht zweimal da.
+     *
+     * @param array<string, string> $fest UserID → Adresse, die gewinnt (offenes Formular)
+     * @return list<array{UserID: string, Name: string, Address: string, SenderAllow: string, Standard: bool}>
+     */
+    private function MailAddressEffective(array $fest = []): array
+    {
+        $gespeichert = $this->MailAddressSaved();
+        $belegt = $this->MailAddressBelegt($fest);
+        foreach ($fest as $adresse) {
+            if (trim((string)$adresse) !== '') {
+                $belegt[strtolower(trim((string)$adresse))] = true;
+            }
+        }
+        $domain = $this->MailHookDomain();
+        $lokal  = $this->MailHookLocalPart();
+        // Name der Familienzeile erst im Formular (MailAddressNamen): dieser Weg
+        // laeuft auch im Webhook, und dort braucht es keine Uebersetzung.
+        $zeilen = [['UserID' => '', 'Name' => '']];
+        foreach ($this->LoadUsers() as $u) {
+            $id = (string)($u['id'] ?? '');
+            if ($id !== '') {
+                $zeilen[] = ['UserID' => $id, 'Name' => (string)($u['name'] ?? '')];
+            }
+        }
+        $raus = [];
+        foreach ($zeilen as $z) {
+            $alt = $gespeichert['zeilen'][$z['UserID']] ?? null;
+            $z += ['Address' => '', 'SenderAllow' => (string)($alt['SenderAllow'] ?? ''), 'Standard' => false];
+            if (array_key_exists($z['UserID'], $fest)) {
+                $z['Address'] = trim((string)$fest[$z['UserID']]);
+            } elseif ($alt !== null && $gespeichert['gilt']) {
+                $z['Address'] = $alt['Address'];
+            } else {
+                $z['Standard'] = true;
+                // $belegt kennt schon JEDE feste Adresse: keine Standardadresse
+                // nimmt einer gespeicherten den Namen weg.
+                $z['Address'] = $domain === ''
+                    ? '' : $this->MailAddressDefault($lokal, $domain, $z['Name'], $z['UserID'], $belegt);
+            }
+            $raus[] = $z;
+        }
+        return $raus;
+    }
+
+    /**
+     * Die gespeicherte Liste, je Kennung die erste Zeile.
+     *
+     * `gilt` ist falsch, solange sie KEINE einzige Adresse traegt. So speichert
+     * die Konsole die Tabelle, wenn „Uebernehmen" faellt, bevor eine Domain
+     * bekannt ist — jede Zeile leer. Das ist keine Entscheidung „Mail aus";
+     * gaelte es als eine, bekaeme nach dem Einrichten niemand eine Adresse. Wer
+     * wirklich allen die Mail abstellen will, nimmt „Activate mail analysis".
+     *
+     * @return array{zeilen: array<string, array{Address: string, SenderAllow: string}>, gilt: bool}
+     */
+    private function MailAddressSaved(): array
+    {
+        $zeilen = [];
+        $gilt = false;
+        foreach ((array)json_decode((string)$this->MailProp('MailAddresses', '[]'), true) as $z) {
+            if (!is_array($z)) {
+                continue;
+            }
+            $id = trim((string)($z['UserID'] ?? ''));
+            $adresse = trim((string)($z['Address'] ?? ''));
+            $gilt = $gilt || $adresse !== '';
+            if (!array_key_exists($id, $zeilen)) {
+                $zeilen[$id] = ['Address' => $adresse, 'SenderAllow' => (string)($z['SenderAllow'] ?? '')];
+            }
+        }
+        return ['zeilen' => $zeilen, 'gilt' => $gilt];
+    }
+
+    /**
+     * Gespeicherte Adressen, die vergeben sind — aus ALLEN Zeilen, auch denen
+     * verschwundener Mitglieder (MailAddressMap nimmt sie weiter an). Zeilen,
+     * die das offene Formular gerade ueberschreibt, zaehlen nicht.
+     *
+     * @param array<string, mixed> $ausser UserID → egal
+     * @return array<string, true> Adresse (klein) → true
+     */
+    private function MailAddressBelegt(array $ausser = []): array
+    {
+        $belegt = [];
+        foreach ((array)json_decode((string)$this->MailProp('MailAddresses', '[]'), true) as $z) {
+            $adresse = is_array($z) ? strtolower(trim((string)($z['Address'] ?? ''))) : '';
+            if ($adresse !== '' && !array_key_exists(trim((string)($z['UserID'] ?? '')), $ausser)) {
+                $belegt[$adresse] = true;
+            }
+        }
+        return $belegt;
+    }
+
+    /**
+     * Die Standardadresse fuer eine Zeile ohne Adresse — nie eine vergebene. Zwei
+     * Mitglieder „Lena" bekommen lena@… und lena-<Kennung>@…; ist auch das
+     * besetzt, bleibt die Zeile leer.
+     *
+     * @param array<string, true> $belegt wird fortgeschrieben
+     */
+    private function MailAddressDefault(string $lokal, string $domain, string $name, string $id, array &$belegt): string
+    {
+        $adresse = $this->MailHookAddressFor($lokal, $domain, $name, $id);
+        if (isset($belegt[strtolower($adresse)]) && $id !== '') {
+            $adresse = $this->MailHookAddressFor($lokal, $domain, $name, $id, substr($id, 0, 6));
+        }
+        if (isset($belegt[strtolower($adresse)])) {
+            return '';
+        }
+        $belegt[strtolower($adresse)] = true;
+        return $adresse;
+    }
+
+    /** Fester lokaler Teil aus dem Domain-Feld (post@… bzw. post+x@… → post), sonst leer. */
+    private function MailHookLocalPart(): string
+    {
+        $basis = trim((string)$this->MailProp('MailHookBase', ''));
+        return str_contains($basis, '@') ? trim(explode('+', explode('@', $basis, 2)[0])[0]) : '';
+    }
+
+    /**
      * Adresse fuer eine Zeile bauen.
      *
      * Zwei Schreibweisen, beide sinnvoll: Wer nur die Domain eintraegt, bekommt je
      * Mitglied eine eigene Adresse (lena@…) — eine eigene Domain nimmt ohnehin
      * jede an, und das liest sich besser. Wer einen festen lokalen Teil vorgibt
      * (post@…), bekommt Plus-Adressen darunter (post+lena@…); dessen Grundadresse
-     * ist dann die allgemeine.
+     * ist dann die allgemeine. $anhang unterscheidet gleiche Namen (lena-3fa2c1@…).
      */
-    private function MailHookAddressFor(string $lokal, string $domain, string $name, string $id): string
+    private function MailHookAddressFor(string $lokal, string $domain, string $name, string $id, string $anhang = ''): string
     {
         if ($id === '') {
             return ($lokal === '' ? 'familie' : $lokal) . '@' . $domain;
@@ -388,9 +515,21 @@ trait MailScan
         if ($tag === '') {
             $tag = substr($id, 0, 6);
         }
+        $anhang = preg_replace('/[^a-z0-9]/', '', strtolower($anhang)) ?? '';
+        if ($anhang !== '') {
+            $tag .= '-' . $anhang;
+        }
         return $lokal === '' ? $tag . '@' . $domain : $lokal . '+' . $tag . '@' . $domain;
     }
 
+    /**
+     * Knopf „Generate receiving addresses": fuellt die LEEREN Zeilen des offenen
+     * Formulars mit Standardadressen.
+     *
+     * Rein oertlich: Bei Mailgun muss keine Adresse angelegt werden, die Route
+     * nimmt ohnehin jede an. Der Knopf erspart nur das Abtippen — Eingetragenes
+     * bleibt unberuehrt, und keine Adresse wird zweimal vergeben.
+     */
     private function MailHookFillAddresses(string $nutzlast = ''): void
     {
         $roh    = json_decode($nutzlast, true);
@@ -400,25 +539,50 @@ trait MailScan
             $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('Please enter your Mailgun domain above first and press Apply.'));
             return;
         }
-        $basis = trim((string)$this->MailProp('MailHookBase', ''));
-        $lokal = str_contains($basis, '@') ? trim(explode('+', explode('@', $basis, 2)[0])[0]) : '';
-
-        $zeilen = [];
-        $neu    = 0;
-        foreach ($this->MailAddressRows($lebend) as $zeile) {
+        $lokal  = $this->MailHookLocalPart();
+        $zeilen = $this->MailAddressRows($lebend);
+        // Vergeben ist, was im Formular steht — und was nur noch gespeichert ist.
+        $belegt = $this->MailAddressBelegt(array_fill_keys(array_column($zeilen, 'UserID'), true));
+        foreach ($zeilen as $zeile) {
+            if ($zeile['Address'] !== '') {
+                $belegt[strtolower($zeile['Address'])] = true;
+            }
+        }
+        $neu = 0;
+        foreach ($zeilen as &$zeile) {
             // Eingetragenes bleibt: der Knopf fuellt Luecken, er ueberschreibt nicht.
             if ($zeile['Address'] === '') {
-                $zeile['Address'] = $this->MailHookAddressFor($lokal, $domain, $zeile['Name'], $zeile['UserID']);
-                $neu++;
+                $zeile['Address'] = $this->MailAddressDefault($lokal, $domain, $zeile['Name'], $zeile['UserID'], $belegt);
+                $neu += $zeile['Address'] !== '' ? 1 : 0;
             }
-            $zeilen[] = $zeile;
         }
+        unset($zeile);
         if ($neu === 0) {
             $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('Every row already has an address.'));
             return;
         }
         $this->UpdateFormField('MailAddresses', 'values', json_encode($zeilen, JSON_UNESCAPED_UNICODE));
         $this->UpdateFormField('MailHookStatus', 'caption', sprintf($this->Translate('%d address(es) added — press Apply to save.'), $neu));
+    }
+
+    /**
+     * Wirksame Zeilen fuers Formular: ohne den Merker `Standard`, die
+     * Familienzeile mit ihrem uebersetzten Namen.
+     *
+     * @param list<array<string, mixed>> $zeilen
+     * @return list<array{UserID: string, Name: string, Address: string, SenderAllow: string}>
+     */
+    private function MailAddressNamen(array $zeilen): array
+    {
+        $raus = [];
+        foreach ($zeilen as $z) {
+            unset($z['Standard']);
+            if ($z['UserID'] === '') {
+                $z['Name'] = $this->Translate('Family (general)');
+            }
+            $raus[] = $z;
+        }
+        return $raus;
     }
 
     /** Setzt den One-Shot-Timer. Die Arbeit gehoert nicht in den Nachrichten-Thread. */
@@ -2716,10 +2880,9 @@ trait MailScan
         };
         $hook = (bool)$this->MailProp('MailHookEnabled', false);
         if ($hook) {
-            foreach ((array)json_decode((string)$this->MailProp('MailAddresses', '[]'), true) as $z) {
-                if (is_array($z)) {
-                    $dazu((string)($z['UserID'] ?? ''), (string)($z['Address'] ?? ''));
-                }
+            // Dieselbe Karte, die der Webhook prueft — samt Standardadressen.
+            foreach ($this->MailAddressMap() as $adresse => $z) {
+                $dazu((string)$z['UserID'], (string)$adresse);
             }
         }
         $imap = (bool)$this->MailProp('MailEnabled', false);
@@ -2830,13 +2993,15 @@ trait MailScan
     /**
      * @return array<string, array{UserID: string, SenderAllow: string}> Adresse (klein) → Zeile.
      *         Jede Empfangsadresse traegt ihr Mitglied und ihre eigene Absenderliste.
+     *         Gespeichertes wie bisher, dazu die Standardadressen der Zeilen ohne
+     *         eigene (MailAddressEffective) — ein neues Mitglied ist sofort erreichbar.
      */
     private function MailAddressMap(): array
     {
         $zeilen = json_decode((string)$this->MailProp('MailAddresses', '[]'), true);
         $karte = [];
         foreach (is_array($zeilen) ? $zeilen : [] as $zeile) {
-            $adresse = strtolower(trim((string)($zeile['Address'] ?? '')));
+            $adresse = is_array($zeile) ? strtolower(trim((string)($zeile['Address'] ?? ''))) : '';
             if ($adresse === '') {
                 continue;
             }
@@ -2844,6 +3009,11 @@ trait MailScan
                 'UserID'      => trim((string)($zeile['UserID'] ?? '')),
                 'SenderAllow' => (string)($zeile['SenderAllow'] ?? '')
             ];
+        }
+        foreach ($this->MailAddressEffective() as $z) {
+            if ($z['Standard'] && $z['Address'] !== '') {
+                $karte[strtolower($z['Address'])] ??= ['UserID' => $z['UserID'], 'SenderAllow' => $z['SenderAllow']];
+            }
         }
         return $karte;
     }

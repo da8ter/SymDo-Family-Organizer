@@ -1061,7 +1061,8 @@
             "Gentle": "behutsam",
             "Lively": "munter",
             "Knowledgeable": "kundig",
-            "Warm": "warm"
+            "Warm": "warm",
+            "Members without an entry get an address automatically. To switch mail off for one member, clear the address and press Apply.": "Mitglieder ohne Eintrag bekommen automatisch eine Adresse. Um die Mail für ein Mitglied abzuschalten, die Adresse leeren und Übernehmen drücken."
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",
