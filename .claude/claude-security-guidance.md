@@ -19,7 +19,8 @@ Kommentar an der Zeile, warum etwas sicher ist, gilt als Ausnahme.
   `lists/pwa`, OAuth-Rückrufe `todogateway_google/_microsoft` (nur `state`),
   `shoppinglist/assets/<id>` (eigener `WebHookToken` in `?t=`).
 - Mail-Webhook: Pfadgeheimnis (`hash_equals`) UND HMAC über `timestamp.token`
-  UND Empfänger in `MailAddresses` (406) — vorher wird nichts gespeichert.
+  UND Empfänger in `MailAddressMap` (Zeile/Standardadresse, 406) — vorher
+  nichts gespeichert.
 - Kachel-Relay (`AiRelayBody`): `AiResult` nur an Instanzen, die
   `IsSymDoWebAppInstance` bestätigt — bei jeder Antwort erneut prüfen.
 
@@ -74,6 +75,8 @@ Kommentar an der Zeile, warum etwas sicher ist, gilt als Ausnahme.
   (`ai_busy`, `ai_rate_limited`, `ai_unreachable`) bleibt sie absichtlich.
 
 ## Fremde Systeme — nur lesend
+- Ausnahme Mailgun (`MailgunSetup`): NUR die eigene Route (POST/PUT, nie
+  DELETE), nur `HOSTS`.
 - Moodle: nur `MoodleCalc::ERLAUBT`, `MoodleRest` weist Rest ab; neue Funktionen
   lesend und auf die Liste. `MoodleRest` umgehen → HIGH.
 - WebUntis: drei Fehlanmeldungen sperren das Schulkonto — keine Login-Schleifen,
@@ -112,7 +115,7 @@ Kommentar an der Zeile, warum etwas sicher ist, gilt als Ausnahme.
   Namen (eine Instanz ist serialisiert). Instanzübergreifende Sperren
   (`SDSC_AiJob_<gateway>`, ShoppingList 500 ms) warten — ein neues 0-Warten
   auf einer geteilten Sperre wäre ein still übersprungener Schreibvorgang.
-- `exec()` ist erlaubt (`proc_open` hängt); Argumente mit `escapeshellarg`.
+- `exec()` erlaubt (`proc_open` hängt), Argumente mit `escapeshellarg`.
 - root: Dateirechte schützen nichts. Pfade unter `IPS_GetKernelDir()` nur aus
   Kennungen/Zufall, nie aus Nutzereingaben.
 - Richtungsregel: die Gateway-Spur ruft nie synchron in einen Scanner
