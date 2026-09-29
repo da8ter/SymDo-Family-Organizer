@@ -43,7 +43,7 @@ function endlos(string $html): array
 
 // An eine Tätigkeit gebunden: laufen nur, solange etwas passiert
 $erlaubt = ['voiceLauschen', 'ai-spin', 'diktatPuls', 'scanner-line-move', 'ladeDreh'];
-$webApp = ['SymDoWebApp', 'ToDoList', 'ShoppingList', 'SymDoNotes', 'SymDoHomework', 'SymDoEdumaps'];
+$webApp = ['SymDoWebApp', 'SymDoToDoList', 'SymDoShoppingList', 'SymDoNotes', 'SymDoHomework', 'SymDoEdumaps'];
 
 foreach ($webApp as $modul) {
     $html = (string)file_get_contents("$wurzel/$modul/module.html");
@@ -56,7 +56,7 @@ foreach ($webApp as $modul) {
     pruefe("$modul: „Verspätet“ blinkt nicht", !str_contains($html, 'nvSpaetBlinken') && str_contains($html, '.nv-spaet { color: #f87171 !important; }'));
 }
 
-foreach (['ShoppingListOverview' => ['name-pingpong', '.iname', '.item'], 'Stundenplan' => ['termin-pingpong', '.termin-titel', '.termin']] as $modul => [$anim, $box, $halter]) {
+foreach (['SymDoShoppingListOverview' => ['name-pingpong', '.iname', '.item'], 'SymDoTimetable' => ['termin-pingpong', '.termin-titel', '.termin']] as $modul => [$anim, $box, $halter]) {
     $html = (string)file_get_contents("$wurzel/$modul/module.html");
     pruefe("$modul: keine Dauer-Animation", endlos($html) === [], implode(', ', endlos($html)));
     pruefe("$modul: Laufschrift läuft zweimal und ruht dann", str_contains($html, "$anim 6s ease-in-out 2;")

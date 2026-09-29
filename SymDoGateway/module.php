@@ -570,7 +570,7 @@ class SymDoGateway extends IPSModuleStrict
 
     private function GetDonationFormElements(): array
     {
-        $formPath = dirname(__DIR__) . '/ToDoOverview/form.json';
+        $formPath = dirname(__DIR__) . '/SymDoToDoOverview/form.json';
         if (!is_readable($formPath)) {
             return [];
         }

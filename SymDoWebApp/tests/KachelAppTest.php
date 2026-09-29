@@ -30,7 +30,7 @@ pruefe('App-Skript beginnt mit der IIFE-Kapselung', str_starts_with($skript, "\n
 pruefe('App-Skript enthält kein schließendes Script-Tag', stripos($skript, '</script') === false);
 pruefe('Version: 16 Hexzeichen, stabil', preg_match('/^[0-9a-f]{16}$/', KachelApp::Version($skript)) === 1 && KachelApp::Version($skript) === KachelApp::Version($skript));
 
-foreach (['ToDoList', 'ShoppingList', 'SymDoNotes', 'SymDoHomework', 'SymDoEdumaps'] as $modul) {
+foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoNotes', 'SymDoHomework', 'SymDoEdumaps'] as $modul) {
     $kachel = (string) file_get_contents($root . '/' . $modul . '/module.html');
     pruefe("$modul: gleiches App-Skript wie die Web-App (Übernahme gelaufen)", KachelApp::Skript($kachel) === $skript);
     $aus = KachelApp::Auslagern($kachel, $skript);
@@ -38,7 +38,7 @@ foreach (['ToDoList', 'ShoppingList', 'SymDoNotes', 'SymDoHomework', 'SymDoEduma
     pruefe("$modul: genau ein Verweis auf " . KachelApp::PFAD . '?v=<Version>', substr_count($aus, '<script src="' . KachelApp::PFAD . '?v=' . KachelApp::Version($skript) . '"></script>') === 1);
     pruefe("$modul: nur das App-Skript fehlt, der Rest ist unverändert", str_replace('<script src="' . KachelApp::PFAD . '?v=' . KachelApp::Version($skript) . '"></script>', '<script>' . $skript . '</script>', $aus) === $kachel);
 }
-$todo = KachelApp::Auslagern((string) file_get_contents($root . '/ToDoList/module.html'), $skript);
+$todo = KachelApp::Auslagern((string) file_get_contents($root . '/SymDoToDoList/module.html'), $skript);
 pruefe('ToDo-Kachel: der Schalter steht vor dem Verweis', strpos($todo, "window.__SYMDO_KACHEL__ = { art: 'todo' }") < strpos($todo, KachelApp::PFAD));
 pruefe('Ohne Gateway-Skript bleibt alles inline', KachelApp::Auslagern($webapp, '') === $webapp);
 pruefe('Anderes Gateway-Skript (Übernahme fehlt): bleibt inline', KachelApp::Auslagern($webapp, $skript . ' ') === $webapp);

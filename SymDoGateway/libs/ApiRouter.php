@@ -917,7 +917,7 @@ trait ApiRouter
      */
     private function HandleAssetBundle(): void
     {
-        $base = realpath(dirname(__DIR__, 2) . '/ShoppingList/assets');
+        $base = realpath(dirname(__DIR__, 2) . '/SymDoShoppingList/assets');
         $roh  = (string)($_GET['f'] ?? '');
         if ($base === false || trim($roh) === '') {
             $this->SendApiError('asset_not_found', 'Asset not found', 404);
@@ -971,7 +971,7 @@ trait ApiRouter
         if ($file === '') {
             $file = (string)($_GET['f'] ?? '');
         }
-        $base = realpath(dirname(__DIR__, 2) . '/ShoppingList/assets');
+        $base = realpath(dirname(__DIR__, 2) . '/SymDoShoppingList/assets');
         if ($file === '' || $base === false) {
             $this->SendApiError('asset_not_found', 'Asset not found', 404);
             return;

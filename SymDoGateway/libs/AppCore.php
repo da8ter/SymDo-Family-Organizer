@@ -1653,7 +1653,7 @@ trait AppCore
      */
     private function GetAssetsVersion(): int
     {
-        $dir = dirname(__DIR__, 2) . '/ShoppingList/assets';
+        $dir = dirname(__DIR__, 2) . '/SymDoShoppingList/assets';
         $max = (int)@filemtime($dir);
         foreach (@scandir($dir) ?: [] as $entry) {
             if ($entry === '.' || $entry === '..') {

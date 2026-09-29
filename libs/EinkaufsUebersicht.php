@@ -16,7 +16,7 @@ declare(strict_types=1);
  * dieser Artikel TREFFEN KANN.
  *
  * Warum die Auswahl kein Bild ändert: die Kachel löst ein Bild über Kandidaten
- * des Namens auf (imageUrlFor/_piResolve in ShoppingListOverview/module.html,
+ * des Namens auf (imageUrlFor/_piResolve in SymDoShoppingListOverview/module.html,
  * Spiegel der Einkaufsliste und der App): der Name, seine ae/ä-Faltung hin und
  * zurück, und Stämme ohne Endung. Jeder Treffer — genau, Marke als ganzes Wort,
  * Endung, ganzes Wort — ist ein TEILSTÜCK eines Kandidaten. Ein Eintrag, der in

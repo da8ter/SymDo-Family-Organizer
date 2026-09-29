@@ -25,7 +25,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 | **SymDo - Sprachassistent** | Device (Präfix `SDVC`) | Sprechstelle des Sprachdialogs als Kachel — eingeschaltet, eingewilligt und begrenzt wird im Gateway ([Anleitung](../SymDoVoice/README.md)) |
 | **SymDo - Notizen** | Device (Präfix `SDNO`) | Der Notizbereich als eigene Kachel ([Anleitung](../SymDoNotes/README.md)) |
 
-> Die Einrichtung der Listen-Synchronisation (Google Tasks, Microsoft To Do, CalDAV) ist in der [ToDo-List-Anleitung](../ToDoList/README.md) beschrieben.
+> Die Einrichtung der Listen-Synchronisation (Google Tasks, Microsoft To Do, CalDAV) ist in der [ToDo-List-Anleitung](../SymDoToDoList/README.md) beschrieben.
 
 ## Inhalt
 
@@ -190,7 +190,7 @@ Der Knopf „Standardwerte" setzt die Felder zurück (übernommen wird mit „Ü
 
 ### Synchronisation (Google Tasks, Microsoft To Do, CalDAV)
 
-Das Gateway ist zugleich der Sync-Broker der ToDo-Listen. Einrichtung und Ablauf: [ToDo-List-Anleitung](../ToDoList/README.md).
+Das Gateway ist zugleich der Sync-Broker der ToDo-Listen. Einrichtung und Ablauf: [ToDo-List-Anleitung](../SymDoToDoList/README.md).
 
 ## 7. Konfiguration: SymDo - Web App (Kachel)
 

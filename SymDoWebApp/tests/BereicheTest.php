@@ -118,7 +118,7 @@ pruefe('Kachel-JS: normalizeTabs kennt school/plan/transit, Reihenfolge wird gel
      str_contains($html, 'const schuleWeg = t.dashboard && !t.school;'), str_contains($html, 'ziel.forEach(b => leiste.appendChild(b))')],
     [true, true, true, true, true, true, true]);
 pruefe('Die Kachel-Kopien tragen die Reihenfolge mit',
-    [str_contains($lesen('ToDoList/module.html'), 'function tabReihenfolge'), str_contains($lesen('ShoppingList/module.html'), 'function tabReihenfolge')],
+    [str_contains($lesen('SymDoToDoList/module.html'), 'function tabReihenfolge'), str_contains($lesen('SymDoShoppingList/module.html'), 'function tabReihenfolge')],
     [true, true]);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);

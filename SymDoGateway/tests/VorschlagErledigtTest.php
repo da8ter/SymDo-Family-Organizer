@@ -244,7 +244,7 @@ pruefe('Zeile: Haken statt Knoepfe, keine Wischgeste, kein Uebernehmen an erledi
     [str_contains($html, 'class="mail-done"'), str_contains($html, "if (zeile.classList.contains('erledigt')) return;"),
      str_contains($html, "if (!eintrag || eintrag.taken === true) return;")],
     [true, true, true]);
-$kopien = ['ShoppingList', 'ToDoList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'];
+$kopien = ['SymDoShoppingList', 'SymDoToDoList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'];
 pruefe('Zeile: Art-Wahl als Auswahlfeld an offenen Zeilen, change setzt sie hier und beim Server',
     [str_contains($html, 'function mailArtWahlHtml'), str_contains($html, '<select class="mail-kind-select" data-mail="kind"'),
      str_contains($html, "e.target.closest('select[data-mail=\"kind\"]')"), str_contains($html, 'class="mail-summary"'),

@@ -128,7 +128,7 @@ Aufgabenverwaltung für die Kachel-Visualisierung — und Datenquelle für SymDo
 - Zählerwerte (offen, überfällig, heute fällig) als Variablen für eigene
   Automationen
 
-→ [Ausführliche Anleitung](ToDoList/README.md)
+→ [Ausführliche Anleitung](SymDoToDoList/README.md)
 
 ## SymDo - Einkaufsliste
 
@@ -145,7 +145,7 @@ Einkaufsliste für die Kachel-Visualisierung — und Datenquelle für SymDo.
   zurückholen
 - Druckfunktion mit drei Layouts
 
-→ [Ausführliche Anleitung](ShoppingList/README.md)
+→ [Ausführliche Anleitung](SymDoShoppingList/README.md)
 
 ## SymDo - Stundenplan
 
@@ -167,7 +167,7 @@ der SymDo-Übersicht.
   Store-Modul [**Jahreskalender**](https://github.com/Wilkware/Almanac) von Wilkware;
   an freien Tagen wird der Balken grau und nennt den Anlass
 
-→ [Ausführliche Anleitung](Stundenplan/README.md)
+→ [Ausführliche Anleitung](SymDoTimetable/README.md)
 
 ## SymDo - Web App
 
@@ -232,14 +232,14 @@ Ein Wochenraster für die Frage aller Fragen: Was gibt es heute? Je Tag ein
 Gericht, blätterbar zwischen dieser und der nächsten Woche, Zutaten mit einem
 Klick in den Einkaufswagen, KI-Rezeptbilder.
 
-→ [Ausführliche Anleitung](MealPlan/README.md)
+→ [Ausführliche Anleitung](SymDoMealPlan/README.md)
 
 ## SymDo - Routinen
 
 Tägliche Häkchenlisten für Kinder: große Zeilen, großes Häkchen, Konfetti, wenn
 alles geschafft ist — und die Heute-Aufgaben als Füller.
 
-→ [Ausführliche Anleitung](Routines/README.md)
+→ [Ausführliche Anleitung](SymDoRoutines/README.md)
 
 ## SymDo - Ämtchenplan
 
@@ -247,7 +247,7 @@ Haushaltsaufgaben, die wochenweise zwischen den Familienmitgliedern wechseln —
 nach Person geordnet, mit Vorschau auf die nächste Woche und Punkten im
 Münzbeutel der Routinen.
 
-→ [Ausführliche Anleitung](Chores/README.md)
+→ [Ausführliche Anleitung](SymDoChores/README.md)
 
 ## SymDo - ToDo Übersicht
 
@@ -255,7 +255,7 @@ Kompakte Kachel mit den drei Kennzahlen einer Aufgabenliste (offen, überfällig
 heute), Farben je Feld, optional roter Hintergrund bei Überfälligen. Ein Tipp
 öffnet ein frei wählbares Objekt.
 
-→ [Ausführliche Anleitung](ToDoOverview/README.md)
+→ [Ausführliche Anleitung](SymDoToDoOverview/README.md)
 
 ## SymDo - Einkaufslisten Übersicht
 
@@ -263,4 +263,4 @@ Kompakte Kachel mit den offenen Artikeln einer Einkaufsliste als waagerecht
 scrollbare Bild-Leiste — dieselbe Vorschau wie auf der SymDo-Übersicht. Ein Tipp
 öffnet ein frei wählbares Objekt.
 
-→ [Ausführliche Anleitung](ShoppingListOverview/README.md)
+→ [Ausführliche Anleitung](SymDoShoppingListOverview/README.md)

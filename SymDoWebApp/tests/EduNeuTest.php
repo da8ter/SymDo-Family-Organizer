@@ -50,7 +50,7 @@ pruefe('Die Zaehlung liest den Bestand direkt, nicht ueber die Notiz-Helfer',
     [str_contains(substr($html, strpos($html, 'function eduNeuZaehlen('), 900), 'edumaps.folders'),
      str_contains(substr($html, strpos($html, 'function eduNeuZaehlen('), 900), 'notesImOrdner')],
     [true, false]);
-$kopien = ['ShoppingList', 'ToDoList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'];
+$kopien = ['SymDoShoppingList', 'SymDoToDoList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'];
 pruefe('Alle fuenf Kachel-Kopien tragen das Abzeichen (Uebernahme gelaufen)',
     array_map(static fn($m) => str_contains($lesen("$m/module.html"), 'function eduIstNeu'), $kopien),
     array_fill(0, 5, true));

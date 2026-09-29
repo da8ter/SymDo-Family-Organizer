@@ -9,7 +9,7 @@ declare(strict_types=1);
  * herein. Damit läuft es im Prüfstand (SymDoGateway/tests/HomeworkTest.php),
  * und die Regeln — was gültig ist, was aufbewahrt wird, welche Stunde eine
  * Aufgabe trägt — stehen an genau einer Stelle. Vorbild:
- * Stundenplan/libs/TimetableCalc.php.
+ * SymDoTimetable/libs/TimetableCalc.php.
  */
 class HomeworkCalc
 {

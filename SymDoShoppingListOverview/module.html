@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body {
+    width: 100%;
+    background: transparent; overflow: hidden;
+    font-family: -apple-system, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    -webkit-user-select: none; user-select: none;
+  }
+  /* Die Visualisierung setzt am RUMPF die Kachelraender: 60 px oben (dort
+     zeichnet sie ihre Ueberschrift), 20 seitlich, 15 unten. Genau diese Regel
+     hat die Kachel bis hierher mit `margin: 0` ueberschrieben und sass danach
+     in der ganzen Karte, Ueberschrift eingeschlossen — der Streifen klebte
+     dicht darunter, die Luft sammelte sich unten.
+
+     Der Abstand bleibt jetzt stehen, und die Hoehe wird darum herum verteilt:
+     die Wurzel ist so hoch wie die Kachel und ordnet als Flex-Behaelter, der
+     Rumpf nimmt sich mit `flex: 1` den Rest ZWISCHEN seinen Abstaenden. Damit
+     stimmt die Flaeche auch dann noch, wenn Symcon die Werte einmal aendert —
+     es steht keine Zahl mehr in dieser Datei. */
+  html {
+    height: 100%; margin: 0; padding: 0;
+    display: flex; flex-direction: column;
+  }
+  body { flex: 1; min-height: 0; display: flex; }
+  /* Nimmt, was der Rumpf zwischen seinen Abstaenden uebrig laesst, und stellt
+     den Streifen mittig hinein. */
+  #wrap {
+    flex: 1; min-width: 0;
+    display: flex; align-items: center;
+    box-sizing: border-box;
+  }
+  #wrap.clickable { cursor: pointer; }
+  #strip {
+    /* 25 statt 10 px: die Artikel standen zu dicht, und seit das Mengen-
+       Abzeichen 4 px ueber den Kreis hinausragt, kam es dem Nachbarn nahe.
+       Bei Bildhoehe 48 ist die Artikelbreite genau der Kreis — der Wert ist
+       dort also unmittelbar der Abstand von Kreis zu Kreis. */
+    display: flex; align-items: flex-start; gap: 25px;
+    overflow-x: auto; overflow-y: hidden;
+    /* Seitlich kein eigenes Polster mehr: den Rand setzt jetzt der Rumpf
+       (20 px von der Visualisierung). Zusammen waeren es 32 px, und der
+       Streifen begaenne deutlich weiter innen als die Ueberschrift darueber. */
+    padding: 6px 0;
+    width: 100%; box-sizing: border-box;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  #strip::-webkit-scrollbar { display: none; }
+  .item {
+    flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  /* Abgehakt: der Artikel verblasst und faellt in sich zusammen, bevor der
+     naechste Zustand ihn ohnehin entfernt. Ohne diese Rueckmeldung wirkte der
+     Tipp folgenlos — zwischen Tipp und neuem Zustand liegt der Weg ueber die
+     Einkaufsliste. */
+  .item.abgehakt {
+    opacity: 0; transform: scale(.8);
+    transition: opacity .22s ease, transform .22s ease;
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .item.abgehakt { transition: opacity .22s ease; transform: none; }
+  }
+  .thumb {
+    border-radius: 50%; overflow: hidden; flex: none;
+    background: rgba(127,127,127,0.15);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  /* Ganz links die Zahl der offenen Artikel, in der Akzentfarbe.
+     `align-self: stretch` macht sie so hoch wie ein ganzer Artikel — Bild UND
+     Namenszeile. Gemessen wird dabei nichts: der Streifen richtet seine Kinder
+     oben aus, dieses eine dehnt sich ueber die volle Zeilenhoehe. Aendert sich
+     die Schriftgroesse, stimmt die Hoehe weiter. */
+  .zaehler {
+    flex: none; align-self: stretch;
+    position: relative; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: var(--accent-color, #0a84ff); color: #fff;
+    font-weight: 700; line-height: 1; box-sizing: border-box;
+  }
+  /* Der Einkaufskorb im Hintergrund — wie auf der SymDo-Uebersicht: gross,
+     blass, leicht gegen den Uhrzeigersinn gekippt und unten rechts aus der
+     Kachel laufend. Als eingebettetes SVG und nicht als Symbolschrift: die
+     Kachel laedt keinen Icon-Satz, und 1,2 MB fuer ein Zeichen waeren keine
+     gute Rechnung. Die Masse in Prozent, damit es der eingestellten Bildhoehe
+     folgt. */
+  .zaehler .korb {
+    position: absolute; right: -16%; bottom: -18%;
+    width: 82%; height: 82%;
+    opacity: .22; transform: rotate(-10deg);
+    fill: none; stroke: #fff; stroke-width: 1.6;
+    stroke-linecap: round; stroke-linejoin: round;
+    pointer-events: none;
+  }
+  .zaehler .zahl { position: relative; z-index: 1; }
+  /* Klein unter der Zahl. Etwas durchscheinend, damit die Zahl die Hauptsache
+     bleibt; die Groesse setzt zaehlerMessen() aus der Kantenlaenge. */
+  .zaehler .wort {
+    position: relative; z-index: 1;
+    margin-top: 3px; font-weight: 600; opacity: .8;
+    max-width: 92%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* Die Huelle traegt das Mengen-Abzeichen. Sie darf die Kreisbeschneidung des
+     Bildes NICHT erben, sonst waere das Abzeichen an der Rundung abgeschnitten. */
+  .thumbwrap { position: relative; display: inline-flex; flex: none; }
+  /* Menge unten rechts am Bild — wie im Artikelstreifen der SymDo-Uebersicht.
+     Hoehe und Mindestbreite gleich: so bleibt die Pille bei „1" ein Kreis und
+     wird erst bei „500 g" laenger. line-height gleich der Inhaltshoehe haelt
+     die Zahl senkrecht mittig. Nicht umbrechen — „2 Zehe/n" waere sonst
+     zweizeilig und wuechse in den Artikelnamen hinein. */
+  .menge {
+    position: absolute; right: -4px; bottom: -3px;
+    min-width: 16px; height: 16px; padding: 1px 4px;
+    border-radius: 999px;
+    background: var(--card-color, #fff); color: var(--content-color, #1c1c1e);
+    font-size: 10px; font-weight: 700; line-height: 14px; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    box-sizing: border-box;
+  }
+  .thumb .initial { font-weight: 700; color: #fff; }
+  .iname {
+    color: var(--content-color, #8e8e93); opacity: 0.85;
+    white-space: nowrap; overflow: hidden;
+    text-align: center;
+  }
+  /* Zu lange Artikelnamen laufen hin und her, statt abgeschnitten dazustehen —
+     dieselbe Bewegung und dieselben Zeiten wie im Artikelstreifen der
+     SymDo-Uebersicht. Die Kachel ist schmal, und die Bilder sind rund: aus
+     „Schokoladenpudding" wurde hier regelmaessig „Schokolade…".
+
+     Der Lauf sitzt in einem eigenen Element INNEN. Kein text-overflow mehr am
+     Namen: sobald der Text in einem eigenen Kasten steckt, greift die Ellipse
+     dort nicht mehr — sie steht jetzt am inneren Element, fuer den Fall ohne
+     Bewegung. */
+  .iname .lauf { display: inline-block; }
+  .iname.laeuft .lauf { animation: name-pingpong 6s ease-in-out 2; }
+  .iname.laeuft.ruht .lauf { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+  @keyframes name-pingpong {
+    0%, 15%   { transform: translateX(0); }
+    45%, 55%  { transform: translateX(var(--lauf-weg, -30px)); }
+    85%, 100% { transform: translateX(0); }
+  }
+  /* Wer Bewegung abgestellt hat, bekommt die Ellipse zurueck: mit max-width hat
+     das innere Element einen eigenen Deckel, an dem sie greift. */
+  @media (prefers-reduced-motion: reduce) {
+    .iname.laeuft .lauf { animation: none; }
+    .iname .lauf { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  }
+  #empty {
+    width: 100%; text-align: center;
+    color: var(--content-color, #8e8e93); opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+  <div id="wrap"><div id="strip"></div></div>
+
+  <script>
+    // ── Bild-Lookup: Spiegel von SymDoShoppingList/module.html (getProductImageUrl)
+    //    und der App (ProductImageLibrary) — alle drei synchron halten! ──────
+    let productImages = {};
+    let productBrands = {};
+    let _piKeys = [];
+    let _piBrandKeys = [];
+    const _piCache = new Map();
+    function _rebuildPiKeys() {
+      const byLength = (a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0);
+      _piKeys = Object.keys(productImages).filter(k => k.length > 1).sort(byLength);
+      _piBrandKeys = Object.keys(productBrands).filter(k => k.length > 1).sort(byLength);
+      _piCache.clear();
+    }
+    const _piIsLetter = (ch) => /\p{L}/u.test(ch);
+    const _piFold = (s) => s.replaceAll('ä', 'ae').replaceAll('ö', 'oe').replaceAll('ü', 'ue').replaceAll('ß', 'ss');
+    const _piUnfold = (s) => s.replaceAll('ae', 'ä').replaceAll('oe', 'ö').replaceAll('ue', 'ü').replaceAll('ss', 'ß');
+    function _piCandidates(key) {
+      const out = [];
+      const push = (v) => { if (v && !out.includes(v)) out.push(v); };
+      push(key); push(_piFold(key)); push(_piUnfold(key));
+      for (const suffix of ['nen', 'en', 'er', 'es', 'se', 'n', 'e', 's']) {
+        if (key.length > suffix.length + 2 && key.endsWith(suffix)) {
+          const stem = key.slice(0, -suffix.length);
+          push(stem); push(_piFold(stem)); push(_piUnfold(stem));
+        }
+      }
+      return out;
+    }
+    function _piWholeWord(text, word) {
+      let idx = text.indexOf(word);
+      while (idx !== -1) {
+        const before = idx === 0 || !_piIsLetter(text[idx - 1]);
+        const after = idx + word.length >= text.length || !_piIsLetter(text[idx + word.length]);
+        if (before && after) return true;
+        idx = text.indexOf(word, idx + 1);
+      }
+      return false;
+    }
+    function _piResolve(key) {
+      const candidates = _piCandidates(key);
+      for (const c of candidates) {
+        if (productImages[c]) return productImages[c];
+      }
+      for (const k of _piBrandKeys) {
+        for (const c of candidates) {
+          if (_piWholeWord(c, k)) return productBrands[k];
+        }
+      }
+      for (const k of _piKeys) {
+        for (const c of candidates) {
+          if (c.length > k.length && c.endsWith(k)) return productImages[k];
+        }
+      }
+      for (const k of _piKeys) {
+        for (const c of candidates) {
+          if (c.length > k.length && _piWholeWord(c, k)) return productImages[k];
+        }
+      }
+      return null;
+    }
+    function imageUrlFor(item) {
+      if (!state.imageBase) return null;
+      if (item.imageUrl) return state.imageBase + encodeURIComponent(item.imageUrl);
+      const key = (item.name || '').normalize().toLowerCase();
+      if (!key) return null;
+      let file = _piCache.get(key);
+      if (file === undefined) {
+        file = _piResolve(key);
+        _piCache.set(key, file);
+      }
+      return file ? state.imageBase + encodeURIComponent(file) : null;
+    }
+
+    // ── Kachel ────────────────────────────────────────────────────────────
+    let state = { items: [], imageBase: '', openObjectId: 0, imageHeight: 48, fontSize: 11,
+                  emptyText: 'Liste ist leer', itemsLabel: 'Artikel' };
+
+    const PALETTE = ['#e7743d', '#4a6cf7', '#28a745', '#c957c9', '#e6a817', '#2aa8a8', '#d9534f', '#7a68c9'];
+    function tintFor(name) {
+      let hash = 0;
+      for (const ch of String(name)) hash = ((hash << 5) - hash + ch.codePointAt(0)) | 0;
+      return PALETTE[Math.abs(hash) % PALETTE.length];
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+    }
+
+    function render() {
+      const strip = document.getElementById('strip');
+      const size = Math.max(24, parseInt(state.imageHeight) || 48);
+      const font = Math.max(7, parseInt(state.fontSize) || 11);
+      const nameWidth = Math.max(size, 40);
+
+      if (!Array.isArray(state.items) || state.items.length === 0) {
+        strip.innerHTML = '<div id="empty" style="font-size:' + (font + 2) + 'px;">'
+          + escapeHtml(state.emptyText) + '</div>';
+        return;
+      }
+
+      /* Die Zahl steht VOR den Artikeln — dieselbe Kantenlaenge wie die Bilder,
+         damit die Reihe eine Linie behaelt. Der Radius folgt der Groesse: bei
+         48 px sind das 13 px, also eine Kachel und kein Kreis. */
+      /* Breite und Schriftgroesse setzt zaehlerMessen() nach dem Einfuegen: die
+         Hoehe steht erst fest, wenn die Zeile steht (Bild plus Namenszeile). */
+      let html = '<div class="zaehler">'
+        + '<svg class="korb" viewBox="0 0 24 24" aria-hidden="true">'
+        + '<path d="M4 9h16l-1.4 9.3a2.2 2.2 0 0 1-2.2 1.9H7.6a2.2 2.2 0 0 1-2.2-1.9L4 9Z"/>'
+        + '<path d="M8.2 9 11 3.4M15.8 9 13 3.4"/>'
+        + '<path d="M9.6 12.6v4.2M14.4 12.6v4.2"/></svg>'
+        + '<span class="zahl">' + state.items.length + '</span>'
+        + '<span class="wort">' + escapeHtml(state.itemsLabel || '') + '</span></div>';
+      for (const item of state.items) {
+        const url = imageUrlFor(item);
+        const initial = escapeHtml(String(item.name || '?').trim().charAt(0).toUpperCase());
+        const inner = url
+          ? '<img src="' + escapeHtml(url) + '" loading="lazy" '
+            + 'onerror="this.parentNode.innerHTML=\'<span class=&quot;initial&quot; '
+            + 'style=&quot;font-size:' + Math.round(size * 0.42) + 'px&quot;>' + initial + '</span>\';'
+            + 'this.parentNode.style.background=\'' + tintFor(item.name) + '\';">'
+          : '<span class="initial" style="font-size:' + Math.round(size * 0.42) + 'px">' + initial + '</span>';
+        const bg = url ? '' : ' style="background:' + tintFor(item.name) + '"';
+        /* Menge wie in der Artikelzeile: leer bedeutet eins. Nicht-numerische
+           Angaben wie „500 g" bleiben unveraendert — hier gibt es keinen
+           Stepper, das Abzeichen zeigt beides gleich an. Der Deckel haelt es
+           innerhalb des Artikels, statt den Nachbarn zu beruehren. */
+        const menge = String(item.amount || '').trim() || '1';
+        html += '<div class="item" data-id="' + escapeHtml(String(item.id || ''))
+          + '" style="width:' + nameWidth + 'px">'
+          + '<div class="thumbwrap">'
+          + '<div class="thumb" style="width:' + size + 'px;height:' + size + 'px"' + (url ? '' : bg) + '>'
+          + inner + '</div>'
+          + '<span class="menge" style="max-width:' + Math.max(28, nameWidth) + 'px">'
+          + escapeHtml(menge) + '</span></div>'
+          + '<div class="iname" style="font-size:' + font + 'px;max-width:' + nameWidth + 'px">'
+          + '<span class="lauf">' + escapeHtml(item.name) + '</span></div>'
+          + '</div>';
+      }
+      strip.innerHTML = html;
+      zaehlerMessen(strip);
+      namenLaufen(strip);
+    }
+
+    /* Der Kasten mit der Artikelzahl soll quadratisch sein. Seine HOEHE kommt
+       aus der Zeile (Bild plus Namenszeile, per align-self: stretch) und steht
+       erst nach dem Einfuegen fest — die Breite muss deshalb gemessen und
+       nachgetragen werden, eine gerechnete waere bei anderer Schriftgroesse
+       falsch. Radius und Zahl folgen derselben Kantenlaenge. */
+    function zaehlerMessen(strip) {
+      const el = strip.querySelector('.zaehler');
+      if (!el) { return; }
+      const hoehe = Math.round(el.getBoundingClientRect().height);
+      if (hoehe <= 0) { return; }
+      el.style.width = hoehe + 'px';
+      el.style.borderRadius = Math.round(hoehe * 0.24) + 'px';
+      el.style.fontSize = Math.round(hoehe * 0.4) + 'px';
+      const wort = el.querySelector('.wort');
+      // Deutlich kleiner als die Zahl, aber nicht unter 8 px — darunter ist es
+      // auf der Wandvisualisierung nur noch ein grauer Strich.
+      if (wort) { wort.style.fontSize = Math.max(8, Math.round(hoehe * 0.16)) + 'px'; }
+    }
+
+    /* Nur die Namen laufen lassen, die wirklich nicht passen. Erst ab vier
+       Pixeln Ueberhang — fuer zwei Pixel lohnt keine Bewegung, und eine Kachel,
+       in der staendig etwas wackelt, ist unruhiger als eine mit ein paar
+       gekuerzten Namen. Gemessen wird NACH dem Einfuegen: vorher hat der Text
+       keine Breite. */
+    // Laufschrift: zwei Durchlaeufe, dann ruht sie mit Ellipse; Antippen startet sie erneut.
+    // Eine Dauer-Animation hielte die ganze Visu im 60-Hz-Takt (~0,2 CPU-Kerne, gemessen).
+    document.addEventListener('animationend', function (e) {
+      if (e.animationName !== 'name-pingpong') { return; }
+      const box = e.target.closest && e.target.closest('.iname');
+      if (box) { box.classList.add('ruht'); }
+    }, true);
+    document.addEventListener('pointerdown', function (e) {
+      const halter = e.target.closest && e.target.closest('.item');
+      const box = halter && halter.querySelector('.iname.laeuft.ruht');
+      if (!box) { return; }
+      box.classList.remove('ruht');
+      const lauf = box.querySelector('.lauf');
+      if (!lauf) { return; }
+      lauf.style.animation = 'none';
+      void lauf.offsetWidth;
+      lauf.style.animation = '';
+    }, { capture: true, passive: true });
+
+    function namenLaufen(strip) {
+      strip.querySelectorAll('.iname').forEach(function (el) {
+        const innen = el.querySelector('.lauf');
+        if (!innen) { return; }
+        el.classList.remove('laeuft', 'ruht');
+        el.style.removeProperty('--lauf-weg');
+        const ueber = innen.scrollWidth - el.clientWidth;
+        if (ueber > 4) {
+          el.style.setProperty('--lauf-weg', '-' + Math.round(ueber) + 'px');
+          el.classList.add('laeuft');
+        }
+      });
+    }
+
+    function handleMessage(data) {
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch (e) { return; }
+      }
+      if (!data || data.type !== 'state') return;
+      state = Object.assign(state, data);
+      productImages = (data.productImages && typeof data.productImages === 'object') ? data.productImages : {};
+      productBrands = (data.productBrands && typeof data.productBrands === 'object') ? data.productBrands : {};
+      _rebuildPiKeys();
+      const wrap = document.getElementById('wrap');
+      wrap.classList.toggle('clickable', (parseInt(state.openObjectId) || 0) > 0);
+      render();
+    }
+
+    document.getElementById('wrap').addEventListener('click', (e) => {
+      /* Ein Tipp auf einen Artikel hakt ihn ab; ein Tipp daneben oeffnet wie
+         bisher das eingestellte Objekt. Der Artikel gewinnt, sonst waere das
+         Abhaken auf einer Kachel mit Ziel gar nicht erreichbar. */
+      const artikel = e.target.closest('.item');
+      const artikelId = artikel && artikel.dataset.id;
+      if (artikelId) {
+        if (artikel.classList.contains('abgehakt')) { return; }   // schon unterwegs
+        artikel.classList.add('abgehakt');
+        if (typeof requestAction === 'function') { requestAction('Check', artikelId); }
+        return;
+      }
+      const id = parseInt(state.openObjectId) || 0;
+      if (id > 0 && typeof openObject === 'function') {
+        openObject(id);
+      }
+    });
+  </script>
+</body>
+</html>

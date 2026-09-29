@@ -67,16 +67,16 @@ foreach (['.plan-stueck.pruefung {', '.wp-stunde.pruefung {', '.hw-pruefung {', 
 pruefe(str_contains($html, "const zustand = pruefung ? ' pruefung'") && str_contains($html, "const lage = pruefung ? ' pruefung'"),
     'Balken und Raster: die Pruefung schlaegt die Vertretung');
 pruefe(str_contains($html, "if (q === 'exam') return translate('Source: exam (UNTIS)');"), 'Quellenwort der Lern-Erinnerung');
-$kachel = (string)file_get_contents(__DIR__ . '/../../Stundenplan/module.html');
+$kachel = (string)file_get_contents(__DIR__ . '/../../SymDoTimetable/module.html');
 pruefe(str_contains($kachel, ".stunde.lage-pruefung {") && str_contains($kachel, "symbol(pruefung ? 'fa-file-pen'"),
     'Stundenplan-Kachel: Markierung wie in der Web-App');
-foreach (['ToDoList', 'ShoppingList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'] as $kopie) {
+foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'] as $kopie) {
     $k = (string)@file_get_contents(__DIR__ . '/../../' . $kopie . '/module.html');
     pruefe(str_contains($k, 'function hwPruefungenHtml(') && str_contains($k, ".wp-stunde.pruefung {"), "Kopie $kopie ist nachgezogen");
 }
 $schluessel = ['Exams', 'Exam', 'exam cancelled', 'Source: exam (UNTIS)', 'Next exam: %1', '%1 day(s) until the exam',
                'Exam today', 'Study start'];
-foreach (['SymDoWebApp', 'ToDoList', 'ShoppingList', 'SymDoHomework', 'SymDoNotes', 'SymDoEdumaps'] as $m) {
+foreach (['SymDoWebApp', 'SymDoToDoList', 'SymDoShoppingList', 'SymDoHomework', 'SymDoNotes', 'SymDoEdumaps'] as $m) {
     $de = json_decode((string)file_get_contents(__DIR__ . '/../../' . $m . '/locale.json'), true)['translations']['de'] ?? [];
     pruefe(array_filter($schluessel, static fn($s) => !isset($de[$s])) === [], "Uebersetzungen in $m/locale.json");
 }
