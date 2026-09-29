@@ -421,6 +421,12 @@ final class MailgunSetup
                 return $r;
             }
             $stueck = $r['daten']['items'] ?? null;
+            // Eine Region ohne Eintraege antwortet mit "items": null statt [] (gemessen
+            // 29.09.2026: EU ohne Domains, {"items":null,"total_count":0}). Das ist leer,
+            // keine Stoerung - sonst bricht die Domainsuche ab, obwohl US die Domain kennt.
+            if ($stueck === null && is_array($r['daten']) && array_key_exists('items', $r['daten'])) {
+                $stueck = [];
+            }
             if (!is_array($stueck)) {
                 return $this->fehler('bad_response', $schritt, ['detail' => 'items missing']);
             }

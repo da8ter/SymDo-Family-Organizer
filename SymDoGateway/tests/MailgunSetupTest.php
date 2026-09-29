@@ -94,6 +94,17 @@ pruefe('Genau eine Domain, nichts eingetragen: sie wird genommen', [$w['ok'], $w
     [true, 'sandbox12.mailgun.org', 'us']);
 pruefe('… und dafuer wurden BEIDE Regionen gefragt', $regionen($mg, '/v4/domains'), ['us', 'eu']);
 
+// Wortlaut der echten Antwort einer leeren Region (SymBox, 29.09.2026)
+[$s, $mg] = neu();
+$mg->domains['us'][] = MailgunAttrappe::domain('sandbox12.mailgun.org');
+$mg->erzwingen['eu GET /v4/domains'] = [200, '{"items":null,"total_count":0}'];
+$w = $s->domainWaehlen('', '');
+pruefe('EU ohne Domains ("items": null) ist leer, keine Stoerung: die US-Domain wird genommen',
+    [$w['ok'], $w['domain'] ?? null, $w['region'] ?? null], [true, 'sandbox12.mailgun.org', 'us']);
+$mg->erzwingen['eu GET /v4/domains'] = [200, '{"total_count":0}'];
+$w = $s->domainWaehlen('', '');
+pruefe('Fehlt "items" ganz, bleibt es eine unlesbare Antwort', [$w['ok'], $w['code'] ?? null], [false, 'bad_response']);
+
 [$s, $mg] = neu();
 $mg->domains['us'][] = MailgunAttrappe::domain('sandbox12.mailgun.org');
 $mg->domains['eu'][] = MailgunAttrappe::domain('mg.example.eu');

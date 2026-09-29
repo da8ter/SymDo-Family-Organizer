@@ -179,7 +179,9 @@ final class MailgunAttrappe
         if ($limit > 1000) {
             return $this->json(400, ['message' => "The 'limit' parameter can't be larger than 1000"]);
         }
-        return $this->json(200, ['total_count' => count($alle), 'items' => array_slice(array_values($alle), $skip, $limit)]);
+        // Wie das echte Mailgun: eine leere Region liefert "items": null, nicht [] (gemessen 29.09.2026)
+        $stueck = array_slice(array_values($alle), $skip, $limit);
+        return $this->json(200, ['total_count' => count($alle), 'items' => $alle === [] ? null : $stueck]);
     }
 
     private function json(int $status, array $daten): array
