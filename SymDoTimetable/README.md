@@ -266,6 +266,27 @@ STPL_FetchHolidays(int $InstanzID): string              // Ferien abrufen, Meldu
 STPL_Refresh(int $InstanzID): void                      // Anzeige nachziehen (Timer)
 STPL_GetSubjects(int $InstanzID): string                // die Fächer als JSON: Name, Symbolklasse, Farbe
 STPL_GetTilePlan(int $InstanzID): string                // wie GetPlan, dazu offene Hausaufgaben je Stunde
+STPL_GetSchoolTime(int $InstanzID, string $Kind, string $Typ, string $Datum): string   // Unterrichtsbeginn/-ende „08:00", '' = kein Unterricht
+STPL_GetSchoolTimestamp(int $InstanzID, string $Kind, string $Typ, string $Datum): int // dasselbe als Unix-Zeit, 0 = kein Unterricht
+```
+
+**Unterrichtsbeginn und -ende für Skripte** (Wecker, Heizung, Rollläden,
+Abholzeit): `$Kind` ist der Name oder die Nummer des Kindes (als Text, `'2'`),
+`$Typ` ist `start` (erste stattfindende Stunde), `end` (letzte stattfindende
+Stunde, ohne Betreuung) oder `end_care` (Ende inklusive Betreuung); `beginn`,
+`ende` und `ende_betreuung` gehen auch. `$Datum` ist `''` für heute, `morgen`
+oder `JJJJ-MM-TT`. Alle vier Angaben sind Pflicht — Symcon übernimmt keine
+Vorgabewerte in die `STPL_`-Funktionen. Entfallene Stunden zählen nicht, eine
+Prüfung oder ein Projekttag schon; an Wochenenden, in den Ferien und wenn alles
+entfällt kommt `''` bzw. `0`. Ungültige Angaben liefern ebenfalls `''`/`0` und
+eine Warnung mit den bekannten Kindern im Meldungsfenster.
+
+```php
+// Wecker für Tim: eine Stunde vor Unterrichtsbeginn morgen
+$beginn = STPL_GetSchoolTimestamp(52930, 'Tim', 'start', 'morgen');
+if ($beginn > 0) {
+    IPS_SetEventCyclicTimeFrom($weckerEreignis, (int)date('G', $beginn - 3600), (int)date('i', $beginn - 3600), 0);
+}
 ```
 
 `STPL_ImportSlots` ist für Zulieferer wie WebUntis gedacht, ausdrücklich aber

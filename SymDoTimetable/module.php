@@ -245,6 +245,91 @@ class SymDoTimetable extends IPSModuleStrict
     }
 
     /**
+     * Unterrichtsbeginn oder -ende eines Kindes als „HH:MM" (29.09.2026) —
+     * fuer Wecker, Heizung, Rolllaeden, Abholzeit.
+     *
+     *   STPL_GetSchoolTime($id, 'Tim', 'start', '')        // heute, erste Stunde
+     *   STPL_GetSchoolTime($id, 'Tim', 'end', 'morgen')    // morgen, letzte Stunde
+     *   STPL_GetSchoolTime($id, '2', 'end_care', '2026-10-05') // Kind Nr. 2, mit Betreuung
+     *
+     * $Child: Name oder Nummer wie bei ImportSlots. $Type: start | end |
+     * end_care (auch beginn, ende, ende_betreuung). $Date: '' = heute,
+     * heute/morgen oder JJJJ-MM-TT. Alle vier Angaben sind Pflicht — Symcon
+     * uebernimmt Vorgabewerte nicht in die STPL_-Funktionen.
+     *
+     * Kein Unterricht (Wochenende, Ferien, alles entfaellt): ''. Ungueltige
+     * Angaben ebenfalls '' und eine Warnung im Meldungsfenster — ein
+     * Wecker-Skript soll nicht abbrechen.
+     */
+    public function GetSchoolTime(string $Child, string $Type, string $Date): string
+    {
+        return (string)($this->Schulzeit($Child, $Type, $Date)['zeit'] ?? '');
+    }
+
+    /** Dasselbe als Unix-Zeitstempel an diesem Datum; 0 = kein Unterricht. */
+    public function GetSchoolTimestamp(string $Child, string $Type, string $Date): int
+    {
+        return (int)($this->Schulzeit($Child, $Type, $Date)['ts'] ?? 0);
+    }
+
+    /** @return array{zeit:string, ts:int}|null null = ungueltige Angaben */
+    private function Schulzeit(string $Child, string $Type, string $Date): ?array
+    {
+        $art   = TimetableCalc::SchulzeitArt($Type);
+        $datum = TimetableCalc::SchulzeitDatum($Date, time());
+        $kinder = array_values($this->Kinder());
+        $nr = $this->KindNummer($Child, $kinder);
+        if ($art === '' || $datum === '' || $nr < 1) {
+            $this->LogMessage(sprintf($this->Translate('GetSchoolTime: invalid request (child "%1$s", type "%2$s", date "%3$s") — known children: %4$s; types: start, end, end_care.'),
+                $Child, $Type, $Date,
+                implode(', ', array_map(static fn(array $k): string => (string)($k['name'] ?? '?'), $kinder))), KL_WARNING);
+            return null;
+        }
+        /* Ueber den FERTIGEN Plan: so gelten Quell-Instanz, Ferien und die
+           datierten Tage aus WebUntis (Entfall, Vertretung) von selbst. Das
+           Kind wird dort ueber den Namen gesucht — ausgeblendete Kinder fehlen
+           im Plan, eine Nummer stimmte dort nicht. */
+        $name = mb_strtolower(trim((string)($kinder[$nr - 1]['name'] ?? '')));
+        $plan = json_decode($this->GetPlanForDate($datum), true);
+        foreach ((array)($plan['children'] ?? []) as $kind) {
+            if (mb_strtolower(trim((string)($kind['name'] ?? ''))) !== $name) {
+                continue;
+            }
+            foreach ((array)($kind['days'] ?? []) as $tag) {
+                if ((string)($tag['date'] ?? '') !== $datum) {
+                    continue;
+                }
+                $zeit = ($tag['holiday'] ?? null) !== null ? '' : TimetableCalc::Schulzeit((array)($tag['slots'] ?? []), $art);
+                return ['zeit' => $zeit, 'ts' => $zeit === '' ? 0 : (int)strtotime($datum . ' ' . $zeit . ':00')];
+            }
+        }
+        return ['zeit' => '', 'ts' => 0];
+    }
+
+    /**
+     * Kind als Name (ohne Gross/Klein) oder 1-basierte Nummer → Nummer, 0 = unbekannt.
+     * Gemeinsam fuer ImportSlots und GetSchoolTime.
+     *
+     * @param list<array<string,mixed>> $kinder
+     */
+    private function KindNummer(mixed $wunsch, array $kinder): int
+    {
+        $nr = 0;
+        if (is_int($wunsch) || (is_string($wunsch) && ctype_digit(trim($wunsch)) && trim($wunsch) !== '')) {
+            $nr = (int)$wunsch;
+        } elseif (is_string($wunsch)) {
+            $gesucht = mb_strtolower(trim($wunsch));
+            foreach ($kinder as $i => $k) {
+                if ($gesucht !== '' && mb_strtolower(trim((string)($k['name'] ?? ''))) === $gesucht) {
+                    $nr = $i + 1;
+                    break;
+                }
+            }
+        }
+        return ($nr < 1 || $nr > count($kinder) || $nr > self::MAX_KINDER) ? 0 : $nr;
+    }
+
+    /**
      * Einmalige Umschrift der Zeiten auf die Form des Zeitwaehlers.
      *
      * Die Spalten Von und Bis sind SelectTime. Die Konsole liest eine solche
@@ -692,19 +777,8 @@ class SymDoTimetable extends IPSModuleStrict
         if (!is_int($wunsch) && !is_string($wunsch)) {
             $wunsch = '';
         }
-        $nr = 0;
-        if (is_int($wunsch) || (is_string($wunsch) && ctype_digit(trim($wunsch)) && trim($wunsch) !== '')) {
-            $nr = (int)$wunsch;
-        } else {
-            $gesucht = mb_strtolower(trim((string)$wunsch));
-            foreach ($kinder as $i => $k) {
-                if (mb_strtolower(trim((string)($k['name'] ?? ''))) === $gesucht && $gesucht !== '') {
-                    $nr = $i + 1;
-                    break;
-                }
-            }
-        }
-        if ($nr < 1 || $nr > count($kinder) || $nr > self::MAX_KINDER) {
+        $nr = $this->KindNummer($wunsch, $kinder);
+        if ($nr < 1) {
             return $fehler('unknown_child', sprintf(
                 $this->Translate('No child "%s" — known are: %s.'), (string)$wunsch,
                 implode(', ', array_map(static fn(array $k): string => (string)($k['name'] ?? '?'), $kinder))));

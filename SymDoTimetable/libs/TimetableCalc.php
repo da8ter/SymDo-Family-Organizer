@@ -404,6 +404,73 @@ class TimetableCalc
         return null;
     }
 
+    /**
+     * Unterrichtsbeginn oder -ende eines Tages als „HH:MM" (29.09.2026, fuer
+     * STPL_GetSchoolTime). Dieselbe Regel wie TagesDauer: Betreuung und
+     * Entfall zaehlen nicht — ausser bei `end_care`, dort ist das Ende der
+     * Betreuung (falls spaeter) die Antwort. Pruefungen und Termine sind
+     * Unterricht. Kein Unterricht: ''.
+     *
+     * @param string $art start | end | end_care (siehe SchulzeitArt)
+     */
+    public static function Schulzeit(array $tagSlots, string $art): string
+    {
+        $unterricht = array_values(array_filter($tagSlots,
+            static fn($s): bool => is_array($s) && !(bool)($s['care'] ?? false)
+                && (string)($s['status'] ?? '') !== 'entfall'));
+        if ($unterricht === []) {
+            return '';
+        }
+        // Unlesbare Zeiten (-1) fallen heraus, sonst waere -1 der „frueheste Beginn".
+        $gueltig = static fn(array $w): array => array_values(array_filter($w, static fn(int $m): bool => $m >= 0));
+        $anfaenge = $gueltig(array_map(static fn(array $s): int => self::Minuten(self::ZeitText($s['start'] ?? '')), $unterricht));
+        $enden    = $gueltig(array_map(static fn(array $s): int => self::Minuten(self::ZeitText($s['end'] ?? '')), $unterricht));
+        if ($anfaenge === [] || $enden === []) {
+            return '';
+        }
+        $von = min($anfaenge);
+        $bis = max($enden);
+        if ($art === 'start') {
+            return self::Zeit($von);
+        }
+        if ($art === 'end_care') {
+            foreach ($tagSlots as $s) {
+                if (is_array($s) && (bool)($s['care'] ?? false)) {
+                    $bis = max($bis, self::Minuten(self::ZeitText($s['end'] ?? '')));
+                }
+            }
+        }
+        return self::Zeit($bis);
+    }
+
+    /** start | end | end_care aus dem, was ein Skript schreibt ('' = unbekannt). */
+    public static function SchulzeitArt(string $roh): string
+    {
+        $t = strtolower(trim($roh));
+        return match ($t) {
+            'start', 'begin', 'beginn', 'anfang'                      => 'start',
+            'end', 'ende', 'schluss'                                  => 'end',
+            'end_care', 'endcare', 'ende_betreuung', 'betreuung'      => 'end_care',
+            default                                                   => '',
+        };
+    }
+
+    /** JJJJ-MM-TT aus '', heute/today, morgen/tomorrow oder einem Datum ('' = ungueltig). */
+    public static function SchulzeitDatum(string $roh, int $jetzt): string
+    {
+        $t = strtolower(trim($roh));
+        if ($t === '' || $t === 'heute' || $t === 'today') {
+            return date('Y-m-d', $jetzt);
+        }
+        if ($t === 'morgen' || $t === 'tomorrow') {
+            return date('Y-m-d', (int)strtotime('+1 day', $jetzt));
+        }
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $t, $m) === 1 && checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
+            return $t;
+        }
+        return '';
+    }
+
     /** Unterrichtsdauer eines Tages in Minuten: vom Beginn der ersten bis zum
      *  Ende der letzten Stunde. Freistunden zaehlen mit, Betreuung nicht. */
     public static function TagesDauer(array $tagSlots): int

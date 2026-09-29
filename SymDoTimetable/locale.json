@@ -92,7 +92,8 @@
             "\"%s\" is not a date.": "„%s\" ist kein Datum.",
             "The dated days need a kernel restart first — the attribute does not exist yet.": "Die datierten Tage brauchen erst einen Kernel-Neustart — das Attribut gibt es noch nicht.",
             "%d subjects added: %s — press Apply to keep them.": "%d Fächer ergänzt: %s — zum Behalten auf „Übernehmen“ drücken.",
-            "Colors from WebUntis (override the colors above)": "Farben aus UNTIS (schlagen die Farben oben)"
+            "Colors from WebUntis (override the colors above)": "Farben aus UNTIS (schlagen die Farben oben)",
+            "GetSchoolTime: invalid request (child \"%1$s\", type \"%2$s\", date \"%3$s\") — known children: %4$s; types: start, end, end_care.": "GetSchoolTime: ungültige Anfrage (Kind „%1$s\", Typ „%2$s\", Datum „%3$s\") — bekannte Kinder: %4$s; Typen: start, end, end_care."
         }
     }
 }
