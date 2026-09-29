@@ -122,13 +122,12 @@ trait MailScan
         // Mailguns „HTTP webhook signing key" — damit wird die Signatur geprueft.
         $this->RegisterPropertyString('MailHookSigningKey', '');
         // Domain bei Mailgun (oder eine feste Adresse fuer Plus-Adressen): Grundlage
-        // der Standardadressen.
+        // der Standardadressen; „Set up Mailgun" traegt sie selbst ein.
         $this->RegisterPropertyString('MailHookBase', '');
         $this->RegisterPropertyInteger('MailHookMaxKB', 1024);
-        // Nur zum Nachladen der Anhaenge (Basic-Auth „api:<key>").
-        // Ohne Formularfeld: Er zaehlt nur fuer den Weg „Store and notify", und der
-        // scheitert bei Sandbox-Domains ohnehin am Abruf. Die Eigenschaft bleibt,
-        // damit ein bestehender Schluessel weiter wirkt.
+        // Mailguns API-Schluessel (Basic-Auth „api:<key>"): richtet per Knopf Route
+        // und Signaturschluessel ein (MailHookMailgunRun), fuehrt die Route bei
+        // einem neuen Token nach und laedt bei „Store and notify" Anhaenge nach.
         $this->RegisterPropertyString('MailHookApiKey', '');
 
         $this->RegisterAttributeString('MailProposals', '[]');
@@ -139,6 +138,10 @@ trait MailScan
         // Je Instanz die bereits verarbeiteten UIDs: {"26939":["1","2"]}
         $this->RegisterAttributeString('MailSeenUIDs', '{}');
         $this->RegisterAttributeString('MailDayCount', '{}');
+        // Region des Mailgun-Kontos (us/eu), beim Einrichten gemerkt: der naechste
+        // Lauf fragt dort zuerst. Kein Geheimnis. Fehlt es (noch kein Neuladen des
+        // Moduls), wird die Region eben jedes Mal gesucht.
+        $this->RegisterAttributeString('MailHookRegion', '');
 
         $this->RegisterTimer('MailScan', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'MailScan\', 0);');
     }
@@ -224,11 +227,24 @@ trait MailScan
             $this->MailArm();
             return true;
         }
+        if ($Ident === 'MailHookMailgunSetup') {
+            $this->MailHookMailgunSetup((string)$Value);
+            return true;
+        }
         if ($Ident === 'MailHookNewSecret') {
             // Das Pfad-Geheimnis erzeugen wir selbst; den Signaturschluessel traegt
             // der Nutzer aus Mailgun ein. Die Anleitung wird gleich mitgezogen, damit
             // die fertige Adresse ohne Umweg dasteht.
             $geheim = bin2hex(random_bytes(24));
+            /* Mit gespeichertem API-Schluessel zieht der Knopf die Route in Mailgun
+               gleich mit und speichert erst DANACH — sonst zeigte sie auf eine
+               Adresse, die Symcon mit 403 abweist. Scheitert Mailgun, bleibt der
+               alte Token. Ohne Schluessel: die Anleitung wie bisher. */
+            $schluessel = trim((string)$this->MailProp('MailHookApiKey', ''));
+            if ($schluessel !== '') {
+                $this->MailHookMailgunRun($schluessel, (string)$this->MailProp('MailHookBase', ''), $geheim, null, false);
+                return true;
+            }
             $teile = $this->MailHookSetupParts($geheim);
             $this->UpdateFormField('MailHookSecret', 'value', $geheim);
             $this->UpdateFormField('MailHookSetup', 'caption', $teile['hinweis']);
@@ -286,8 +302,8 @@ trait MailScan
      */
     private function MailHookSetupParts(string $geheim): array
     {
-        $connect = $this->GetConnectUrl();
-        if ($connect === '') {
+        $praefix = $this->MailHookPraefix();
+        if ($praefix === '') {
             return [
                 'hinweis' => $this->Translate('No Symcon Connect address found — without it Mailgun cannot reach this system. Set up Connect first.'),
                 'url'     => '', 'bereit' => false,
@@ -301,9 +317,21 @@ trait MailScan
         }
         return [
             'hinweis' => $this->Translate('In Mailgun: Receiving → Create Route. Leave "Expression type" on "Catch all". Turn ON "Forward" and paste the address below into its "Destination" field — that way attachments come along. Turn ON "Stop" as well. Leave "Store and notify" OFF: for sandbox domains Mailgun refuses to hand out stored messages, so attachments would be lost. Priority stays 0. The signing key is under API Security → "HTTP webhook signing key".'),
-            'url'     => rtrim($connect, '/') . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION . '/mail/hook/' . $geheim,
+            'url'     => $praefix . $geheim,
             'bereit'  => true,
         ];
+    }
+
+    /**
+     * Die Hook-Adresse ohne Token. Zugleich das Erkennungszeichen der eigenen
+     * Route in Mailgun: sie leitet hierhin weiter, egal mit welchem Token.
+     */
+    private function MailHookPraefix(): string
+    {
+        $connect = $this->GetConnectUrl();
+        return $connect === ''
+            ? ''
+            : rtrim($connect, '/') . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION . '/mail/hook/';
     }
 
     /**
@@ -536,7 +564,7 @@ trait MailScan
         $lebend = is_array($roh) ? array_values(array_filter($roh, 'is_array')) : null;
         $domain = $this->MailHookDomain();
         if ($domain === '') {
-            $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('Please enter your Mailgun domain above first and press Apply.'));
+            $this->UpdateFormField('MailAddressStatus', 'caption', $this->Translate('Please enter your Mailgun domain above first and press Apply.'));
             return;
         }
         $lokal  = $this->MailHookLocalPart();
@@ -558,11 +586,212 @@ trait MailScan
         }
         unset($zeile);
         if ($neu === 0) {
-            $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('Every row already has an address.'));
+            $this->UpdateFormField('MailAddressStatus', 'caption', $this->Translate('Every row already has an address.'));
             return;
         }
         $this->UpdateFormField('MailAddresses', 'values', json_encode($zeilen, JSON_UNESCAPED_UNICODE));
-        $this->UpdateFormField('MailHookStatus', 'caption', sprintf($this->Translate('%d address(es) added — press Apply to save.'), $neu));
+        $this->UpdateFormField('MailAddressStatus', 'caption', sprintf($this->Translate('%d address(es) added — press Apply to save.'), $neu));
+    }
+
+    // ─────────────── Mailgun per API-Schluessel einrichten ───────────────
+    //
+    // Ein Knopf statt fuenf Handgriffen. Die Anfragen und ihre Deutung stehen
+    // Symcon-frei in MailgunSetup; hier steht, was Symcon dazu braucht: Formular
+    // lesen, speichern, gegenlesen, Formular nachziehen, Saetze bauen.
+
+    /** Knopf „Set up Mailgun": Schluessel, Domain, Token und Adressen aus dem OFFENEN Formular. */
+    private function MailHookMailgunSetup(string $nutzlast): void
+    {
+        $roh  = json_decode($nutzlast, true);
+        $roh  = is_array($roh) ? $roh : [];
+        $text = static fn(mixed $v): string => is_scalar($v) ? trim((string)$v) : '';
+        $token = $text($roh['token'] ?? '');
+        $this->MailHookMailgunRun($text($roh['key'] ?? ''), $text($roh['domain'] ?? ''),
+            MailgunSetup::tokenGueltig($token) ? $token : '',
+            is_array($roh['addresses'] ?? null) ? array_values(array_filter($roh['addresses'], 'is_array')) : null,
+            true);
+    }
+
+    /**
+     * Einrichten (Knopf) oder die Route einem neuen Token nachfuehren.
+     *
+     * Erst Mailgun, dann Symcon — mit Absicht. Zeigt die Route schon auf den
+     * neuen Token, waehrend Symcon noch den alten kennt, weist der Hook kurz ab;
+     * Mailgun versucht es spaeter noch einmal, und dann passt es. Umgekehrt
+     * liefen Mailguns Wiederholungen an die alte Adresse ins Leere.
+     *
+     * @param string $token   leer = der gespeicherte (oder ein neuer)
+     * @param ?array $lebend  Adresszeilen des offenen Formulars; null = Tabelle bleibt
+     * @param bool $einrichten true: „Set up Mailgun" (schaltet den Empfang ein);
+     *                         false: neuer Token, der Schalter bleibt, wie er ist
+     */
+    private function MailHookMailgunRun(#[\SensitiveParameter] string $schluessel, string $feld,
+        #[\SensitiveParameter] string $token, ?array $lebend, bool $einrichten): void
+    {
+        $status = function (string $text): void {
+            $this->UpdateFormField('MailHookStatus', 'caption', $text);
+        };
+        if ($schluessel === '') {
+            $status($this->Translate('Please enter the Mailgun API key first.'));
+            return;
+        }
+        if (!MailgunSetup::schluesselGueltig($schluessel)) {
+            $status($this->Translate('This does not look like a Mailgun API key — please copy it again.'));
+            return;
+        }
+        if ($token === '') {
+            $alt   = trim((string)$this->MailProp('MailHookSecret', ''));
+            $token = MailgunSetup::tokenGueltig($alt) ? $alt : bin2hex(random_bytes(24));
+        }
+        $teile = $this->MailHookSetupParts($token);
+        if (!$teile['bereit']) {
+            $status($teile['hinweis']);
+            return;
+        }
+        $feld   = trim($feld);
+        $domain = str_contains($feld, '@') ? (string)(explode('@', $feld, 2)[1] ?? '') : $feld;
+        $domainVorher = $this->MailHookDomain();
+        $vorher = $this->MailAddressEffective();
+        $erg = $this->MailgunNeu($schluessel)->einrichten($domain, $this->MailAttr('MailHookRegion', ''),
+            $teile['url'], $this->MailgunBeschreibung(), $this->MailHookPraefix());
+        if (!$erg['ok']) {
+            // detail ist in MailgunSetup schon bereinigt: ohne Schluessel und Token.
+            $this->SendDebug('Mailgun', sprintf('%s: %s (HTTP %d) %s',
+                $erg['schritt'], $erg['code'], $erg['status'], $erg['detail']), 0);
+            $grund = $this->MailgunGrund($erg);
+            $status($einrichten ? $grund : sprintf($this->Translate('The token was not changed: %s'), $grund));
+            return;
+        }
+
+        // Eine feste Adresse (post@…) bleibt stehen, wenn ihre Domain die gewaehlte ist.
+        $basis = str_contains($feld, '@') && MailgunSetup::domainNormal($domain) === $erg['domain']
+            ? $feld : (string)$erg['domain'];
+        $werte = ['MailHookApiKey' => $schluessel, 'MailHookBase' => $basis, 'MailHookSecret' => $token,
+                  'MailHookSigningKey' => (string)$erg['signingKey']];
+        if ($einrichten) {
+            $werte['MailHookEnabled'] = true;
+        }
+        $fehlt = $this->MailHookSpeichern($werte);
+        try {
+            @$this->WriteAttributeString('MailHookRegion', (string)$erg['region']);
+        } catch (\Throwable $e) {
+            // Attribut fehlt bis zum Neuladen des Moduls — dann wird eben wieder gesucht.
+        }
+
+        // Das OFFENE Formular nachziehen: sonst schriebe ein spaeteres
+        // „Uebernehmen" die alten Werte aus dem Formular zurueck.
+        $this->UpdateFormField('MailHookBase', 'value', $basis);
+        $this->UpdateFormField('MailHookSecret', 'value', $token);
+        $this->UpdateFormField('MailHookSigningKey', 'value', (string)$erg['signingKey']);
+        if ($einrichten) {
+            $this->UpdateFormField('MailHookEnabled', 'value', true);
+        }
+        $this->UpdateFormField('MailHookSetup', 'caption', $teile['hinweis']);
+        $this->UpdateFormField('MailHookNotifyUrl', 'value', $teile['url']);
+        if ($lebend !== null) {
+            $this->UpdateFormField('MailAddresses', 'values',
+                (string)json_encode($this->MailAddressFormRows($lebend, $vorher), JSON_UNESCAPED_UNICODE));
+        } elseif ($domainVorher !== $erg['domain']) {
+            $this->UpdateFormField('MailAddresses', 'values',
+                (string)json_encode($this->MailAddressRows(), JSON_UNESCAPED_UNICODE));
+        }
+
+        $pruefung = (array)$erg['pruefung'];
+        $this->SendDebug('Mailgun', sprintf('%s (%s): Route %s %s, weitere %d, Pruefung %s',
+            $erg['domain'], $erg['region'], $erg['routeId'], $erg['neu'] ? 'angelegt' : 'nachgefuehrt',
+            $erg['weitere'], ($pruefung['ok'] ?? false) ? 'ok' : (string)($pruefung['code'] ?? '?')), 0);
+        $this->LogMessage(sprintf($einrichten
+            ? 'SymDo: Mailgun eingerichtet — Domain %s, Region %s, Route %s'
+            : 'SymDo: Mail-Webhook-Token erneuert, Mailgun-Route nachgefuehrt — Domain %s, Region %s, Route %s',
+            $erg['domain'], strtoupper((string)$erg['region']), $erg['neu'] ? 'angelegt' : 'aktualisiert'), KL_NOTIFY);
+        $status($this->MailgunErfolg($erg, $einrichten, $fehlt));
+    }
+
+    /**
+     * Eigenschaften setzen, uebernehmen und GEGENLESEN.
+     *
+     * IPS_SetProperty liefert auch bei gleichem Wert false; beweisen kann nur
+     * das Lesen nach dem Uebernehmen (IPS_GetProperty zeigt den AKTIVEN Stand).
+     * Uebernommen wird direkt — aus RequestAction ist das der gewohnte Weg
+     * (Einwilligungs-Widerruf in AppCore, Stundenplan-Import); nur aus
+     * ApplyChanges heraus lehnt Symcon 9.1 den Selbstaufruf ab. Kommt trotzdem
+     * nicht alles an, holt ein Einmal-Zeitgeber das Uebernehmen nach.
+     *
+     * @param array<string, mixed> $werte
+     * @return list<string> Eigenschaften, die (noch) nicht angekommen sind
+     */
+    private function MailHookSpeichern(array $werte): array
+    {
+        foreach ($werte as $name => $wert) {
+            try {
+                @IPS_SetProperty($this->InstanceID, (string)$name, $wert);
+            } catch (\Throwable $e) {
+                // Das Gegenlesen unten meldet es.
+            }
+        }
+        $this->mailConfigCache = null;
+        try {
+            @IPS_ApplyChanges($this->InstanceID);
+        } catch (\Throwable $e) {
+            // dito
+        }
+        $this->mailConfigCache = null;
+        $fehlt = [];
+        foreach ($werte as $name => $wert) {
+            try {
+                $ist = @IPS_GetProperty($this->InstanceID, (string)$name);
+            } catch (\Throwable $e) {
+                $ist = null;
+            }
+            if ($ist !== $wert) {
+                $fehlt[] = (string)$name;
+            }
+        }
+        if ($fehlt !== []) {
+            $this->UebernehmenNachtragen();
+        }
+        return $fehlt;
+    }
+
+    /**
+     * Die Adresszeilen fuers offene Formular nach dem Einrichten.
+     *
+     * Getipptes bleibt. Eine Zeile, die noch die Standardadresse von vorher
+     * zeigte (oder leer war und keine eigene hat), folgt der neuen Domain —
+     * sonst speicherte ein spaeteres „Uebernehmen" die alte.
+     *
+     * @param list<array<string, mixed>> $lebend
+     * @param list<array{UserID: string, Address: string, Standard: bool}> $vorher
+     * @return list<array{UserID: string, Name: string, Address: string, SenderAllow: string}>
+     */
+    private function MailAddressFormRows(array $lebend, array $vorher): array
+    {
+        $alt = [];
+        foreach ($vorher as $z) {
+            $alt[$z['UserID']] = $z;
+        }
+        $fest = [];
+        $sender = [];
+        foreach ($lebend as $l) {
+            $id = is_array($l) ? trim((string)($l['UserID'] ?? '')) : null;
+            if ($id === null || array_key_exists($id, $sender)) {
+                continue;
+            }
+            $sender[$id] = (string)($l['SenderAllow'] ?? '');
+            $adresse = trim((string)($l['Address'] ?? ''));
+            $war = $alt[$id] ?? null;
+            if (!($war !== null && $war['Standard'] && ($adresse === '' || strcasecmp($adresse, (string)$war['Address']) === 0))) {
+                $fest[$id] = $adresse;
+            }
+        }
+        $raus = [];
+        foreach ($this->MailAddressEffective($fest) as $z) {
+            if (array_key_exists($z['UserID'], $sender)) {
+                $z['SenderAllow'] = $sender[$z['UserID']];
+            }
+            $raus[] = $z;
+        }
+        return $this->MailAddressNamen($raus);
     }
 
     /**
@@ -583,6 +812,100 @@ trait MailScan
             $raus[] = $z;
         }
         return $raus;
+    }
+
+    /** Die Statuszeile nach Erfolg. Zuerst, was noch zu tun ist. */
+    private function MailgunErfolg(array $erg, bool $einrichten, array $fehlt): string
+    {
+        $saetze = [];
+        if ($fehlt !== []) {
+            $saetze[] = $this->Translate('Mailgun is ready, but Symcon has not taken over the settings yet — please press Apply now.');
+        }
+        $region = strtoupper((string)$erg['region']);
+        if (!$einrichten) {
+            $saetze[] = sprintf($this->Translate('New token stored — the route in Mailgun for %s now points to the new address.'), $erg['domain']);
+        } elseif ($erg['neu']) {
+            $saetze[] = sprintf($this->Translate('Mailgun is set up for %1$s (region %2$s): route created, signing key stored, mail reception switched on.'), $erg['domain'], $region);
+        } else {
+            $saetze[] = sprintf($this->Translate('Mailgun is set up for %1$s (region %2$s): route updated, signing key stored, mail reception switched on.'), $erg['domain'], $region);
+        }
+        $p = (array)$erg['pruefung'];
+        if (($p['ok'] ?? false) === true) {
+            $saetze[] = ($p['vorher'] ?? '') !== ''
+                ? sprintf($this->Translate('Self-check passed; the route "%s" runs first but lets the mail through.'), $p['vorher'])
+                : $this->Translate('Self-check passed: Mailgun hands mail for this domain to Symcon.');
+        } elseif (($p['code'] ?? '') === 'match_other') {
+            $saetze[] = sprintf($this->Translate('Self-check failed: the route "%s" catches this domain first and stops there — delete or change it in Mailgun.'), $p['detail']);
+        } elseif (($p['code'] ?? '') === 'match_none') {
+            $saetze[] = $this->Translate('Self-check failed: Mailgun knows no route for this domain — please press the button again.');
+        } else {
+            $saetze[] = sprintf($this->Translate('The self-check could not run: %s'), $this->MailgunGrund($p));
+        }
+        if (($erg['zustand'] ?? '') === 'unverified') {
+            $saetze[] = $this->Translate('Note: Mailgun lists the domain as not yet verified — mail only arrives once its DNS records are verified.');
+        }
+        if ((int)$erg['weitere'] > 0) {
+            $saetze[] = sprintf($this->Translate('%d more route(s) in Mailgun also forward to this system — you can delete them there.'), (int)$erg['weitere']);
+        }
+        $fremd = 0;
+        foreach ($this->MailAddressEffective() as $z) {
+            $fremd += $z['Address'] !== '' && !str_ends_with(strtolower($z['Address']), '@' . $erg['domain']) ? 1 : 0;
+        }
+        if ($fremd > 0) {
+            $saetze[] = sprintf($this->Translate('%1$d receiving address(es) are not on %2$s — Mailgun does not deliver those to Symcon.'), $fremd, $erg['domain']);
+        }
+        if ((bool)$this->MailProp('MailHookEnabled', false) && !$this->MailHookIsEnabled()) {
+            $saetze[] = $this->Translate('Mail is only accepted once the AI features are switched on and their privacy notice is accepted.');
+        }
+        return implode(' ', $saetze);
+    }
+
+    /** Der Satz zu einem Fehlerbefund aus MailgunSetup — ohne Geheimnisse (detail ist bereinigt). */
+    private function MailgunGrund(array $e): string
+    {
+        $detail = (string)($e['detail'] ?? '');
+        $status = (int)($e['status'] ?? 0);
+        $code   = (string)($e['code'] ?? '');
+        $liste  = implode(', ', array_slice(array_map('strval', (array)($e['liste'] ?? [])), 0, 8));
+        $grund = match ($code) {
+            'key_invalid'         => $this->Translate('The Mailgun API key is invalid or lacks permissions (role Developer or Admin needed).'),
+            'unreachable'         => sprintf($this->Translate('Mailgun cannot be reached (%s).'), $detail),
+            'server'              => sprintf($this->Translate('Mailgun reports a server error (HTTP %d) — please try again later.'), $status),
+            'rate_limited'        => $this->Translate('Mailgun is limiting requests right now — please try again in a minute.'),
+            'redirect'            => sprintf($this->Translate('Mailgun answered with a redirect (HTTP %d), which is not followed.'), $status),
+            'rejected'            => sprintf($this->Translate('Mailgun rejected the request (HTTP %1$d): %2$s'), $status, $detail),
+            'bad_response'        => sprintf($this->Translate('Mailgun sent an answer that cannot be read (%s).'), $detail),
+            'budget'              => $this->Translate('Mailgun took too long to answer — please try again.'),
+            'no_domain'           => $this->Translate('There is no active domain in this Mailgun account.'),
+            'domain_ambiguous'    => sprintf($this->Translate('The Mailgun account has several domains (%s) — enter the one to use in the domain field and press the button again.'), $liste),
+            'domain_unknown'      => sprintf($this->Translate('The domain %1$s is not in this Mailgun account (found: %2$s).'), (string)($e['domain'] ?? ''), $liste !== '' ? $liste : '—'),
+            'domain_invalid'      => sprintf($this->Translate('"%s" is not a valid domain name.'), (string)($e['domain'] ?? '')),
+            'signing_key_missing' => $this->Translate('Mailgun has no webhook signing key for this account yet — create one in Mailgun (HTTP webhook signing key) and press the button again.'),
+            'hook_invalid'        => $this->Translate('The Symcon Connect address must start with https:// — Mailgun would otherwise deliver the mail unencrypted.'),
+            default               => sprintf($this->Translate('Mailgun setup failed (%s).'), $code),
+        };
+        $wo = match ((string)($e['schritt'] ?? '')) {
+            'domains'     => $this->Translate('Reading the domains'),
+            'signing_key' => $this->Translate('Reading the signing key'),
+            'routes'      => $this->Translate('Reading the routes'),
+            'route_save'  => $this->Translate('Saving the route'),
+            'match'       => $this->Translate('Self-check'),
+            default       => '',
+        };
+        return $wo !== '' && in_array($code, ['unreachable', 'server', 'rate_limited', 'redirect', 'rejected', 'bad_response', 'budget'], true)
+            ? $wo . ': ' . $grund : $grund;
+    }
+
+    /** Daran erkennt der naechste Lauf die eigene Route wieder (neben der Weiterleitung). */
+    private function MailgunBeschreibung(): string
+    {
+        return 'SymDo Gateway ' . $this->InstanceID;
+    }
+
+    /** Eigene Methode, damit der Pruefstand eine Attrappe statt curl hereinreicht. */
+    private function MailgunNeu(#[\SensitiveParameter] string $schluessel): MailgunSetup
+    {
+        return new MailgunSetup($schluessel);
     }
 
     /** Setzt den One-Shot-Timer. Die Arbeit gehoert nicht in den Nachrichten-Thread. */

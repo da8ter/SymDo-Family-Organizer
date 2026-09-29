@@ -11,6 +11,7 @@ require_once __DIR__ . '/../libs/ScanKanal.php';
 require_once __DIR__ . '/libs/ScanBridge.php';
 require_once __DIR__ . '/libs/AiJobs.php';
 require_once __DIR__ . '/libs/MailAnalyseCalc.php';
+require_once __DIR__ . '/libs/MailgunSetup.php';
 require_once __DIR__ . '/libs/MailScan.php';
 require_once __DIR__ . '/libs/MailFetch.php';
 require_once __DIR__ . '/libs/Originale.php';
@@ -2160,8 +2161,12 @@ class SymDoGateway extends IPSModuleStrict
      * — es sind zwei getrennte Wege in dieselbe Analyse, und der Nutzer soll
      * beim Suchen eines Fehlers wissen, welcher davon gemeint ist.
      *
-     * Die Adresse und der Routen-Ausdruck werden hier berechnet: Sie stehen sonst
-     * nirgends, und ein falsch abgetippter Token kostet eine Stunde Suche.
+     * Oben der Weg mit API-Schluessel: ein Knopf richtet Route, Token und
+     * Signaturschluessel ein (MailHookMailgunRun). Der Handweg bleibt als
+     * Rueckfall im Unterpanel „Manual setup" — dort werden Adresse und
+     * Anleitung berechnet, weil ein falsch abgetippter Token eine Stunde Suche
+     * kostet. Das Domain-Feld steht oben: der Knopf liest es, und seine
+     * Rueckfrage bei mehreren Domains verweist genau darauf.
      */
     private function GetMailHookPanel(): array
     {
@@ -2175,7 +2180,11 @@ class SymDoGateway extends IPSModuleStrict
             'items'    => [
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate('Set up a free account at https://www.mailgun.com and configure it as described below.')
+                    'caption' => $this->Translate('Set up a free account at https://www.mailgun.com, create an API key there and enter it below. "Set up Mailgun" does the rest: it finds your domain, creates the route to Symcon, fetches the signing key and switches reception on.')
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Tip: create a key of its own for Symcon in Mailgun (API keys, role Developer or Admin — free plans only offer Admin). It is stored in this instance; a key of its own can be revoked at any time without affecting anything else.')
                 ],
                 [
                     'type'    => 'CheckBox',
@@ -2183,49 +2192,84 @@ class SymDoGateway extends IPSModuleStrict
                     'caption' => $this->Translate('Activate mail analysis')
                 ],
                 [
+                    'type'    => 'PasswordTextBox',
+                    'name'    => 'MailHookApiKey',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Mailgun API key')
+                ],
+                [
                     'type'    => 'ValidationTextBox',
                     'name'    => 'MailHookBase',
                     'width'   => '400px',
-                    'caption' => $this->Translate('Mailgun domain (e.g. sandbox….mailgun.org) — or a fixed address if you prefer plus tags')
+                    'caption' => $this->Translate('Mailgun domain — filled in by the button; enter it only if the account has several (or a fixed address for plus tags)')
                 ],
                 [
-                    'type'  => 'RowLayout',
-                    'items' => [
+                    'type'    => 'Button',
+                    'caption' => $this->Translate('Set up Mailgun'),
+                    /* Die Werte des OFFENEN Formulars mitreichen — wie beim
+                       Adressknopf: sonst griffe der Knopf auf den gespeicherten
+                       Stand zu, und ein gerade eingefuegter Schluessel fehlte. */
+                    'onClick' => 'IPS_RequestAction($id, \'MailHookMailgunSetup\', json_encode(['
+                        . '"key" => $MailHookApiKey, "domain" => $MailHookBase, "token" => $MailHookSecret, '
+                        . '"addresses" => iterator_to_array($MailAddresses)]));'
+                ],
+                [
+                    // Rueckmeldung von Einrichten und neuem Token. Bewusst ein
+                    // Label und kein echo: eine Ausgabe aus RequestAction meldet
+                    // Symcon als Skriptfehler samt Dateiname und Zeilennummer.
+                    'type'    => 'Label',
+                    'name'    => 'MailHookStatus',
+                    'caption' => ''
+                ],
+                [
+                    'type'     => 'ExpansionPanel',
+                    'caption'  => $this->Translate('Manual setup (without API key)'),
+                    'expanded' => false,
+                    'items'    => [
                         [
-                            'type'    => 'PasswordTextBox',
-                            'name'    => 'MailHookSecret',
-                            'width'   => '380px',
-                            'caption' => $this->Translate('Webhook token')
+                            'type'    => 'Label',
+                            'caption' => $this->Translate('Only needed without an API key: enter the domain above, generate a token, create the route in Mailgun by hand as described below, paste the signing key and press Apply. With an API key stored, "Generate new token" moves the route in Mailgun along by itself.')
                         ],
                         [
-                            'type'    => 'Button',
-                            'caption' => $this->Translate('Generate new token'),
-                            'onClick' => 'IPS_RequestAction($id, \'MailHookNewSecret\', 0);'
+                            'type'  => 'RowLayout',
+                            'items' => [
+                                [
+                                    'type'    => 'PasswordTextBox',
+                                    'name'    => 'MailHookSecret',
+                                    'width'   => '380px',
+                                    'caption' => $this->Translate('Webhook token')
+                                ],
+                                [
+                                    'type'    => 'Button',
+                                    'caption' => $this->Translate('Generate new token'),
+                                    'onClick' => 'IPS_RequestAction($id, \'MailHookNewSecret\', 0);'
+                                ]
+                            ]
+                        ],
+                        [
+                            'type'    => 'PasswordTextBox',
+                            'name'    => 'MailHookSigningKey',
+                            'width'   => '400px',
+                            'caption' => $this->Translate('Mailgun HTTP webhook signing key (verifies every delivery)')
+                        ],
+                        [
+                            'type'    => 'Label',
+                            'name'    => 'MailHookSetup',
+                            'caption' => $teile['hinweis']
+                        ],
+                        [
+                            // Bewusst ein normales Eingabefeld: aus einer Beschriftung laesst
+                            // sich nichts markieren, und ein ausgegrautes Feld ebenso wenig.
+                            // Aenderungen daran sind folgenlos — der Inhalt wird bei jedem
+                            // Aufbau neu berechnet und gehoert zu keiner Eigenschaft.
+                            'type'      => 'ValidationTextBox',
+                            'name'      => 'MailHookNotifyUrl',
+                            'caption'   => $this->Translate('Address for Mailgun ("Forward" → Destination) — select and copy'),
+                            'width'     => '600px',
+                            'multiline' => true,
+                            'value'     => $teile['url']
                         ]
                     ]
-                ],
-                [
-                    'type'    => 'PasswordTextBox',
-                    'name'    => 'MailHookSigningKey',
-                    'width'   => '400px',
-                    'caption' => $this->Translate('Mailgun HTTP webhook signing key (verifies every delivery)')
-                ],
-                [
-                    'type'    => 'Label',
-                    'name'    => 'MailHookSetup',
-                    'caption' => $teile['hinweis']
-                ],
-                [
-                    // Bewusst ein normales Eingabefeld: aus einer Beschriftung laesst
-                    // sich nichts markieren, und ein ausgegrautes Feld ebenso wenig.
-                    // Aenderungen daran sind folgenlos — der Inhalt wird bei jedem
-                    // Aufbau neu berechnet und gehoert zu keiner Eigenschaft.
-                    'type'      => 'ValidationTextBox',
-                    'name'      => 'MailHookNotifyUrl',
-                    'caption'   => $this->Translate('Address for Mailgun ("Forward" → Destination) — select and copy'),
-                    'width'     => '600px',
-                    'multiline' => true,
-                    'value'     => $teile['url']
                 ],
                 $this->GetMailAddressList(),
                 [
@@ -2240,11 +2284,10 @@ class SymDoGateway extends IPSModuleStrict
                     'onClick' => 'IPS_RequestAction($id, \'MailHookFillAddresses\', json_encode(iterator_to_array($MailAddresses)));'
                 ],
                 [
-                    // Rueckmeldung der beiden Knoepfe. Bewusst ein Label und kein
-                    // echo: eine Ausgabe aus RequestAction meldet Symcon als
-                    // Skriptfehler samt Dateiname und Zeilennummer.
+                    // Eigene Rueckmeldung direkt unter dem Knopf — die obere steht
+                    // eine Tabelle weit weg.
                     'type'    => 'Label',
-                    'name'    => 'MailHookStatus',
+                    'name'    => 'MailAddressStatus',
                     'caption' => ''
                 ],
                 [

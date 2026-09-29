@@ -123,7 +123,8 @@ $p->RequestAction('MailHookFillAddresses', json_encode($lebend));
 $gefuellt = json_decode((string)$p->feld('MailAddresses', 'values'), true);
 pruefe('Adressknopf fuellt nur Luecken — eine gerade geleerte bekommt ihre Adresse zurueck', $adressen($gefuellt),
     ['familie@mg.example.com', 'lena@mg.example.com', 'tom@mg.example.com', 'eigene@example.org', 'max@mg.example.com']);
-pruefe('… und meldet sich in der Statuszeile', $p->feld('MailHookStatus', 'caption'), '3 address(es) added — press Apply to save.');
+pruefe('… und meldet sich unter der Tabelle, nicht oben', [$p->feld('MailAddressStatus', 'caption'), $p->feld('MailHookStatus', 'caption')],
+    ['3 address(es) added — press Apply to save.', null]);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);
