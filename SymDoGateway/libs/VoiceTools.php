@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+// Das Zeitraum-Enum von verlauf_lesen steht in der reinen Rechenklasse.
+require_once __DIR__ . '/VoiceVerlaufCalc.php';
+
 /**
  * Sprachdialog — Werkzeugschicht.
  *
@@ -418,6 +421,24 @@ trait VoiceTools
                     'required' => ['geraet', 'raum', 'filter', 'id'],
                 ],
             ],
+            /* Verlaufsfragen (29.09.2026): vergangene Werte aus dem Symcon-Archiv
+               fuer Geraete aus demselben Katalog — nur lesen (VoiceVerlauf). */
+            'verlauf_lesen' => [
+                'art' => 'lesen', 'tor' => 'geraete',
+                'beschreibung' => 'Liest VERGANGENE Werte eines Geräts oder Sensors aus dem Archiv: Temperatur, Luftfeuchte, Verbrauch, Laufzeit („Wie warm war es gestern Nacht im Kinderzimmer?", „Wie viel Strom haben wir diese Woche verbraucht?", „Wie lange war die Heizung gestern an?"). Den gesprochenen Zeitraum in "zeitraum" übersetzen; einen bestimmten vergangenen Tag („letzten Dienstag", „am 20. September") als "tag" mit "datum". Für den aktuellen Wert geraete_lesen nehmen.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'geraet'   => ['type' => ['string', 'null'], 'description' => 'Gerät oder Messwert wie gesprochen, z.B. "Temperatur", "Stromzähler", "Heizung"'],
+                        'raum'     => ['type' => ['string', 'null'], 'description' => 'Raumname, z.B. "Kinderzimmer"; null = überall'],
+                        'id'       => ['type' => ['integer', 'null'], 'description' => 'Kennung aus einer Kandidatenliste; sonst null'],
+                        'zeitraum' => ['type' => 'string', 'enum' => VoiceVerlaufCalc::ARTEN,
+                                       'description' => 'letzte_nacht = gestern 22 Uhr bis heute 6 Uhr; tag = ein bestimmter Tag in "datum"'],
+                        'datum'    => ['type' => ['string', 'null'], 'description' => 'Nur bei zeitraum "tag": JJJJ-MM-TT; sonst null'],
+                    ],
+                    'required' => ['geraet', 'raum', 'id', 'zeitraum', 'datum'],
+                ],
+            ],
             'geraete_suchen' => [
                 'art' => 'lesen', 'tor' => 'geraete',
                 'beschreibung' => 'Sucht freigegebene Geräte lose — wenn der Nutzer ein Gerät umschreibt („die Lampe über dem Esstisch"), eine Etage nennt („oben im Bad") oder geraet_steuern nichts Eindeutiges fand. Liefert Kandidaten mit Pfad (Etage › Raum › Gerät), Typ, möglichen Werten und "id"; mit der id rufst du dann geraet_steuern, geraete_lesen oder zeitplan_anlegen auf.',
@@ -603,6 +624,7 @@ trait VoiceTools
                 'notiz_aendern'       => $this->VoiceToolNotizAendern($args, $ctx),
                 'nachricht_senden'    => $this->VoiceToolNachricht($args, $ctx),
                 'geraete_lesen'       => $this->VoiceToolGeraeteLesen($args, $ctx),
+                'verlauf_lesen'       => $this->VoiceToolVerlauf($args, $ctx),
                 'geraete_suchen'      => $this->VoiceToolGeraeteSuchen($args, $ctx),
                 'geraet_steuern'      => $this->VoiceToolGeraetSteuern($args, $ctx, 'geraet'),
                 'szene_starten'       => $this->VoiceToolGeraetSteuern($args, $ctx, 'szene'),
@@ -3303,7 +3325,7 @@ trait VoiceTools
             // Feste Grenzen: was das Modell kann, steht in genau diesen Werkzeugen.
             // Alles andere lehnt es freundlich ab, statt eine Faehigkeit zu erfinden.
             'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Schritte in den Routinen der Kinder abhaken; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen, ändern und löschen und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; den Essensplan lesen und Gerichte für Tage festlegen; den Stundenplan der Kinder abfragen (welche Fächer an einem Tag anstehen, wann Schule aus ist, was entfällt oder vertreten wird); die Hausaufgaben der Kinder abfragen, eintragen und abhaken (welches Fach, bis wann, mit Notiz); den Ämtchenplan abfragen (wer an einem Tag oder in dieser Woche für welches Ämtchen zuständig ist und ob es schon erledigt ist); einen Tagesüberblick geben; eine kurze Mitteilung auf die Geräte des Haushalts oder einer Person schicken; '
-            . ($geraete ? 'freigegebene Geräte im Haus lesen und steuern — Licht samt Farbe und Farbtemperatur, Rollläden, Heizung, Steckdosen, Szenen und Skripte — sofort (geraete_lesen, geraet_steuern, szene_starten) oder zeitgesteuert, einmalig („in 55 Minuten", „um 22 Uhr") wie dauerhaft („jeden Tag um 11 Uhr", „werktags um 6:30"), mit zeitplan_anlegen, zeitplaene_lesen und zeitplan_loeschen; ' : '')
+            . ($geraete ? 'freigegebene Geräte im Haus lesen und steuern — Licht samt Farbe und Farbtemperatur, Rollläden, Heizung, Steckdosen, Szenen und Skripte — sofort (geraete_lesen, geraet_steuern, szene_starten) oder zeitgesteuert, einmalig („in 55 Minuten", „um 22 Uhr") wie dauerhaft („jeden Tag um 11 Uhr", „werktags um 6:30"), mit zeitplan_anlegen, zeitplaene_lesen und zeitplan_loeschen; den Verlauf dieser Geräte und Sensoren aus dem Archiv abfragen — Temperatur letzte Nacht, Verbrauch diese Woche, wie lange etwas gestern an war (verlauf_lesen); ' : '')
             . 'Fragen zu Symcon selbst mit dem Werkzeug symcon_handbuch aus dem offiziellen Handbuch beantworten. Mehr nicht, und ausschließlich über deine Werkzeuge.',
             $geraete
                 ? 'Im Haus steuerst du NUR, was dir geraete_lesen, geraet_steuern, szene_starten und die zeitplan-Werkzeuge liefern — nichts anderes und nie ohne Werkzeug. Gib "wert" als gesprochenes Ziel weiter ("an", "aus", "50 Prozent", "21 Grad", "hoch", "Auto", "rot", "warmweiß", "wärmer", "heller"), rechne nichts um; nennt der Nutzer einen Raum, setze "raum". Du rufst niemanden an, schickst keine E-Mails (kurze Mitteilungen auf die Geräte im Haushalt gehen sehr wohl, mit nachricht_senden) und beantwortest keine allgemeinen Wissens- oder Rechenfragen — Fragen zu Symcon sind die einzige Ausnahme, und die beantwortest du NUR mit dem Werkzeug symcon_handbuch. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.'

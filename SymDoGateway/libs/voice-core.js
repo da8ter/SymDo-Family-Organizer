@@ -51,7 +51,8 @@ function erzeuge(opt) {
   /* Langsame Werkzeuge bekommen mehr Luft: das Handbuch fragt Einbettung und
      Lesermodell beim Anbieter (gemessen 3,5–5 s, unter Last mehr). Ein Abbruch
      nach 8 s waere hier ein Fehler ohne Not — die Antwort kommt ja noch. */
-  var werkzeugDeckelJe = { symcon_handbuch: 15000 };
+  // verlauf_lesen: eine Archivabfrage ueber ein Jahr darf laenger dauern.
+  var werkzeugDeckelJe = { symcon_handbuch: 15000, verlauf_lesen: 12000 };
   var stilleMs = (opt.silenceSeconds || 45) * 1000;
 
   /* Ein kurzer, freundlicher Zweiklang, sobald die Verbindung steht — das „Hi"
