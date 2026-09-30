@@ -171,6 +171,8 @@ der SymDo-Übersicht.
 
 ## SymDo - Web App
 
+![SymDo — Web App](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Web%20App.png)
+
 Die SymDo-Oberfläche als Kachel — und das Backend, in dem steht, was App und
 Kachel zeigen: sichtbare Bereiche, Listenauswahl, Bedienelemente, Info-Abzeichen
 und die Stundenplan-Instanzen.
@@ -187,6 +189,8 @@ ToDo-Listen mit Google, Microsoft und CalDAV sprechen.
 
 ## SymDo - Sprachassistent
 
+![SymDo — Sprachassistent](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Sprachassistent.png)
+
 Ein Gespräch mit der SymDo-KI: Einkaufsliste, Aufgaben, Termine, Notizen,
 Essensplan, Stundenplan und Tagesüberblick per Stimme — und, wenn im Gateway
 freigegeben, Licht, Rollläden, Heizung, Szenen und Zeitpläne. Alles Heikle nur
@@ -197,6 +201,8 @@ Eingeschaltet, eingewilligt und begrenzt wird im Gateway.
 
 ## SymDo - Notizen
 
+![SymDo — Notizen](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Notizen.png)
+
 Der Notizbereich der App als eigene Kachel: Ordner je Familienmitglied und
 eigene, Notizen mit Text und Anhängen. Nichts einzurichten — die Notizen liegen
 im Gateway.
@@ -204,6 +210,8 @@ im Gateway.
 → [Ausführliche Anleitung](SymDoNotes/README.md)
 
 ## SymDo - Klassenseiten
+
+![SymDo — Klassenseiten](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Klassenseiten.png)
 
 Die Schulseiten als eigene Kachel: je Kind seine Seiten, darin die Karten —
 Elternbriefe, Materiallisten, AG-Wahlen mit Buchungslage, Wochenpläne, Bilder
@@ -217,6 +225,8 @@ eingetragen.
 
 ## SymDo - Hausaufgaben
 
+![SymDo — Hausaufgaben](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Hausaufgaben.png)
+
 Die Hausaufgaben der Kinder als eigene Kachel, im Aufbau der Aufgabenliste:
 drei Zahlen (offen, überfällig, heute fällig), darunter die Liste nach
 Fälligkeit gruppiert — mit dem Symbol und der Farbe des Fachs, Häkchen, Wischen
@@ -228,6 +238,8 @@ Aufgaben liegen im Gateway.
 
 ## SymDo - Essensplan
 
+![SymDo — Essensplan](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Essensplan.png)
+
 Ein Wochenraster für die Frage aller Fragen: Was gibt es heute? Je Tag ein
 Gericht, blätterbar zwischen dieser und der nächsten Woche, Zutaten mit einem
 Klick in den Einkaufswagen, KI-Rezeptbilder.
@@ -236,12 +248,16 @@ Klick in den Einkaufswagen, KI-Rezeptbilder.
 
 ## SymDo - Routinen
 
+![SymDo — Routinen](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Routinen.png)
+
 Tägliche Häkchenlisten für Kinder: große Zeilen, großes Häkchen, Konfetti, wenn
 alles geschafft ist — und die Heute-Aufgaben als Füller.
 
 → [Ausführliche Anleitung](SymDoRoutines/README.md)
 
 ## SymDo - Ämtchenplan
+
+![SymDo — Ämtchenplan](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Aemtchenplan.png)
 
 Haushaltsaufgaben, die wochenweise zwischen den Familienmitgliedern wechseln —
 nach Person geordnet, mit Vorschau auf die nächste Woche und Punkten im
@@ -251,6 +267,8 @@ Münzbeutel der Routinen.
 
 ## SymDo - ToDo Übersicht
 
+![SymDo — ToDo Übersicht](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20ToDo%20List%20Overview.png)
+
 Kompakte Kachel mit den drei Kennzahlen einer Aufgabenliste (offen, überfällig,
 heute), Farben je Feld, optional roter Hintergrund bei Überfälligen. Ein Tipp
 öffnet ein frei wählbares Objekt.
@@ -258,6 +276,8 @@ heute), Farben je Feld, optional roter Hintergrund bei Überfälligen. Ein Tipp
 → [Ausführliche Anleitung](SymDoToDoOverview/README.md)
 
 ## SymDo - Einkaufslisten Übersicht
+
+![SymDo — Einkaufslisten Übersicht](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Shoppinglist%20Overview.png)
 
 Kompakte Kachel mit den offenen Artikeln einer Einkaufsliste als waagerecht
 scrollbare Bild-Leiste — dieselbe Vorschau wie auf der SymDo-Übersicht. Ein Tipp

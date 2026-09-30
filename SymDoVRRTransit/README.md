@@ -1,5 +1,9 @@
 # SymDo - VRR Transit
 
+![SymDo — Nahverkehr Abfahrten](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Nahverkehr%20Abfahrten.png)
+
+![SymDo — Nahverkehr Strecken](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Nahverkehr%20Strecken.png)
+
 **Die Abfahrtstafel für zu Hause — und ein Schulweg, der von selbst weiß, wann und in
 welche Richtung er geht.**
 

@@ -1,5 +1,7 @@
 # SymDo - Essensplan
 
+![SymDo — Essensplan](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Essensplan.png)
+
 Ein Wochenraster für die Frage aller Fragen: **Was gibt es heute?** Je Tag ein
 Gericht, blätterbar zwischen dieser und der nächsten Woche — und ein Klick
 legt die Zutaten in den Einkaufswagen.

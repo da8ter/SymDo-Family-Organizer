@@ -1,5 +1,7 @@
 # SymDo - Notizen
 
+![SymDo — Notizen](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Notizen.png)
+
 **Der Notizbereich der SymDo-App als eigene Kachel für die Tile-Visualisierung.**
 
 Dieselben Notizen, dieselbe Ansicht wie in der Web-App — nur ohne die übrigen Bereiche. Die Kachel eignet sich für eine Wandvisualisierung, an der nur Notizen gebraucht werden: Einkaufszettel für den Nachmittag, die Liste fürs Wochenende, der Elternbrief als Bild oder PDF.

@@ -1,5 +1,7 @@
 # SymDo - Einkaufslisten Übersicht
 
+![SymDo — Einkaufslisten Übersicht](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Shoppinglist%20Overview.png)
+
 Dieses Modul stellt eine kompakte **Übersichts-Kachel** für die Tile-Visualisierung
 bereit: die noch offenen Artikel einer **SymDo - Einkaufsliste**-Instanz als
 waagerecht scrollbare **Bild-Leiste** — dieselbe Vorschau wie auf der

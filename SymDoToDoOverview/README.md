@@ -1,5 +1,7 @@
 # SymDo - ToDo Übersicht
 
+![SymDo — ToDo Übersicht](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20ToDo%20List%20Overview.png)
+
 Dieses Modul stellt eine kompakte **Übersichts-Kachel** für die Tile-Visualisierung bereit. Sie zeigt die drei Kennzahlen einer **SymDo - ToDo Liste**-Instanz (**Offen**, **Überfällig**, **Heute**) und öffnet beim Klick ein frei wählbares Objekt bzw. eine Kategorie.
 
 > Hintergrund: Symcon rendert HTML-Modulinhalte **nicht** innerhalb einer Kategorie-Kachel. Damit die Übersicht z. B. neben einer Kategorie-Kachel platziert werden kann, gibt es dieses eigenständige Modul.

@@ -1,5 +1,7 @@
 # SymDo - Hausaufgaben
 
+![SymDo — Hausaufgaben](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Hausaufgaben.png)
+
 **Die Hausaufgaben der Kinder als eigene Kachel — dieselbe Liste wie in der
 App, im Aufbau der Aufgabenliste.**
 

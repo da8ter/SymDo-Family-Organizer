@@ -1,5 +1,7 @@
 # SymDo - Routinen
 
+![SymDo — Routinen](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Routinen.png)
+
 Tägliche Häkchenlisten für Kinder als Kachel: Zähne putzen 🪥, Ranzen packen 🎒,
 Brotdose einpacken 🥪 — große Zeilen, großes Häkchen, Konfetti, wenn alles
 geschafft ist. Die Häkchen setzen sich jeden Tag zur eingestellten Zeit von

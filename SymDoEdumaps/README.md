@@ -1,5 +1,7 @@
 # SymDo - Klassenseiten
 
+![SymDo — Klassenseiten](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Klassenseiten.png)
+
 **Die Schulseiten als eigene Kachel — dieselben Karten wie in der App, nur
 lesend. Aus zwei Quellen: Edumaps und LOGINEO NRW LMS.**
 

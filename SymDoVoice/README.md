@@ -1,5 +1,7 @@
 # SymDo - Sprachassistent
 
+![SymDo — Sprachassistent](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Sprachassistent.png)
+
 **Reden statt tippen: der Sprachdialog mit der SymDo-KI als Kachel für die Tile-Visualisierung.**
 
 „Setz Milch auf die Einkaufsliste." — „Was hat Tim morgen für Unterricht?" — „Mach das Licht im Wohnzimmer aus, und in zehn Minuten das im Flur." Die Kachel hört zu, antwortet mit Stimme und erledigt es. Sie ist die Sprechstelle des Sprachdialogs; **alles andere liegt im SymDo Gateway**: dort wird der Dialog eingeschaltet, die Einwilligung erteilt, der Umfang festgelegt und protokolliert.
