@@ -4,6 +4,8 @@
 
 ![SymDo — Web App](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Web%20App.png)
 
+![SymDo — Web App auf dem Smartphone](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Web%20App%20Smartphone.png)
+
 ![SymDo — KI-Eingang](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Web%20App%20KI.png)
 
 Dieses Modul bringt die SymDo-Oberfläche als **Kachel** in die Tile-Visualisierung —
