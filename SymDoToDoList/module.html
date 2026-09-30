@@ -4181,6 +4181,39 @@ html.web-app #ladeschirm.geht { opacity: 0; }
    nebeneinander (.wp-ecke-reihe). Zwilling der Kachel. */
 .wp-stunde .wp-ecke { position: absolute; left: 10px; bottom: 6px; display: flex; flex-direction: column; gap: 2px; }
 .wp-stunde.wp-ecke-reihe .wp-ecke { flex-direction: row; }
+/* Zu niedrig fuer die Saeule: die Zeichen STAPELN sich wie die Gesichter der
+   Mitgliederleiste (30.09.2026) — nebeneinander liefen drei in die Textspalte.
+   Eingeklappt liegen sie als deckende Scheiben (Fachfarbe --karte, Ring)
+   uebereinander in der Spalte des Fachsymbols, um --ek-v versetzt (aus der
+   Kartenhoehe gerechnet); aufgeklappt faechern sie federnd und gestaffelt
+   nach rechts auf, ueber den Text. Maus: Hover; Touch: der erste Tipp
+   klappt auf (.offen), erst der zweite oeffnet das Blatt. */
+.wp-stunde.wp-ecke-reihe .wp-ecke { display: block; width: 22px; height: 22px; z-index: 2; }
+.wp-stunde.wp-hw-eng.wp-ecke-reihe .wp-ecke { height: 16px; }
+.wp-stunde.wp-ecke-reihe .wp-ecke button {
+  position: absolute; left: 0; bottom: 0; border-radius: 999px;
+  background: color-mix(in srgb, #fff 22%, var(--karte, #607D8B));
+  box-shadow: 0 0 0 1.5px var(--karte, #607D8B);
+  transform: translateY(calc(var(--i, 0) * -1 * var(--ek-v, 8px)));
+}
+.wp-stunde.wp-ecke-reihe .wp-ecke.offen button {
+  transform: translateX(calc(var(--i, 0) * 26px));
+  transition: transform .34s cubic-bezier(.34, 1.4, .64, 1) calc(var(--i, 0) * 22ms);
+}
+@media (hover: hover) {
+  .wp-stunde.wp-ecke-reihe .wp-ecke:hover button {
+    transform: translateX(calc(var(--i, 0) * 26px));
+    transition: transform .34s cubic-bezier(.34, 1.4, .64, 1) calc(var(--i, 0) * 22ms);
+  }
+}
+/* Eingeklappt ragte nur ein Splitter der Hausaufgaben-Zahl heraus — sie kommt erst aufgeklappt. */
+.wp-stunde.wp-ecke-reihe .wp-ecke button b { opacity: 0; transition: opacity .2s ease; }
+.wp-stunde.wp-ecke-reihe .wp-ecke.offen button b { opacity: 1; }
+@media (hover: hover) { .wp-stunde.wp-ecke-reihe .wp-ecke:hover button b { opacity: 1; } }
+.wp-stunde.wp-ecke-reihe .wp-ecke button:hover { background: color-mix(in srgb, #fff 36%, var(--karte, #607D8B)); }
+@media (prefers-reduced-motion: reduce) {
+  .wp-stunde.wp-ecke-reihe .wp-ecke button { transition: none !important; }
+}
 .wp-stunde.wp-hw-eng .wp-ecke { bottom: 1px; }
 .wp-stunde.wp-hw-eng .wp-ecke button { height: 16px; border-radius: 5px; }
 .wp-stunde.wp-hw-eng .wp-ecke button > i, .wp-stunde.wp-hw-eng .wp-ecke button > svg { width: 11px; height: 11px; }
@@ -10495,8 +10528,14 @@ function renderWochenplan() {
         let ecke = '';
         const pruefZeichen = pruefung && sl.status !== 'entfall';
         const zeichen = (pruefZeichen ? 1 : 0) + (hw ? 1 : 0) + (notiz ? 1 : 0);
+        const eckeReihe = zeichen > 1 && h < 34 + 24 * zeichen;
         if (zeichen > 0) {
           const nr = wpInfo.length;
+          // Versatz der gestapelten Zeichen: Platz unter dem Fachsymbol, 3–10px (Zwilling der Kachel).
+          const eng = h < 57;
+          const versatz = eckeReihe ? Math.max(3, Math.min(10, Math.floor((h - (eng ? 1 : 6) - 32 - (eng ? 16 : 22)) / (zeichen - 1)))) : 0;
+          let i = 0;
+          const lage = () => ' style="--i:' + (i++) + '"';
           wpInfo.push({
             titel: sl.name || '',
             wann: translate(PLAN_TAGE[t.weekday] || '') + (t.date ? ' ' + stundenplanDatumKurz(t.date) : '')
@@ -10508,19 +10547,19 @@ function renderWochenplan() {
             pruefung: pruefZeichen ? ((hausaufgaben.exams || []).find(p => p && String(p.childId) === String(kind.userId || '')
                 && String(p.date || '') === String(t.date || '') && hwFachTreffer(p.subject, sl.name)) || { title: sl.examTitle || '' }) : null
           });
-          ecke = '<span class="wp-ecke">'
-            + (pruefZeichen ? '<button type="button" data-wpinfo="' + nr + '" data-art="pruefung" title="' + escapeHtml(translate('Exam') + (sl.examTitle ? ': ' + sl.examTitle : ''))
+          ecke = '<span class="wp-ecke"' + (versatz ? ' style="--ek-v:' + versatz + 'px"' : '') + '>'
+            + (pruefZeichen ? '<button type="button"' + lage() + ' data-wpinfo="' + nr + '" data-art="pruefung" title="' + escapeHtml(translate('Exam') + (sl.examTitle ? ': ' + sl.examTitle : ''))
               + '" aria-label="' + escapeHtml(translate('Exam')) + '"><i class="fa-light fa-file-pen"></i></button>' : '')
-            + (hw ? '<button type="button" data-wpinfo="' + nr + '" data-art="hw" title="' + escapeHtml(hw + ' ' + translate('Homework'))
+            + (hw ? '<button type="button"' + lage() + ' data-wpinfo="' + nr + '" data-art="hw" title="' + escapeHtml(hw + ' ' + translate('Homework'))
               + '" aria-label="' + escapeHtml(translate('Homework')) + '"><i class="fa-light fa-house"></i>' + (hw > 1 ? '<b>' + hw + '</b>' : '') + '</button>' : '')
-            + (notiz ? '<button type="button" data-wpinfo="' + nr + '" data-art="notiz" title="' + escapeHtml(notiz)
+            + (notiz ? '<button type="button"' + lage() + ' data-wpinfo="' + nr + '" data-art="notiz" title="' + escapeHtml(notiz)
               + '" aria-label="' + escapeHtml(translate('Note on the lesson')) + '"><i class="fa-light fa-circle-info"></i></button>' : '')
             + '</span>';
         }
         spalten += '<div class="wp-stunde' + lage + (zeichen > 0 && h < 57 ? ' wp-hw-eng' : '')
-          + (zeichen > 1 && h < 34 + 24 * zeichen ? ' wp-ecke-reihe' : '')
+          + (eckeReihe ? ' wp-ecke-reihe' : '')
           + '" title="' + escapeHtml(hinweis) + '"' +
-          ' style="background:' + escapeHtml(sl.color || '#607D8B') + fachTinteStil(sl.color) + ';top:' + y(sl.from) +
+          ' style="background:' + escapeHtml(sl.color || '#607D8B') + ';--karte:' + escapeHtml(sl.color || '#607D8B') + fachTinteStil(sl.color) + ';top:' + y(sl.from) +
           'px;height:' + h + 'px">' +
           (sl.icon ? '<span class="wp-sym"><i class="fa-light ' + escapeHtml(sl.icon) + '"></i></span>' : '') +
           '<div><div class="wp-fach">' + escapeHtml(sl.name || '') + '</div>' +
@@ -10543,6 +10582,14 @@ function renderWochenplan() {
   /* Ein Tipp auf ein Eckzeichen oeffnet sein Blatt, ein Tipp aufs Blatt schliesst. */
   el.onclick = ev => {
     const knopf = ev.target.closest('[data-wpinfo]');
+    // Gestapelte Zeichen ohne Maus: der erste Tipp faechert nur auf.
+    const stapel = knopf && knopf.closest('.wp-ecke-reihe .wp-ecke');
+    el.querySelectorAll('.wp-ecke.offen').forEach(o => { if (o !== stapel) o.classList.remove('offen'); });
+    if (stapel && !stapel.classList.contains('offen') && !(window.matchMedia && matchMedia('(hover: hover)').matches)) {
+      ev.stopPropagation();
+      stapel.classList.add('offen');
+      return;
+    }
     if (knopf) {
       ev.stopPropagation();
       wpInfoOffen = { nr: parseInt(knopf.dataset.wpinfo, 10) || 0,

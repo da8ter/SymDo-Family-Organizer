@@ -471,6 +471,39 @@
     display: flex; flex-direction: column; gap: 2px;
   }
   .stunde.ecke-reihe .ecke { flex-direction: row; }
+  /* Zu niedrig fuer die Saeule: die Zeichen STAPELN sich wie die Gesichter der
+     Mitgliederleiste (30.09.2026) — nebeneinander liefen drei in die Textspalte.
+     Eingeklappt liegen sie als deckende Scheiben (Fachfarbe --karte, Ring)
+     uebereinander in der Spalte des Fachsymbols, um --ek-v versetzt (aus der
+     Kartenhoehe gerechnet); aufgeklappt faechern sie federnd und gestaffelt
+     nach rechts auf, ueber den Text. Maus: Hover; Touch: der erste Tipp
+     klappt auf (.offen), erst der zweite oeffnet das Blatt. */
+  .stunde.ecke-reihe .ecke { display: block; width: 22px; height: 22px; z-index: 2; }
+  .stunde.hw-eng.ecke-reihe .ecke { height: 16px; }
+  .stunde.ecke-reihe .ecke button {
+    position: absolute; left: 0; bottom: 0; border-radius: 999px;
+    background: color-mix(in srgb, #fff 22%, var(--karte, #607D8B));
+    box-shadow: 0 0 0 1.5px var(--karte, #607D8B);
+    transform: translateY(calc(var(--i, 0) * -1 * var(--ek-v, 8px)));
+  }
+  .stunde.ecke-reihe .ecke.offen button {
+    transform: translateX(calc(var(--i, 0) * 26px));
+    transition: transform .34s cubic-bezier(.34, 1.4, .64, 1) calc(var(--i, 0) * 22ms);
+  }
+  @media (hover: hover) {
+    .stunde.ecke-reihe .ecke:hover button {
+      transform: translateX(calc(var(--i, 0) * 26px));
+      transition: transform .34s cubic-bezier(.34, 1.4, .64, 1) calc(var(--i, 0) * 22ms);
+    }
+  }
+  /* Eingeklappt ragte nur ein Splitter der Hausaufgaben-Zahl heraus — sie kommt erst aufgeklappt. */
+  .stunde.ecke-reihe .ecke button b { opacity: 0; transition: opacity .2s ease; }
+  .stunde.ecke-reihe .ecke.offen button b { opacity: 1; }
+  @media (hover: hover) { .stunde.ecke-reihe .ecke:hover button b { opacity: 1; } }
+  .stunde.ecke-reihe .ecke button:hover { background: color-mix(in srgb, #fff 36%, var(--karte, #607D8B)); }
+  @media (prefers-reduced-motion: reduce) {
+    .stunde.ecke-reihe .ecke button { transition: none !important; }
+  }
   .stunde .ecke button {
     border: 0; background: transparent; color: inherit; cursor: pointer;
     width: 22px; height: 22px; padding: 0; border-radius: 7px;
@@ -1781,6 +1814,17 @@
          Tipp aufs Blatt schliesst es. Sonst tut ein Klick hier nichts. */
       ziel.onclick = function (e) {
         const knopf = e.target.closest('[data-info]');
+        // Gestapelte Zeichen ohne Maus: der erste Tipp faechert nur auf.
+        const stapel = knopf && knopf.closest('.ecke-reihe .ecke');
+        document.querySelectorAll('.ecke.offen').forEach(function (o) {
+          if (o !== stapel) { o.classList.remove('offen'); }
+        });
+        if (stapel && !stapel.classList.contains('offen')
+            && !(window.matchMedia && window.matchMedia('(hover: hover)').matches)) {
+          e.stopPropagation();
+          stapel.classList.add('offen');
+          return;
+        }
         if (knopf) {
           e.stopPropagation();
           infoOffen = { nr: parseInt(knopf.dataset.info, 10) || 0,
@@ -2044,13 +2088,14 @@
              Fachsymbol (Symbol bis 30px, je Zeichen 22px und 2px Abstand, 6px
              Rand) — sonst nebeneinander. */
           const eckeReihe = zeichen > 1 && h < 34 + 24 * zeichen;
+          const eckeV = eckeReihe ? stapelVersatz(h, zeichen, engeKarte) : 0;
           spalten += '<div class="stunde' + (s.next ? ' jetzt' : '')
             + (s.care ? ' betreuung' : '') + lagen
             + (engeKarte ? ' hw-eng' : '') + (eckeReihe ? ' ecke-reihe' : '') + '" title="'
             + esc(s.name + ', ' + s.start + ' – ' + s.end + (wo ? ', ' + wo : '')
                   + (marke ? ' — ' + marke : '') + (pruefTitel ? ': ' + pruefTitel : '')
                   + (notiz ? '\n' + notiz : ''))
-            + '" style="background:' + esc(s.color) + tinte(s.color)
+            + '" style="background:' + esc(s.color) + ';--karte:' + esc(s.color) + tinte(s.color)
             + ';top:' + y(s.from) + 'px;height:' + h + 'px">'
             + (s.icon ? '<span class="sym">' + symbol(s.icon) + '</span>' : '')
             + '<div><div class="fach">' + esc(s.name) + '</div>'
@@ -2064,7 +2109,7 @@
                ERSTEN Stunde des Fachs an diesem Tag. */
             /* Das Hausaufgaben-Symbol mit rotem Zaehler. Der Tipp nennt
                zusaetzlich den Text der Aufgabe. */
-            + eckzeichen(s, notiz, tag, pruefZeichen)
+            + eckzeichen(s, notiz, tag, pruefZeichen, eckeV)
             + '</div>';
           vorher = Math.max(vorher, s.to);
         });
@@ -2241,7 +2286,17 @@
    * „i" bei einem Hinweis der Lehrkraft. Die Details landen in stundenInfo,
    * der Knopf traegt nur deren Nummer.
    */
-  function eckzeichen(s, notiz, tag, pruefZeichen) {
+  /**
+   * Versatz der gestapelten Eckzeichen: so viel, wie unter dem Fachsymbol
+   * (bis 30px) Platz ist, hoechstens 10px, mindestens 3px.
+   */
+  function stapelVersatz(h, n, eng) {
+    const knopf = eng ? 16 : 22;
+    const frei = h - (eng ? 1 : 6) - 32;
+    return Math.max(3, Math.min(10, Math.floor((frei - knopf) / (n - 1))));
+  }
+
+  function eckzeichen(s, notiz, tag, pruefZeichen, versatz) {
     if (!s.hw && !notiz && !pruefZeichen) { return ''; }
     const nr = stundenInfo.length;
     stundenInfo.push({
@@ -2253,19 +2308,21 @@
       notiz: notiz,
       pruefung: pruefZeichen ? (s.pruefung || { titel: s.examTitle || '' }) : null
     });
-    let html = '<span class="ecke">';
+    let html = '<span class="ecke"' + (versatz ? ' style="--ek-v:' + versatz + 'px"' : '') + '>';
+    let i = 0;
+    const lage = function () { return ' style="--i:' + (i++) + '"'; };
     if (pruefZeichen) {
-      html += '<button type="button" data-info="' + nr + '" data-art="pruefung" title="'
+      html += '<button type="button"' + lage() + ' data-info="' + nr + '" data-art="pruefung" title="'
         + esc('Prüfung' + (s.examTitle ? ': ' + s.examTitle : '')) + '" aria-label="Prüfung">'
         + symbol('fa-file-pen') + '</button>';
     }
     if (s.hw) {
-      html += '<button type="button" data-info="' + nr + '" data-art="hw" title="'
+      html += '<button type="button"' + lage() + ' data-info="' + nr + '" data-art="hw" title="'
         + esc(s.hw + ' Hausaufgabe(n)' + (s.hwText ? ': ' + s.hwText : '')) + '" aria-label="Hausaufgaben">'
         + symbol('fa-house') + (s.hw > 1 ? '<b>' + s.hw + '</b>' : '') + '</button>';
     }
     if (notiz) {
-      html += '<button type="button" data-info="' + nr + '" data-art="notiz" title="' + esc(notiz)
+      html += '<button type="button"' + lage() + ' data-info="' + nr + '" data-art="notiz" title="' + esc(notiz)
         + '" aria-label="Hinweis zur Stunde">' + symbol('fa-circle-info') + '</button>';
     }
     return html + '</span>';
