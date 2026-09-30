@@ -2,6 +2,8 @@
 
 ![SymDo — Ämtchenplan](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Aemtchenplan.png)
 
+![SymDo — Glücksrad](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Aemtchenplan%20Gluecksrad.png)
+
 **Haushaltsaufgaben, die wochenweise zwischen den Familienmitgliedern wechseln — als Kachel für die Tile-Visualisierung.**
 
 Wer bringt diese Woche den Müll raus, wer räumt den Tisch ab, wer gießt die Blumen? Die Kachel beantwortet genau diese Frage: eine Tabelle aus Ämtchen und Wochentagen, in jeder Zelle das Gesicht dessen, der dran ist, und ein Häkchen je Erledigung.

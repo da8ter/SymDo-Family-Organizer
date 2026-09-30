@@ -4,6 +4,8 @@
 
 ![SymDo — Web App](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Web%20App.png)
 
+![SymDo — KI-Eingang](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Web%20App%20KI.png)
+
 Dieses Modul bringt die SymDo-Oberfläche als **Kachel** in die Tile-Visualisierung —
 dieselbe Oberfläche, die auf dem Handy als Web-App läuft, nur ohne Kopplung und
 ohne Token: an der Wandvisualisierung ist man ohnehin schon im Haus.

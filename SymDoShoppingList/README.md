@@ -2,6 +2,10 @@
 
 ![SymDo — Shopping List](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Shopping%20List.png)
 
+![SymDo — Favoritenlisten](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Shopping%20List%20Favoriten.png)
+
+![SymDo — Rezept](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Shopping%20List%20Rezept.png)
+
 Dieses Modul stellt eine Einkaufsliste für die Tile-Visualisierung bereit.
 
 - Artikel anlegen, bearbeiten, abhaken und löschen
