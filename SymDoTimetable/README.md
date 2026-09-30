@@ -227,9 +227,12 @@ Schultag zum Ferientag machen und umgekehrt.
 
 Sind im Haus Hausaufgaben eingetragen (Bestand im **SymDo - Gateway**, siehe
 dessen Anleitung), zeigt die Kachel an der Stunde, ob dafür etwas zu tun ist:
-im Wochenraster eine rote Zahl an der Stunde, in der Zeitachse ein Punkt am
-Balken. Die Notiz steht im Tipp, die Fachfarbe bleibt unberührt. Dieselbe Zahl
-steht auch im Stundenplan der Web-App und der App.
+im Wochenraster ein **Haus** unten links an der Stunde (bei mehreren Aufgaben
+mit kleiner Zahl), in der Zeitachse ein Punkt am Balken. Ein Tipp aufs Haus
+öffnet ein Blatt mit jeder Aufgabe samt Notiz. Liegt ein **Hinweis der
+Lehrkraft** zur Stunde vor (aus WebUntis), steht daneben ein **„i"**; sein
+Blatt zeigt den ganzen Hinweis. Die Fachfarbe bleibt unberührt. Dieselben
+Zeichen stehen im Wochenraster der Web-App.
 
 Die Zahl fällt an die **erste** Stunde des Fachs an diesem Tag — zwei Stunden
 desselben Fachs verdoppeln sie nicht. Was zu keiner Stunde passt, weil das Fach

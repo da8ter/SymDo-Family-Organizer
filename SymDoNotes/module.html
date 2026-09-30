@@ -4173,6 +4173,41 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 }
 /* Enge Karte: die Zahl rueckt an die Kante. */
 .wp-stunde.wp-hw-eng .wp-hw { bottom: 3px; }
+/* Seit 30.09.2026: Eckzeichen unten links — Haus = Hausaufgaben, „i" = Hinweis
+   der Lehrkraft (wie in der Untis-App); ein Tipp oeffnet das Blatt. Zwilling der
+   Stundenplan-Kachel (.stunde .ecke). */
+.wp-stunde .wp-ecke { position: absolute; left: 6px; bottom: 5px; display: flex; gap: 2px; }
+.wp-stunde.wp-hw-eng .wp-ecke { bottom: 1px; left: 8px; }
+.wp-stunde.wp-hw-eng .wp-ecke button { width: 16px; height: 16px; border-radius: 5px; }
+.wp-stunde.wp-hw-eng .wp-ecke button > i, .wp-stunde.wp-hw-eng .wp-ecke button > svg { width: 11px; height: 11px; }
+.wp-stunde .wp-ecke button {
+  border: 0; background: transparent; color: inherit; cursor: pointer;
+  width: 22px; height: 22px; padding: 0; border-radius: 7px; position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.wp-stunde .wp-ecke button:hover { background: color-mix(in srgb, currentColor 18%, transparent); }
+.wp-stunde .wp-ecke button > i, .wp-stunde .wp-ecke button > svg { width: 13px; height: 13px; }
+.wp-stunde .wp-ecke button b {
+  position: absolute; top: -3px; right: -4px; min-width: 13px; height: 13px; padding: 0 3px;
+  box-sizing: border-box; border-radius: 999px; background: #E53935; color: #fff;
+  font-size: 8px; font-weight: 800; line-height: 13px; text-align: center;
+}
+.wp-infoblatt {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center;
+  background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(3px);
+}
+.wp-infoblatt .wp-infokarte {
+  width: 100%; max-width: 560px; max-height: 70%; overflow-y: auto; box-sizing: border-box;
+  padding: 12px 16px 18px; background: var(--bg); border-radius: 16px 16px 0 0;
+  box-shadow: 0 -6px 18px rgba(0,0,0,.18);
+}
+.wp-infoblatt .wp-infokopf { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
+.wp-infoblatt .wp-infokopf .zu { margin-left: auto; border: 0; background: transparent; color: var(--muted); font: inherit; cursor: pointer; padding: 2px 6px; }
+.wp-infoblatt .wp-infounter { font-size: 12px; color: var(--muted); margin: 2px 0 8px; }
+.wp-infoblatt .wp-infoeintrag { padding: 8px 0; border-top: 1px solid var(--border); font-size: 14px; line-height: 1.4; }
+.wp-infoblatt .wp-infoeintrag:first-of-type { border-top: 0; }
+.wp-infoblatt .wp-infoeintrag b { font-weight: 600; }
+.wp-infoblatt .wp-infoeintrag .text { white-space: pre-line; overflow-wrap: anywhere; }
 
 /* ── Hausaufgaben ──────────────────────────────────────────────────────────
    Eine Zeile ist Haken, Fachsymbol, Text und Faelligkeit — dieselbe Ordnung
@@ -10260,6 +10295,10 @@ function planStundenText(m) {
 /* 0 = laufende Woche, 1 = die kommende. Nur mit Import erreichbar (dated) —
    ohne ihn wiederholt sich die Vorlage, beide Wochen saehen gleich aus. */
 let planWoche = 0;
+/* Details je Stundenkarte der Wochenansicht fuer das Blatt eines Eckzeichens
+   (30.09.2026); neu gefuellt bei jedem Zeichnen, `wpInfoOffen` = offenes Blatt. */
+let wpInfo = [];
+let wpInfoOffen = null;
 /* Hat der Nutzer selbst geblaettert? Dann bleibt seine Wahl stehen, bis er den
    Bereich verlaesst. Ohne die Unterscheidung setzte die Vorauswahl unten ihn
    bei jedem Zeichnen zurueck. */
@@ -10304,9 +10343,26 @@ function planWochenwahlHtml(kind) {
     `<button data-planwoche="vor" aria-label="${translate('Next week')}">›</button></span>`;
 }
 
+/** Das Blatt zum Eckzeichen einer Stundenkarte (Hausaufgaben oder Hinweis). */
+function wpInfoBlattHtml() {
+  const e = wpInfoOffen && wpInfo[wpInfoOffen.nr];
+  if (!e) return '';
+  const hw = wpInfoOffen.art === 'hw';
+  const inhalt = hw
+    ? e.hw.map(h => `<div class="wp-infoeintrag"><b>${escapeHtml(h.fach || e.titel)}</b>` +
+        (h.text ? `<div class="text">${escapeHtml(h.text)}</div>` : '') + `</div>`).join('')
+    : `<div class="wp-infoeintrag"><div class="text">${escapeHtml(e.notiz)}</div></div>`;
+  return `<div class="wp-infoblatt" data-wpinfozu="1"><div class="wp-infokarte">` +
+    `<div class="wp-infokopf"><i class="fa-light ${hw ? 'fa-house' : 'fa-circle-info'}"></i>` +
+    `<span>${escapeHtml((hw ? translate('Homework') : translate('Note on the lesson')) + ' · ' + e.titel)}</span>` +
+    `<button class="zu" data-wpinfozu="1" aria-label="${escapeHtml(translate('Close'))}">✕</button></div>` +
+    `<div class="wp-infounter">${escapeHtml(e.wann)}</div>${inhalt}</div></div>`;
+}
+
 function renderWochenplan() {
   const el = document.getElementById('planArea');
   if (!el) return;
+  wpInfo = [];
   schuleLeisteZeichnen('planSchoolSeg', 'plan');
   const kind = planKinder()[0] || null;
   const titel = document.getElementById('planTitle');
@@ -10420,9 +10476,30 @@ function renderWochenplan() {
           (sl.notes ? '\n' + String(sl.notes).trim() : '');
         // Notiz der Lehrkraft (24.09.2026) — nur bei Stunden, die stattfinden.
         const notiz = sl.status !== 'entfall' ? String(sl.notes || '').trim() : '';
-        const hw = hwFuerSlot(hausaufgaben.items, kind.id, t.date, sl.name,
+        /* Die Kennung des Kindes ist userId — der Plan traegt kein `id`. Bis zum
+           30.09.2026 stand hier kind.id, und die Zahl erschien nie. */
+        const hw = hwFuerSlot(hausaufgaben.items, kind.userId, t.date, sl.name,
           ersteProFach[String(sl.name || '')], idx);
-        spalten += '<div class="wp-stunde' + lage + (hw && h < 57 ? ' wp-hw-eng' : '')
+        let ecke = '';
+        if (hw || notiz) {
+          const nr = wpInfo.length;
+          wpInfo.push({
+            titel: sl.name || '',
+            wann: translate(PLAN_TAGE[t.weekday] || '') + (t.date ? ' ' + stundenplanDatumKurz(t.date) : '')
+              + (sl.start ? ', ' + sl.start + ' – ' + sl.end : ''),
+            hw: hw ? (hausaufgaben.items || []).filter(i => i && i.done !== true
+                && String(i.childId) === String(kind.userId || '') && String(i.due || '') === String(t.date || '')
+                && hwFachTreffer(i.subject, sl.name)).map(i => ({ fach: String(i.subject || sl.name || ''), text: String(i.note || '') })) : [],
+            notiz: notiz
+          });
+          ecke = '<span class="wp-ecke">'
+            + (hw ? '<button type="button" data-wpinfo="' + nr + '" data-art="hw" title="' + escapeHtml(hw + ' ' + translate('Homework'))
+              + '" aria-label="' + escapeHtml(translate('Homework')) + '"><i class="fa-light fa-house"></i>' + (hw > 1 ? '<b>' + hw + '</b>' : '') + '</button>' : '')
+            + (notiz ? '<button type="button" data-wpinfo="' + nr + '" data-art="notiz" title="' + escapeHtml(notiz)
+              + '" aria-label="' + escapeHtml(translate('Note on the lesson')) + '"><i class="fa-light fa-circle-info"></i></button>' : '')
+            + '</span>';
+        }
+        spalten += '<div class="wp-stunde' + lage + ((hw || notiz) && h < 57 ? ' wp-hw-eng' : '')
           + '" title="' + escapeHtml(hinweis) + '"' +
           ' style="background:' + escapeHtml(sl.color || '#607D8B') + fachTinteStil(sl.color) + ';top:' + y(sl.from) +
           'px;height:' + h + 'px">' +
@@ -10431,14 +10508,8 @@ function renderWochenplan() {
           '<div class="wp-zeit">' + escapeHtml(sl.start || '') + ' – ' + escapeHtml(sl.end || '') + '</div>' +
           (marke ? '<div class="wp-wo wp-zustand">' + escapeHtml(marke) + '</div>' : '') +
           (pruefTitel ? '<div class="wp-wo">' + escapeHtml(pruefTitel) + '</div>' : '') +
-          (notiz ? '<div class="wp-notiz"><i class="fa-light fa-circle-info"></i><span>' +
-            escapeHtml(notiz) + '</span></div>' : '') +
           (wo ? '<div class="wp-wo">' + escapeHtml(wo) + '</div>' : '') +
-          '</div>' +
-          (hw ? '<span class="wp-hw" title="' + escapeHtml(
-                  hw + ' ' + translate('Homework')) + '">' +
-                '<b>' + hw + '</b></span>' : '') +
-          '</div>';
+          '</div>' + ecke + '</div>';
         vorher = Math.max(vorher, sl.to);
       }
       spalten += luecke(vorher, bis);
@@ -10446,9 +10517,24 @@ function renderWochenplan() {
     spalten += '</div></div>';
   }
 
+  if (wpInfoOffen && !wpInfo[wpInfoOffen.nr]) wpInfoOffen = null;
   renderInto(el, '<div class="wp-raster"><div class="wp-achse">' +
     '<div class="wp-innen" style="height:' + hoehe + 'px;margin-top:34px">' + achse + '</div></div>' +
-    '<div class="wp-spalten">' + spalten + '</div></div>');
+    '<div class="wp-spalten">' + spalten + '</div></div>' + wpInfoBlattHtml());
+  /* Ein Tipp auf ein Eckzeichen oeffnet sein Blatt, ein Tipp aufs Blatt schliesst. */
+  el.onclick = ev => {
+    const knopf = ev.target.closest('[data-wpinfo]');
+    if (knopf) {
+      ev.stopPropagation();
+      wpInfoOffen = { nr: parseInt(knopf.dataset.wpinfo, 10) || 0, art: knopf.dataset.art === 'notiz' ? 'notiz' : 'hw' };
+      renderWochenplan();
+      return;
+    }
+    if (wpInfoOffen && ev.target.closest('[data-wpinfozu]')) {
+      wpInfoOffen = null;
+      renderWochenplan();
+    }
+  };
 
   /* Zur heutigen Spalte. Gerechnet wird ueber die Rechtecke, nicht ueber
      offsetLeft: das zaehlt ab dem naechsten positionierten Vorfahren, und der

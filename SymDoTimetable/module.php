@@ -1176,6 +1176,15 @@ class SymDoTimetable extends IPSModuleStrict
                     $vorher = trim((string)($karte['hwText'] ?? ''));
                     $text = trim((string)$i['note']) !== '' ? trim((string)$i['note']) : (string)$i['subject'];
                     $karte['hwText'] = $vorher === '' ? $text : ($vorher . ' · ' . $text);
+                    /* Fuer das Blatt in der Wochenansicht (30.09.2026): jede
+                       Aufgabe einzeln, mit Fach — der zusammengeklebte Text
+                       taugt nur fuer den Tooltip. Hoechstens sechs, gekappt. */
+                    $liste = (array)($karte['hwListe'] ?? []);
+                    if (count($liste) < 6) {
+                        $liste[] = ['fach' => (string)$i['subject'],
+                                    'text' => mb_substr(trim((string)($i['note'] ?? '')), 0, 400)];
+                    }
+                    $karte['hwListe'] = $liste;
                     $plan['children'][$ki]['days'][$ti]['slots'][$treffer] = $karte;
                 }
                 if ($frei > 0) {

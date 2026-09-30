@@ -600,6 +600,7 @@
       "Forward school or daycare mails to one of these addresses — the AI turns them into appointments, tasks and notes.": "Leite Schul- oder Kita-Mails an eine dieser Adressen weiter — die KI macht daraus Termine, Aufgaben und Notizen.",
       "Here you will find what the AI has recognised in mails and documents.": "Hier erscheint, was die KI in Mails und Dokumenten erkannt hat.",
       "Address copied": "Adresse kopiert",
+      "Note on the lesson": "Hinweis zur Stunde",
       "SymDo Notes": "SymDo - Notizen",
       "Shows the notes of the SymDo app as a tile — the same notes, the same view. There is nothing to set up: the notes come from the SymDo Gateway.": "Zeigt die Notizen der SymDo-App als Kachel — dieselben Notizen, dieselbe Ansicht. Einzurichten ist nichts: die Notizen kommen aus dem SymDo Gateway.",
       "Gateway: %1$s (#%2$d)": "Gateway: %1$s (#%2$d)",

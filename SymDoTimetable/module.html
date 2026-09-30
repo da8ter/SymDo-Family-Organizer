@@ -458,6 +458,32 @@
      dem die Zahl sass — und deckte gemessene acht bis zwoelf seiner sechzehn
      Pixel zu. Auf einer 54px hohen Karte ist fuer beides kein Platz, und von
      den beiden sagt die ZAHL mehr. */
+  /* Seit 30.09.2026: SYMBOLE unten links statt der roten Zahl — das Haus
+     fuer Hausaufgaben, das „i" fuer einen Hinweis der Lehrkraft (wie in der
+     Untis-App). Ein Tipp darauf oeffnet ein Blatt mit dem Inhalt. Bei mehr
+     als einer Aufgabe steht die Zahl klein am Haus. */
+  .stunde .ecke {
+    position: absolute; left: 6px; bottom: 5px;
+    display: flex; gap: 2px;
+  }
+  .stunde .ecke button {
+    border: 0; background: transparent; color: inherit; cursor: pointer;
+    width: 22px; height: 22px; padding: 0; border-radius: 7px;
+    display: inline-flex; align-items: center; justify-content: center; position: relative;
+  }
+  .stunde .ecke button:hover { background: color-mix(in srgb, currentColor 18%, transparent); }
+  .stunde .ecke button > i, .stunde .ecke button > svg { width: 13px; height: 13px; }
+  .stunde .ecke button b {
+    position: absolute; top: -3px; right: -4px;
+    min-width: 13px; height: 13px; padding: 0 3px; box-sizing: border-box;
+    border-radius: 999px; background: #E53935; color: #fff;
+    font-size: 8px; font-weight: 800; line-height: 13px; text-align: center;
+  }
+  .infoblatt .eintrag { padding: 6px 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.4; }
+  .infoblatt .eintrag:first-child { border-top: 0; }
+  .infoblatt .eintrag b { font-weight: 600; }
+  .infoblatt .eintrag .text { white-space: pre-line; overflow-wrap: anywhere; }
+  .infoblatt .unter { font-size: 12px; color: var(--muted); margin: -4px 0 6px; }
   .stunde .hw {
     position: absolute; left: 10px; bottom: 8px;
     display: inline-flex; align-items: center; justify-content: center;
@@ -472,6 +498,10 @@
   /* Enge Karte: die Zahl rueckt an die Kante, damit sie dem Fachsymbol nicht
      zu nahe kommt. */
   .stunde.hw-eng .hw { bottom: 3px; }
+  /* Enge Karte (45 Minuten): kleinere Knoepfe, sonst stossen sie ans Fachsymbol. */
+  .stunde.hw-eng .ecke { bottom: 1px; left: 8px; }
+  .stunde.hw-eng .ecke button { width: 16px; height: 16px; border-radius: 5px; }
+  .stunde.hw-eng .ecke button > i, .stunde.hw-eng .ecke button > svg { width: 11px; height: 11px; }
   /* Was sich keiner Stunde zuordnen liess, steht als Fusszeile unter der
      Spalte — eine Hausaufgabe, die nirgends erscheint, waere schlimmer als
      eine an ungenauer Stelle. */
@@ -963,6 +993,11 @@
   let zustand = null;
   let kindNr  = 0;
   let legende = false;   // Legende der sichtbaren Faecher
+  /* Details je Stundenkarte der Wochenansicht (Hausaufgaben, Hinweis), fuer
+     das Blatt nach einem Tipp auf ein Eckzeichen. Neu gefuellt bei jedem
+     Zeichnen; `infoOffen` ist das gerade offene Blatt (oder null). */
+  let stundenInfo = [];
+  let infoOffen = null;
   let tagNr   = 0;       // gewaehlter Wochentag in der Timeline, 0 = noch keiner
   /* In WELCHER Woche der gewaehlte Tag liegt: 0 = laufende, 1 = die kommende.
      Die Timeline bekommt keinen zweiten Kasten neben die Tageswahl — sie
@@ -1663,7 +1698,11 @@
        Kennzeichnung steuert, wo der Balken sitzt (siehe #inhalt.istWoche). */
     blaseWeg();
     ziel.classList.toggle('istWoche', zustand.mode !== 'timeline');
+    stundenInfo = [];
     let html = zustand.mode === 'timeline' ? timeline() : woche();
+    // Das offene Blatt ueberlebt ein Neuzeichnen nur, wenn es seine Karte noch gibt.
+    if (infoOffen && !stundenInfo[infoOffen.nr]) { infoOffen = null; }
+    html += infoBlattHtml();
     ziel.innerHTML = html;
     symboleErsetzen();
     // Nach dem Einfuegen: erst jetzt hat der Balken eine Breite. Reihenfolge
@@ -1729,7 +1768,21 @@
         zeichne();
       };
     } else {
-      ziel.onclick = null;
+      /* Wochenansicht: ein Tipp auf ein Eckzeichen oeffnet sein Blatt, ein
+         Tipp aufs Blatt schliesst es. Sonst tut ein Klick hier nichts. */
+      ziel.onclick = function (e) {
+        const knopf = e.target.closest('[data-info]');
+        if (knopf) {
+          e.stopPropagation();
+          infoOffen = { nr: parseInt(knopf.dataset.info, 10) || 0, art: knopf.dataset.art === 'notiz' ? 'notiz' : 'hw' };
+          zeichne();
+          return;
+        }
+        if (infoOffen && e.target.closest('[data-infozu]')) {
+          infoOffen = null;
+          zeichne();
+        }
+      };
     }
     // Beim Oeffnen zum heutigen Tag: die Woche faengt sonst am Montag an, und
     // am Donnerstag sieht man zuerst, was vorbei ist. In der KOMMENDEN Woche
@@ -1973,7 +2026,7 @@
              Kachel. Wird es zu eng, ruecken Symbol und Punkt an die Kante;
              ueberall sonst steht das Symbol so weit von der unteren Kante wie
              das Fachsymbol von der oberen. */
-          const engeKarte = s.hw && h < 57;
+          const engeKarte = (s.hw || notiz) && h < 57;
           spalten += '<div class="stunde' + (s.next ? ' jetzt' : '')
             + (s.care ? ' betreuung' : '') + lagen
             + (engeKarte ? ' hw-eng' : '') + '" title="'
@@ -1987,7 +2040,6 @@
             + '<div class="zeit">' + esc(s.start) + ' – ' + esc(s.end) + '</div>'
             + (marke ? '<div class="wo zustand">' + esc(marke) + '</div>' : '')
             + (pruefTitel ? '<div class="wo">' + esc(pruefTitel) + '</div>' : '')
-            + (notiz ? '<div class="wo notiz-kurz">' + symbol('fa-circle-info') + '<span>' + esc(notiz) + '</span></div>' : '')
             + (wo ? '<div class="wo">' + esc(wo) + '</div>' : '')
             + '</div>'
             /* Offene Hausaufgaben zu dieser Stunde. Die Zahl kommt vom Modul
@@ -1995,9 +2047,7 @@
                ERSTEN Stunde des Fachs an diesem Tag. */
             /* Das Hausaufgaben-Symbol mit rotem Zaehler. Der Tipp nennt
                zusaetzlich den Text der Aufgabe. */
-            + (s.hw ? '<span class="hw" title="' + esc(s.hw + ' Hausaufgabe(n)'
-                      + (s.hwText ? ': ' + s.hwText : '')) + '">'
-                      + '<b>' + s.hw + '</b></span>' : '')
+            + eckzeichen(s, notiz, tag)
             + '</div>';
           vorher = Math.max(vorher, s.to);
         });
@@ -2167,6 +2217,55 @@
       });
     });
     return Array.from(karte.values());
+  }
+
+  /**
+   * Die Eckzeichen einer Stundenkarte (30.09.2026): Haus bei Hausaufgaben,
+   * „i" bei einem Hinweis der Lehrkraft. Die Details landen in stundenInfo,
+   * der Knopf traegt nur deren Nummer.
+   */
+  function eckzeichen(s, notiz, tag) {
+    if (!s.hw && !notiz) { return ''; }
+    const nr = stundenInfo.length;
+    stundenInfo.push({
+      titel: s.name || '',
+      wann: (TAGNAMEN[tag.weekday] || tag.label || '') + (tag.date ? ' ' + datumKurz(tag.date) : '')
+        + (s.start ? ', ' + s.start + ' – ' + s.end : ''),
+      hw: Array.isArray(s.hwListe) && s.hwListe.length ? s.hwListe
+        : (s.hw ? [{ fach: s.name || '', text: s.hwText || '' }] : []),
+      notiz: notiz
+    });
+    let html = '<span class="ecke">';
+    if (s.hw) {
+      html += '<button type="button" data-info="' + nr + '" data-art="hw" title="'
+        + esc(s.hw + ' Hausaufgabe(n)' + (s.hwText ? ': ' + s.hwText : '')) + '" aria-label="Hausaufgaben">'
+        + symbol('fa-house') + (s.hw > 1 ? '<b>' + s.hw + '</b>' : '') + '</button>';
+    }
+    if (notiz) {
+      html += '<button type="button" data-info="' + nr + '" data-art="notiz" title="' + esc(notiz)
+        + '" aria-label="Hinweis zur Stunde">' + symbol('fa-circle-info') + '</button>';
+    }
+    return html + '</span>';
+  }
+
+  /** Das Blatt zu einem Eckzeichen — dieselbe Form wie die Faecher-Legende. */
+  function infoBlattHtml() {
+    const e = infoOffen && stundenInfo[infoOffen.nr];
+    if (!e) { return ''; }
+    const hw = infoOffen.art === 'hw';
+    const kopf = (hw ? 'Hausaufgaben' : 'Hinweis') + ' · ' + e.titel;
+    const inhalt = hw
+      ? e.hw.map(function (h) {
+          return '<div class="eintrag"><b>' + esc(h.fach || e.titel) + '</b>'
+            + (h.text ? '<div class="text">' + esc(h.text) + '</div>' : '') + '</div>';
+        }).join('')
+      : '<div class="eintrag"><div class="text">' + esc(e.notiz) + '</div></div>';
+    return '<div class="legendenblatt infoblatt" data-infozu="1">'
+      + '<div class="legende">'
+      + '<div class="legendenkopf">' + symbol(hw ? 'fa-house' : 'fa-circle-info') + '<span>' + esc(kopf) + '</span>'
+      + '<button class="zu" data-infozu="1" aria-label="Schließen">✕</button></div>'
+      + '<div class="unter">' + esc(e.wann) + '</div>'
+      + inhalt + '</div></div>';
   }
 
   function legendeHtml() {
