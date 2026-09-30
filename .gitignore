@@ -16,3 +16,7 @@ __pycache__/
 # Claude-Code: lokale Einstellungen und lokale Review-Regeln bleiben auf dem Rechner.
 .claude/settings.local.json
 .claude/*.local.*
+
+# Release-Vorbereitung (Skill symdo-release): Forumstexte, Bild-Zwischenstände
+# und die lokale Release-Liste bleiben auf dem Rechner und kommen in kein Repo.
+/release-notes/
