@@ -60,7 +60,9 @@ $karte = substr($karte, 0, (int)strpos($karte, "\n}\n"));
 pruefe(!preg_match('/\bsprung\b/', $karte) && str_contains($karte, '<div class="more-row"><span>${escapeHtml(label)}</span></div>')
     && !str_contains($karte, '<button class="more-row"'),
     'Hausaufgaben-Kasten: „n weitere" ist nur Text, kein Knopf (kein Rest von sprung)');
-foreach (['.plan-stueck.pruefung {', '.wp-stunde.pruefung {', '.hw-pruefung {', '.hw-pruef-balken > span {',
+// Seit 30.09.2026 traegt die Karte der Wochenansicht keinen Rahmen mehr, sondern
+// das Pruefungszeichen (.wp-ecke, data-art="pruefung") — geprueft in EckzeichenTest.
+foreach (['.plan-stueck.pruefung {', '.wp-stunde.pruefung .wp-fach {', '.hw-pruefung {', '.hw-pruef-balken > span {',
           '.hw-pruef-rund i, .hw-pruef-rund svg'] as $css) {
     pruefe(str_contains($html, $css), "Stil: $css");
 }
@@ -68,11 +70,11 @@ pruefe(str_contains($html, "const zustand = pruefung ? ' pruefung'") && str_cont
     'Balken und Raster: die Pruefung schlaegt die Vertretung');
 pruefe(str_contains($html, "if (q === 'exam') return translate('Source: exam (UNTIS)');"), 'Quellenwort der Lern-Erinnerung');
 $kachel = (string)file_get_contents(__DIR__ . '/../../SymDoTimetable/module.html');
-pruefe(str_contains($kachel, ".stunde.lage-pruefung {") && str_contains($kachel, "symbol(pruefung ? 'fa-file-pen'"),
+pruefe(str_contains($kachel, ".stunde.lage-pruefung .fach {") && str_contains($kachel, "symbol(pruefung ? 'fa-file-pen'"),
     'Stundenplan-Kachel: Markierung wie in der Web-App');
 foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'] as $kopie) {
     $k = (string)@file_get_contents(__DIR__ . '/../../' . $kopie . '/module.html');
-    pruefe(str_contains($k, 'function hwPruefungenHtml(') && str_contains($k, ".wp-stunde.pruefung {"), "Kopie $kopie ist nachgezogen");
+    pruefe(str_contains($k, 'function hwPruefungenHtml(') && str_contains($k, 'data-art="pruefung"'), "Kopie $kopie ist nachgezogen");
 }
 $schluessel = ['Exams', 'Exam', 'exam cancelled', 'Source: exam (UNTIS)', 'Next exam: %1', '%1 day(s) until the exam',
                'Exam today', 'Study start'];

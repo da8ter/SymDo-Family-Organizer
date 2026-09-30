@@ -1127,6 +1127,7 @@ class SymDoTimetable extends IPSModuleStrict
             return $plan;
         }
         $items = is_array($roh['items'] ?? null) ? $roh['items'] : [];
+        $plan = $this->PruefungenAnhaengen($plan, is_array($roh['exams'] ?? null) ? $roh['exams'] : []);
         if ($items === []) {
             return $plan;
         }
@@ -1189,6 +1190,45 @@ class SymDoTimetable extends IPSModuleStrict
                 }
                 if ($frei > 0) {
                     $plan['children'][$ki]['days'][$ti]['hwFrei'] = $frei;
+                }
+            }
+        }
+        return $plan;
+    }
+
+    /**
+     * Die Einzelheiten einer Pruefung an ihre Stunde (30.09.2026): Titel, Art,
+     * Thema, Raum — fuer das Blatt hinter dem Pruefungszeichen der
+     * Wochenansicht. Zugeordnet ueber Kind, Datum und Fach; die Stunde selbst
+     * traegt nur das Merkmal `exam` und den Titel.
+     *
+     * @param list<array<string,mixed>> $pruefungen aus TGW_GetHomework
+     */
+    private function PruefungenAnhaengen(array $plan, array $pruefungen): array
+    {
+        if ($pruefungen === []) {
+            return $plan;
+        }
+        foreach ((array)($plan['children'] ?? []) as $ki => $kind) {
+            $userId = trim((string)($kind['userId'] ?? ''));
+            foreach ((array)($kind['days'] ?? []) as $ti => $tag) {
+                $datum = (string)($tag['date'] ?? '');
+                foreach ((array)($tag['slots'] ?? []) as $si => $slot) {
+                    if (($slot['exam'] ?? false) !== true) {
+                        continue;
+                    }
+                    foreach ($pruefungen as $p) {
+                        if ((string)($p['childId'] ?? '') === $userId && (string)($p['date'] ?? '') === $datum
+                            && TimetableSubjects::FachGleich((string)($slot['name'] ?? ''), (string)($p['subject'] ?? ''))) {
+                            $plan['children'][$ki]['days'][$ti]['slots'][$si]['pruefung'] = [
+                                'titel' => mb_substr((string)($p['title'] ?? ''), 0, 120),
+                                'art'   => mb_substr((string)($p['examType'] ?? ''), 0, 60),
+                                'thema' => mb_substr((string)($p['topic'] ?? ''), 0, 400),
+                                'raum'  => (string)($p['room'] ?? ''),
+                            ];
+                            break;
+                        }
+                    }
                 }
             }
         }

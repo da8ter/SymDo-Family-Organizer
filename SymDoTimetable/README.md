@@ -231,7 +231,10 @@ im Wochenraster ein **Haus** unten links an der Stunde (bei mehreren Aufgaben
 mit kleiner Zahl), in der Zeitachse ein Punkt am Balken. Ein Tipp aufs Haus
 öffnet ein Blatt mit jeder Aufgabe samt Notiz. Liegt ein **Hinweis der
 Lehrkraft** zur Stunde vor (aus WebUntis), steht daneben ein **„i"**; sein
-Blatt zeigt den ganzen Hinweis. Die Fachfarbe bleibt unberührt. Dieselben
+Blatt zeigt den ganzen Hinweis. Eine **Prüfung** trägt als erstes Zeichen ein
+Blatt mit Stift; sein Blatt nennt Titel, Art, Themen und Raum (aus WebUntis,
+über das Gateway). Die Zeichen stehen unter dem Fachsymbol untereinander, auf
+niedrigen Karten nebeneinander. Die Fachfarbe bleibt unberührt. Dieselben
 Zeichen stehen im Wochenraster der Web-App.
 
 Die Zahl fällt an die **erste** Stunde des Fachs an diesem Tag — zwei Stunden

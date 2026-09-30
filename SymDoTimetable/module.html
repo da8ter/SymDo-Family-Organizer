@@ -580,7 +580,8 @@
   /* Die Klassenarbeit (24.09.2026): sie FINDET statt, aber sie ist keine
      Stunde wie jede andere — ein kraeftiger heller Rahmen, die Fachfarbe
      bleibt. WORTGLEICH zur Web-App. Entfaellt sie, gilt das Bild des Entfalls. */
-  .stunde.lage-pruefung { box-shadow: inset 0 0 0 2px rgba(255,255,255,.95); }
+  /* Kein Rahmen mehr in der Wochenansicht (30.09.2026): die Pruefung zeigt ein
+     Eckzeichen mit Blatt wie Hausaufgaben und Hinweise. */
   .stunde.lage-pruefung .fach { font-weight: 800; }
   .stueck.lage-pruefung { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.95); }
   .stunde.lage-pruefung.lage-entfall, .stueck.lage-pruefung.lage-entfall { box-shadow: none; }
@@ -1782,7 +1783,8 @@
         const knopf = e.target.closest('[data-info]');
         if (knopf) {
           e.stopPropagation();
-          infoOffen = { nr: parseInt(knopf.dataset.info, 10) || 0, art: knopf.dataset.art === 'notiz' ? 'notiz' : 'hw' };
+          infoOffen = { nr: parseInt(knopf.dataset.info, 10) || 0,
+            art: ['notiz', 'pruefung'].indexOf(knopf.dataset.art) >= 0 ? knopf.dataset.art : 'hw' };
           zeichne();
           return;
         }
@@ -2034,9 +2036,14 @@
              Kachel. Wird es zu eng, ruecken Symbol und Punkt an die Kante;
              ueberall sonst steht das Symbol so weit von der unteren Kante wie
              das Fachsymbol von der oberen. */
-          const engeKarte = (s.hw || notiz) && h < 57;
-          // Zwei Zeichen passen erst ab gut 84px unter das Fachsymbol.
-          const eckeReihe = s.hw && notiz && h < 84;
+          // Pruefungszeichen nur, solange die Pruefung stattfindet.
+          const pruefZeichen = pruefung && lage !== 'entfall';
+          const zeichen = (pruefZeichen ? 1 : 0) + (s.hw ? 1 : 0) + (notiz ? 1 : 0);
+          const engeKarte = zeichen > 0 && h < 57;
+          /* Untereinander passen n Zeichen erst ab 34 + 24·n Pixeln unter das
+             Fachsymbol (Symbol bis 30px, je Zeichen 22px und 2px Abstand, 6px
+             Rand) — sonst nebeneinander. */
+          const eckeReihe = zeichen > 1 && h < 34 + 24 * zeichen;
           spalten += '<div class="stunde' + (s.next ? ' jetzt' : '')
             + (s.care ? ' betreuung' : '') + lagen
             + (engeKarte ? ' hw-eng' : '') + (eckeReihe ? ' ecke-reihe' : '') + '" title="'
@@ -2057,7 +2064,7 @@
                ERSTEN Stunde des Fachs an diesem Tag. */
             /* Das Hausaufgaben-Symbol mit rotem Zaehler. Der Tipp nennt
                zusaetzlich den Text der Aufgabe. */
-            + eckzeichen(s, notiz, tag)
+            + eckzeichen(s, notiz, tag, pruefZeichen)
             + '</div>';
           vorher = Math.max(vorher, s.to);
         });
@@ -2234,8 +2241,8 @@
    * „i" bei einem Hinweis der Lehrkraft. Die Details landen in stundenInfo,
    * der Knopf traegt nur deren Nummer.
    */
-  function eckzeichen(s, notiz, tag) {
-    if (!s.hw && !notiz) { return ''; }
+  function eckzeichen(s, notiz, tag, pruefZeichen) {
+    if (!s.hw && !notiz && !pruefZeichen) { return ''; }
     const nr = stundenInfo.length;
     stundenInfo.push({
       titel: s.name || '',
@@ -2243,9 +2250,15 @@
         + (s.start ? ', ' + s.start + ' – ' + s.end : ''),
       hw: Array.isArray(s.hwListe) && s.hwListe.length ? s.hwListe
         : (s.hw ? [{ fach: s.name || '', text: s.hwText || '' }] : []),
-      notiz: notiz
+      notiz: notiz,
+      pruefung: pruefZeichen ? (s.pruefung || { titel: s.examTitle || '' }) : null
     });
     let html = '<span class="ecke">';
+    if (pruefZeichen) {
+      html += '<button type="button" data-info="' + nr + '" data-art="pruefung" title="'
+        + esc('Prüfung' + (s.examTitle ? ': ' + s.examTitle : '')) + '" aria-label="Prüfung">'
+        + symbol('fa-file-pen') + '</button>';
+    }
     if (s.hw) {
       html += '<button type="button" data-info="' + nr + '" data-art="hw" title="'
         + esc(s.hw + ' Hausaufgabe(n)' + (s.hwText ? ': ' + s.hwText : '')) + '" aria-label="Hausaufgaben">'
@@ -2262,9 +2275,16 @@
   function infoBlattHtml() {
     const e = infoOffen && stundenInfo[infoOffen.nr];
     if (!e) { return ''; }
-    const hw = infoOffen.art === 'hw';
-    const kopf = (hw ? 'Hausaufgaben' : 'Hinweis') + ' · ' + e.titel;
-    const inhalt = hw
+    const art = infoOffen.art;
+    const hw = art === 'hw';
+    const p = e.pruefung || {};
+    const kopf = (art === 'pruefung' ? 'Prüfung' : (hw ? 'Hausaufgaben' : 'Hinweis')) + ' · ' + e.titel;
+    const inhalt = art === 'pruefung'
+      ? '<div class="eintrag"><b>' + esc(p.titel || e.titel) + '</b>'
+          + (p.art ? '<div class="text">' + esc(p.art) + '</div>' : '')
+          + (p.thema ? '<div class="text">Themen: ' + esc(p.thema) + '</div>' : '')
+          + (p.raum ? '<div class="text">Raum ' + esc(p.raum) + '</div>' : '') + '</div>'
+      : hw
       ? e.hw.map(function (h) {
           return '<div class="eintrag"><b>' + esc(h.fach || e.titel) + '</b>'
             + (h.text ? '<div class="text">' + esc(h.text) + '</div>' : '') + '</div>';
@@ -2272,7 +2292,7 @@
       : '<div class="eintrag"><div class="text">' + esc(e.notiz) + '</div></div>';
     return '<div class="legendenblatt infoblatt" data-infozu="1">'
       + '<div class="legende">'
-      + '<div class="legendenkopf">' + symbol(hw ? 'fa-house' : 'fa-circle-info') + '<span>' + esc(kopf) + '</span>'
+      + '<div class="legendenkopf">' + symbol(art === 'pruefung' ? 'fa-file-pen' : (hw ? 'fa-house' : 'fa-circle-info')) + '<span>' + esc(kopf) + '</span>'
       + '<button class="zu" data-infozu="1" aria-label="Schließen">✕</button></div>'
       + '<div class="unter">' + esc(e.wann) + '</div>'
       + inhalt + '</div></div>';

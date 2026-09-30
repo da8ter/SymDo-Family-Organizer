@@ -601,7 +601,8 @@
             "Forward school or daycare mails to one of these addresses — the AI turns them into appointments, tasks and notes.": "Leite Schul- oder Kita-Mails an eine dieser Adressen weiter — die KI macht daraus Termine, Aufgaben und Notizen.",
             "Here you will find what the AI has recognised in mails and documents.": "Hier erscheint, was die KI in Mails und Dokumenten erkannt hat.",
             "Address copied": "Adresse kopiert",
-            "Note on the lesson": "Hinweis zur Stunde"
+            "Note on the lesson": "Hinweis zur Stunde",
+            "Room": "Raum"
         }
     }
 }

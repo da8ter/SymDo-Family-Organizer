@@ -162,7 +162,17 @@ trait Homework
                 $items[] = $i;
             }
         }
-        return (string)json_encode(['items' => $items], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        /* Die anstehenden Pruefungen gleich mit (30.09.2026): die Stundenplan-
+           Kachel zeigt sie als Eckzeichen samt Thema, und das Thema steht nur
+           hier, nicht an der Stunde. */
+        $pruefungen = [];
+        try {
+            $pruefungen = $this->UntisPruefungenOeffentlich($kind);
+        } catch (\Throwable $e) {
+            // ohne WebUntis gibt es keine — die Hausaufgaben gelten trotzdem
+        }
+        return (string)json_encode(['items' => $items, 'exams' => $pruefungen],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**
