@@ -1036,9 +1036,11 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-weight: 600;
 }
-/* Der Fachname jeder Stunde (30.09.2026): schlichter Text, und nur, wenn er
-   GANZ hineinpasst — planFachnamenEinpassen() misst und blendet sonst aus. */
-.plan-fach.passt-nicht { display: none; }
+/* Der Fachname jeder Stunde (30.09.2026): schlichter Text, KEIN Chip — nicht zu
+   verwechseln mit .plan-fach, den Faecher-Pillen der Legende. Passt er nicht ganz,
+   kuerzt der Browser mit „…"; bleiben dafuer 5 Zeichen oder weniger, blendet
+   planFachnamenEinpassen() ihn aus. */
+.plan-fachname.passt-nicht { display: none; }
 /* Pfad in der Ordner-Kopfzeile: „Lena › " vor dem Namen, leiser als er. Ohne
    ihn sieht ein Unterordner aus wie einer von oben. */
 .note-path { color: var(--muted); font-weight: 600; }
@@ -9162,14 +9164,19 @@ function planBlaseZeigen(el, text) {
 }
 
 /**
- * Fachnamen im Balken nur, wenn sie ungekuerzt passen (Wunsch 30.09.2026) —
- * ein „M…" neben dem Symbol sagt nichts. Erst alle zeigen, dann messen.
+ * Fachnamen im Balken (Wunsch 30.09.2026): ganz, wenn sie passen; gekuerzt, wenn
+ * MEHR als 5 Zeichen samt „…" Platz haben; sonst gar nicht — ein „M…" neben dem
+ * Symbol sagt nichts. Erst alle zeigen, dann messen (Zeichenbreite gemittelt).
  * Zwilling von fachnamenEinpassen() in der Stundenplan-Kachel.
  */
 function planFachnamenEinpassen() {
-  const namen = [...document.querySelectorAll('.plan-fach')];
+  const namen = [...document.querySelectorAll('.plan-fachname')];
   namen.forEach(n => n.classList.remove('passt-nicht'));
-  namen.forEach(n => { if (n.scrollWidth > n.clientWidth + 1) n.classList.add('passt-nicht'); });
+  namen.forEach(n => {
+    const voll = n.scrollWidth, platz = n.clientWidth, zeichen = (n.textContent || '').length;
+    if (voll <= platz + 1 || zeichen === 0) return;
+    if (Math.floor(platz / (voll / zeichen)) <= 5) n.classList.add('passt-nicht');
+  });
 }
 
 function planTermineBeschriften() {
@@ -10259,7 +10266,7 @@ function stundenplanKarte() {
              Symbol allein (Container-Abfrage bei .plan-stueck). */
           : (pruefung ? `<i class="fa-light fa-file-pen"></i>`
             : (s.icon ? `<i class="fa-light ${escapeHtml(s.icon)}"></i>` : '')) +
-            (s.name ? `<span class="plan-titel plan-fach"${titelBreite}>${escapeHtml(s.name)}</span>` : '')) + `</div>`;
+            (s.name ? `<span class="plan-titel plan-fachname"${titelBreite}>${escapeHtml(s.name)}</span>` : '')) + `</div>`;
     });
     let ticks = '<div class="plan-linie"></div>';
     const ersterTick = Math.ceil(von / 15) * 15;

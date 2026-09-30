@@ -604,8 +604,9 @@
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-weight: 600;
   }
-  /* Der Fachname jeder Stunde (30.09.2026): schlichter Text, und nur, wenn er
-     GANZ hineinpasst — fachnamenEinpassen() misst und blendet sonst aus. */
+  /* Der Fachname jeder Stunde (30.09.2026): schlichter Text, kein Chip. Passt er
+     nicht ganz, kuerzt der Browser mit „…"; bleiben dafuer 5 Zeichen oder
+     weniger, blendet fachnamenEinpassen() ihn aus. */
   .stueck .fach-titel.passt-nicht { display: none; }
   /* Der Termin ist kein Unterricht: eine helle Kante hebt ihn von der
      Vertretung ab, und der Fachname steht kursiv — die Fachfarbe bleibt
@@ -1367,12 +1368,18 @@
     blaseFrist = setTimeout(blaseWeg, 2500);
   }
 
-  /* Fachnamen im Balken nur, wenn sie ungekuerzt passen (Wunsch 30.09.2026).
-     Erst alle zeigen, dann messen. Zwilling von planFachnamenEinpassen() der Web-App. */
+  /* Fachnamen im Balken (Wunsch 30.09.2026): ganz, wenn sie passen; gekuerzt,
+     wenn MEHR als 5 Zeichen samt „…" Platz haben; sonst gar nicht. Erst alle
+     zeigen, dann messen (Zeichenbreite gemittelt). Zwilling von
+     planFachnamenEinpassen() der Web-App. */
   function fachnamenEinpassen() {
     const namen = Array.prototype.slice.call(document.querySelectorAll('.fach-titel'));
     namen.forEach(function (n) { n.classList.remove('passt-nicht'); });
-    namen.forEach(function (n) { if (n.scrollWidth > n.clientWidth + 1) { n.classList.add('passt-nicht'); } });
+    namen.forEach(function (n) {
+      const voll = n.scrollWidth, platz = n.clientWidth, zeichen = (n.textContent || '').length;
+      if (voll <= platz + 1 || zeichen === 0) { return; }
+      if (Math.floor(platz / (voll / zeichen)) <= 5) { n.classList.add('passt-nicht'); }
+    });
   }
 
   function termineBeschriften() {
