@@ -40,8 +40,10 @@ pruefe('Web-App: dieselben Eckzeichen und ein eigenes Blatt',
 pruefe('Web-App: Kind ueber userId (kind.id gibt es im Plan nicht)',
     str_contains($web, 'hwFuerSlot(hausaufgaben.items, kind.userId, t.date, sl.name,')
     && str_contains($web, "String(i.childId) === String(kind.userId || '')"));
-pruefe('Enge Karten: kleinere Knoepfe in beiden',
-    str_contains($kachel, '.stunde.hw-eng .ecke button { width: 16px;') && str_contains($web, '.wp-stunde.wp-hw-eng .wp-ecke button { width: 16px;'));
+pruefe('Unter dem Fachsymbol: gleiche Spalte (links 10px), untereinander, bei Enge nebeneinander',
+    str_contains($kachel, "position: absolute; left: 10px; bottom: 6px;\n    display: flex; flex-direction: column;")
+    && str_contains($web, '.wp-stunde .wp-ecke { position: absolute; left: 10px; bottom: 6px; display: flex; flex-direction: column;')
+    && str_contains($kachel, "(eckeReihe ? ' ecke-reihe' : '')") && str_contains($web, "(hw && notiz && h < 84 ? ' wp-ecke-reihe' : '')"));
 
 echo "\n$anzahl Zusicherungen, $fehler Abweichung(en).\n";
 exit($fehler === 0 ? 0 : 1);

@@ -4177,9 +4177,12 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 /* Seit 30.09.2026: Eckzeichen unten links — Haus = Hausaufgaben, „i" = Hinweis
    der Lehrkraft (wie in der Untis-App); ein Tipp oeffnet das Blatt. Zwilling der
    Stundenplan-Kachel (.stunde .ecke). */
-.wp-stunde .wp-ecke { position: absolute; left: 6px; bottom: 5px; display: flex; gap: 2px; }
-.wp-stunde.wp-hw-eng .wp-ecke { bottom: 1px; left: 8px; }
-.wp-stunde.wp-hw-eng .wp-ecke button { width: 16px; height: 16px; border-radius: 5px; }
+/* Genau unter dem Fachsymbol, Zeichen untereinander; zu niedrig fuer zwei:
+   nebeneinander (.wp-ecke-reihe). Zwilling der Kachel. */
+.wp-stunde .wp-ecke { position: absolute; left: 10px; bottom: 6px; display: flex; flex-direction: column; gap: 2px; }
+.wp-stunde.wp-ecke-reihe .wp-ecke { flex-direction: row; }
+.wp-stunde.wp-hw-eng .wp-ecke { bottom: 1px; }
+.wp-stunde.wp-hw-eng .wp-ecke button { height: 16px; border-radius: 5px; }
 .wp-stunde.wp-hw-eng .wp-ecke button > i, .wp-stunde.wp-hw-eng .wp-ecke button > svg { width: 11px; height: 11px; }
 .wp-stunde .wp-ecke button {
   border: 0; background: transparent; color: inherit; cursor: pointer;
@@ -10502,6 +10505,7 @@ function renderWochenplan() {
             + '</span>';
         }
         spalten += '<div class="wp-stunde' + lage + ((hw || notiz) && h < 57 ? ' wp-hw-eng' : '')
+          + (hw && notiz && h < 84 ? ' wp-ecke-reihe' : '')
           + '" title="' + escapeHtml(hinweis) + '"' +
           ' style="background:' + escapeHtml(sl.color || '#607D8B') + fachTinteStil(sl.color) + ';top:' + y(sl.from) +
           'px;height:' + h + 'px">' +

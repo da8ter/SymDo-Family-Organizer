@@ -462,10 +462,15 @@
      fuer Hausaufgaben, das „i" fuer einen Hinweis der Lehrkraft (wie in der
      Untis-App). Ein Tipp darauf oeffnet ein Blatt mit dem Inhalt. Bei mehr
      als einer Aufgabe steht die Zahl klein am Haus. */
+  /* Genau unter dem Fachsymbol (links 10px, 22px breit): dieselbe Mittelachse,
+     die Zeichen UNTEREINANDER (Wunsch 30.09.2026). Ist die Karte fuer zwei
+     Zeichen uebereinander zu niedrig, stehen sie nebeneinander (.ecke-reihe) —
+     das erste bleibt dann unter dem Fachsymbol. */
   .stunde .ecke {
-    position: absolute; left: 6px; bottom: 5px;
-    display: flex; gap: 2px;
+    position: absolute; left: 10px; bottom: 6px;
+    display: flex; flex-direction: column; gap: 2px;
   }
+  .stunde.ecke-reihe .ecke { flex-direction: row; }
   .stunde .ecke button {
     border: 0; background: transparent; color: inherit; cursor: pointer;
     width: 22px; height: 22px; padding: 0; border-radius: 7px;
@@ -499,8 +504,8 @@
      zu nahe kommt. */
   .stunde.hw-eng .hw { bottom: 3px; }
   /* Enge Karte (45 Minuten): kleinere Knoepfe, sonst stossen sie ans Fachsymbol. */
-  .stunde.hw-eng .ecke { bottom: 1px; left: 8px; }
-  .stunde.hw-eng .ecke button { width: 16px; height: 16px; border-radius: 5px; }
+  .stunde.hw-eng .ecke { bottom: 1px; }
+  .stunde.hw-eng .ecke button { height: 16px; border-radius: 5px; }
   .stunde.hw-eng .ecke button > i, .stunde.hw-eng .ecke button > svg { width: 11px; height: 11px; }
   /* Was sich keiner Stunde zuordnen liess, steht als Fusszeile unter der
      Spalte — eine Hausaufgabe, die nirgends erscheint, waere schlimmer als
@@ -2030,9 +2035,11 @@
              ueberall sonst steht das Symbol so weit von der unteren Kante wie
              das Fachsymbol von der oberen. */
           const engeKarte = (s.hw || notiz) && h < 57;
+          // Zwei Zeichen passen erst ab gut 84px unter das Fachsymbol.
+          const eckeReihe = s.hw && notiz && h < 84;
           spalten += '<div class="stunde' + (s.next ? ' jetzt' : '')
             + (s.care ? ' betreuung' : '') + lagen
-            + (engeKarte ? ' hw-eng' : '') + '" title="'
+            + (engeKarte ? ' hw-eng' : '') + (eckeReihe ? ' ecke-reihe' : '') + '" title="'
             + esc(s.name + ', ' + s.start + ' – ' + s.end + (wo ? ', ' + wo : '')
                   + (marke ? ' — ' + marke : '') + (pruefTitel ? ': ' + pruefTitel : '')
                   + (notiz ? '\n' + notiz : ''))
