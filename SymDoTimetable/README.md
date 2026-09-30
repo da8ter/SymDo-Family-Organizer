@@ -1,5 +1,9 @@
 # SymDo - Stundenplan
 
+![SymDo — Stundenplan Woche](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Stundenplan%20Woche.png)
+
+![SymDo — Stundenplan Timeline](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Stundenplan%20Timeline.png)
+
 Der Wochenplan der Kinder als Symcon-Kachel: Fächer, Zeiten, Betreuung, Ferien.
 Eingerichtet wird alles im Backend der Instanz — es gibt keine zweite Ablage und
 keine App, in der man den Plan pflegen müsste. Wer **WebUntis** hat, lässt sich

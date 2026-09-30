@@ -26,8 +26,8 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
 - **Tägliches Briefing** — die KI fasst morgens zusammen, was heute zählt:
   Termine, fällige Aufgaben, Schulzeiten der Kinder, Einkaufsliste, Geburtstage
   und Jahrestage. Auf Wunsch vorgelesen, im Ton eurer Wahl — vom höflichen Butler
-  bis zum Drillsergeant. Sprachausgabe über OpenAI, Microsoft Azure, ElevenLabs
-  oder Amazon Polly.
+  bis zum Drillsergeant. Sprachausgabe über OpenAI, Microsoft Azure, ElevenLabs,
+  Amazon Polly oder Google Gemini.
 - **Kalender** — Termine aus [OpenCalendar](https://github.com/Burki24/OpenCalendar)
   lesen, anlegen und bearbeiten. Bei einer Serie fragt die App nach der Reichweite
   (nur dieser Termin, dieser und alle folgenden, die ganze Serie), und
@@ -101,8 +101,8 @@ KI-Eingang und Briefing kommen erst mit ihm.
   optional
 - Für die KI: ein eigener API-Schlüssel (**Anthropic** oder **OpenAI**) oder ein
   lokaler, OpenAI-kompatibler Server (z. B. LM Studio), optional
-- Für die Sprachausgabe: **OpenAI**, **Azure Speech**, **ElevenLabs** oder
-  **Amazon Polly**, optional
+- Für die Sprachausgabe: **OpenAI**, **Azure Speech**, **ElevenLabs**,
+  **Amazon Polly** oder **Google Gemini**, optional
 - Für den Sprachassistenten: ein **OpenAI**-Schlüssel und ein Gerät mit
   Mikrofon in einem sicheren Kontext (HTTPS, Symcon-App oder Connect), optional
 - Für Stundenplan aus **WebUntis** und **Klassenseiten**: Zugang bzw. Adresse
