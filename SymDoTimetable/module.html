@@ -380,7 +380,7 @@
      Wert kommt aus --spalte-min und wird beim Start an der ECHTEN Schrift
      genommen — eine feste Zahl staende auf einer anderen Plattform daneben. */
   .spalte {
-    flex: 1 1 0; min-width: var(--spalte-min, 140px);
+    flex: 1 1 0; min-width: var(--spalte-min, 175px);
     border-radius: 16px; background: var(--spalte); overflow: hidden;
   }
   .spaltenkopf {
@@ -859,6 +859,7 @@
      links und rechts, der Symbolkreis und sein Abstand. Alles aus dem
      Stylesheet gelesen, damit die Rechnung nicht auseinanderlaeuft, wenn dort
      jemand eine Zahl aendert. */
+  const SPALTE_ZUSCHLAG = 1.25;
   function spaltenMindestbreite() {
     try {
       const karte = document.createElement('div');
@@ -876,11 +877,13 @@
       const daneben = parseFloat(stil.paddingLeft) + parseFloat(stil.paddingRight)
         + parseFloat(symStil.width) + parseFloat(stil.columnGap || stil.gap || 0);
       karte.remove();
-      const min = Math.ceil(textBreit + daneben);
+      /* Mal 1,25 (Nutzerwunsch 30.09.2026): genau „Mathematik" war zu knapp —
+         Raum, Lehrer und Hinweise wurden in jeder Spalte gekuerzt. */
+      const min = Math.ceil((textBreit + daneben) * SPALTE_ZUSCHLAG);
       if (Number.isFinite(min) && min > 0) {
         document.documentElement.style.setProperty('--spalte-min', min + 'px');
       }
-    } catch (e) { /* Vorgabe 140px greift */ }
+    } catch (e) { /* Vorgabe 175px greift */ }
   }
   spaltenMindestbreite();
   /* Noch einmal, sobald die Schriften stehen: der Kachel-SDK von Symcon zieht

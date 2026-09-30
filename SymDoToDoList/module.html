@@ -4081,7 +4081,8 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 }
 .wp-spalten::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .wp-spalte {
-  flex: 1 1 0; min-width: 140px;
+  /* 175 statt 140px (Nutzerwunsch 30.09.2026, gut 25 % breiter). */
+  flex: 1 1 0; min-width: 175px;
   border-radius: var(--radius); background: var(--surface); overflow: hidden;
 }
 /* Der Rahmen des heutigen Tages gehoert IN DEN VORDERGRUND. Als `outline` lag
