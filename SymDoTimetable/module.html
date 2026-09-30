@@ -604,6 +604,9 @@
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-weight: 600;
   }
+  /* Der Fachname jeder Stunde (30.09.2026): schlichter Text, und nur, wenn er
+     GANZ hineinpasst — fachnamenEinpassen() misst und blendet sonst aus. */
+  .stueck .fach-titel.passt-nicht { display: none; }
   /* Der Termin ist kein Unterricht: eine helle Kante hebt ihn von der
      Vertretung ab, und der Fachname steht kursiv — die Fachfarbe bleibt
      unangetastet. */
@@ -1364,7 +1367,18 @@
     blaseFrist = setTimeout(blaseWeg, 2500);
   }
 
+  /* Fachnamen im Balken nur, wenn sie ungekuerzt passen (Wunsch 30.09.2026).
+     Erst alle zeigen, dann messen. Zwilling von planFachnamenEinpassen() der Web-App. */
+  function fachnamenEinpassen() {
+    const namen = Array.prototype.slice.call(document.querySelectorAll('.fach-titel'));
+    namen.forEach(function (n) { n.classList.remove('passt-nicht'); });
+    namen.forEach(function (n) { if (n.scrollWidth > n.clientWidth + 1) { n.classList.add('passt-nicht'); } });
+  }
+
   function termineBeschriften() {
+    fachnamenEinpassen();
+    // Das Symbol kommt erst mit /icons.js als <svg> und aendert die Breite ein wenig.
+    setTimeout(fachnamenEinpassen, 400);
     // Groesster Fehlbetrag ueber alle Zeilen, als ANTEIL der Balkenbreite —
     // in Minuten umgerechnet wird erst zum Schluss, wenn die Spanne feststeht.
     let fehltAnteil = 0;
@@ -2499,7 +2513,7 @@
            ihnen ueberdeckt. Also bis zur naechsten Stunde, die auf ihm liegt,
            und 26 px ab fuer Zeichen und Abstaende. */
         let titelBreite = '';
-        if (mitTitel) {
+        {
           let naechst = s.to;
           slots.forEach(function (x) {
             if (x !== s && x.from > s.from && x.from < naechst) { naechst = x.from; }
@@ -2527,7 +2541,11 @@
           + (mitTitel
               ? symbol(pruefung ? 'fa-file-pen' : (s.status === 'termin' ? 'fa-calendar-star' : 'fa-right-left'))
                 + '<span class="titel"' + titelBreite + '>' + esc((pruefung && pruefTitel) || s.name || '') + '</span>'
-              : symbol(pruefung ? 'fa-file-pen' : s.icon))
+              /* Seit 30.09.2026 traegt JEDE Stunde ihren Fachnamen neben dem
+                 Symbol (Wunsch des Nutzers) — zu schmale Stuecke zeigen weiter
+                 nur das Symbol (Container-Abfrage bei .stueck). */
+              : symbol(pruefung ? 'fa-file-pen' : s.icon)
+                + (s.name ? '<span class="titel fach-titel"' + titelBreite + '>' + esc(s.name) + '</span>' : ''))
           + '</div>';
       });
 

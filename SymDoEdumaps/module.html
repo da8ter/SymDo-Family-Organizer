@@ -1036,6 +1036,9 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-weight: 600;
 }
+/* Der Fachname jeder Stunde (30.09.2026): schlichter Text, und nur, wenn er
+   GANZ hineinpasst — planFachnamenEinpassen() misst und blendet sonst aus. */
+.plan-fach.passt-nicht { display: none; }
 /* Pfad in der Ordner-Kopfzeile: „Lena › " vor dem Namen, leiser als er. Ohne
    ihn sieht ein Unterordner aus wie einer von oben. */
 .note-path { color: var(--muted); font-weight: 600; }
@@ -9158,7 +9161,21 @@ function planBlaseZeigen(el, text) {
   planBlaseFrist = setTimeout(planBlaseWeg, 2500);
 }
 
+/**
+ * Fachnamen im Balken nur, wenn sie ungekuerzt passen (Wunsch 30.09.2026) —
+ * ein „M…" neben dem Symbol sagt nichts. Erst alle zeigen, dann messen.
+ * Zwilling von fachnamenEinpassen() in der Stundenplan-Kachel.
+ */
+function planFachnamenEinpassen() {
+  const namen = [...document.querySelectorAll('.plan-fach')];
+  namen.forEach(n => n.classList.remove('passt-nicht'));
+  namen.forEach(n => { if (n.scrollWidth > n.clientWidth + 1) n.classList.add('passt-nicht'); });
+}
+
 function planTermineBeschriften() {
+  planFachnamenEinpassen();
+  // Das Symbol kommt erst mit /icons.js als <svg> und aendert die Breite ein wenig.
+  setTimeout(planFachnamenEinpassen, 400);
   planBlaseWeg();
   // Groesster Fehlbetrag ueber alle Zeilen, als ANTEIL der Balkenbreite.
   let fehltAnteil = 0;
@@ -10211,7 +10228,7 @@ function stundenplanKarte() {
          („1. Methodenta⚛"). Also bis zur naechsten Stunde, die auf ihm liegt,
          und 26 px ab fuer Zeichen und Abstaende. */
       let titelBreite = '';
-      if (mitTitel) {
+      {
         let naechst = s.to;
         for (const x of slots) {
           if (x !== s && x.from > s.from && x.from < naechst) { naechst = x.from; }
@@ -10237,8 +10254,12 @@ function stundenplanKarte() {
         (mitTitel
           ? `<i class="fa-light ${pruefung ? 'fa-file-pen' : (s.status === 'termin' ? 'fa-calendar-star' : 'fa-right-left')}"></i>` +
             `<span class="plan-titel"${titelBreite}>${escapeHtml((pruefung && s.examTitle) || s.name || '')}</span>`
+          /* Seit 30.09.2026 traegt JEDE Stunde ihren Fachnamen neben dem Symbol
+             (Wunsch des Nutzers) — nur zu schmale Stuecke zeigen weiter das
+             Symbol allein (Container-Abfrage bei .plan-stueck). */
           : (pruefung ? `<i class="fa-light fa-file-pen"></i>`
-            : (s.icon ? `<i class="fa-light ${escapeHtml(s.icon)}"></i>` : ''))) + `</div>`;
+            : (s.icon ? `<i class="fa-light ${escapeHtml(s.icon)}"></i>` : '')) +
+            (s.name ? `<span class="plan-titel plan-fach"${titelBreite}>${escapeHtml(s.name)}</span>` : '')) + `</div>`;
     });
     let ticks = '<div class="plan-linie"></div>';
     const ersterTick = Math.ceil(von / 15) * 15;
