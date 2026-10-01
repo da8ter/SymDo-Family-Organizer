@@ -1,5 +1,7 @@
 # SymDo - KI-Eingang
 
+![SymDo — KI-Eingang](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20KI-Eingang.png)
+
 **Der KI-Eingang der SymDo-App als eigene Kachel für die Tile-Visualisierung.**
 
 Dieselben Vorschläge, dieselbe Ansicht wie in der Web-App — nur ohne die übrigen Bereiche. Was die KI in weitergeleiteten E-Mails, Elternbriefen oder Karten der Klassenseiten gefunden hat, steht hier zum Prüfen bereit: übernehmen als Aufgabe, Termin, Hausaufgabe oder Notiz, anpassen oder verwerfen.

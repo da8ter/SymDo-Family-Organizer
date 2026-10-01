@@ -239,6 +239,8 @@ Aufgaben liegen im Gateway.
 
 ## SymDo - KI-Eingang
 
+![SymDo — KI-Eingang](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20KI-Eingang.png)
+
 Der KI-Eingang der App als eigene Kachel: was die KI in weitergeleiteten Mails,
 Elternbriefen und Karten der Klassenseiten gefunden hat, je Nachricht mit
 Zusammenfassung — übernehmen als Aufgabe, Termin, Hausaufgabe oder Notiz,
