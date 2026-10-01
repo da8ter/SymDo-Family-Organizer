@@ -244,7 +244,7 @@ pruefe('Zeile: Haken statt Knoepfe, keine Wischgeste, kein Uebernehmen an erledi
     [str_contains($html, 'class="mail-done"'), str_contains($html, "if (zeile.classList.contains('erledigt')) return;"),
      str_contains($html, "if (!eintrag || eintrag.taken === true) return;")],
     [true, true, true]);
-$kopien = ['SymDoShoppingList', 'SymDoToDoList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'];
+$kopien = ['SymDoShoppingList', 'SymDoToDoList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox'];
 pruefe('Zeile: Art-Wahl als Auswahlfeld an offenen Zeilen, change setzt sie hier und beim Server',
     [str_contains($html, 'function mailArtWahlHtml'), str_contains($html, '<select class="mail-kind-select" data-mail="kind"'),
      str_contains($html, "e.target.closest('select[data-mail=\"kind\"]')"), str_contains($html, 'class="mail-summary"'),
@@ -265,12 +265,12 @@ pruefe('Fusszeile: „Löschen" rechts, links die Quelle — mit Rueckfall auf d
 pruefe('Die Quellen-Woerter stehen in allen locale.json',
     array_map(static fn($k) => array_map(static fn($w) => json_decode($lesen("$k/locale.json"), true)['translations']['de'][$w] ?? null,
         ['Source: %1', 'Class page', 'Delete']), array_merge(['SymDoWebApp'], $kopien)),
-    array_fill(0, 6, ['Quelle: %1', 'Klassenseite', 'Löschen']));
-pruefe('Alle fuenf Kachel-Kopien tragen den Haken',
-    array_map(static fn($k) => str_contains($lesen("$k/module.html"), 'function mailErledigt'), $kopien), array_fill(0, 5, true));
+    array_fill(0, count($kopien) + 1, ['Quelle: %1', 'Klassenseite', 'Löschen']));
+pruefe('Alle Kachel-Kopien tragen den Haken',
+    array_map(static fn($k) => str_contains($lesen("$k/module.html"), 'function mailErledigt'), $kopien), array_fill(0, count($kopien), true));
 pruefe('„Taken over" heisst ueberall „Uebernommen"',
     array_map(static fn($k) => json_decode($lesen("$k/locale.json"), true)['translations']['de']['Taken over'] ?? null,
-        array_merge(['SymDoWebApp'], $kopien)), array_fill(0, 6, 'Übernommen'));
+        array_merge(['SymDoWebApp'], $kopien)), array_fill(0, count($kopien) + 1, 'Übernommen'));
 
 
 // ── Umstellen auf Hausaufgabe traegt Notiz und Kind nach (23.09.2026) ───────

@@ -56,7 +56,7 @@ foreach (['tdOriginal', 'ceOriginal', 'hwOriginal', 'ntOriginal'] as $b) {
 pruefe(str_contains($html, 'data-mail="original"') && str_contains($html, 'function originalZeigen(id)'), 'Auge an der Zeile und das Blatt');
 pruefe(str_contains($html, "text.innerHTML = String(o.text || '').trim() !== '' ? notizTextHtml(String(o.text)) : '';"),
     'der Text geht durch notizTextHtml (erst maskiert)');
-foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework'] as $kopie) {
+foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox'] as $kopie) {
     $k = (string)@file_get_contents(__DIR__ . '/../../' . $kopie . '/module.html');
     pruefe(str_contains($k, 'function originalZeigen(id)') && str_contains($k, 'id="originalOverlay"'), "Kopie $kopie ist nachgezogen");
 }

@@ -83,6 +83,11 @@ class SetupPlan
             'guid' => '{60BD47B7-215A-4198-8CA9-417B549E3969}',
             'name' => 'SymDo - Klassenseiten',
         ],
+        'aiinbox' => [
+            'guid'   => '{62F42E2D-BE0A-4490-80C2-CF54355E94C2}',
+            'name'   => 'SymDo - KI-Eingang',
+            'nutzer' => 'DefaultUserID',
+        ],
         'voice' => [
             'guid'     => '{1F413A34-452C-4A8D-BEFC-CA7CB9DBB1BB}',
             'name'     => 'SymDo - Sprachassistent',

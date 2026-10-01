@@ -75,6 +75,7 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
 | **SymDo - Notizen** | Device | Der Notizbereich der App als eigene Kachel |
 | **SymDo - Klassenseiten** | Device | Die Klassenseiten der Schule als eigene Kachel — aus Edumaps und LOGINEO NRW LMS: Karten mit Text, Dateien und Buchungslage, nur lesend |
 | **SymDo - Hausaufgaben** | Device | Die Hausaufgaben der Kinder als eigene Kachel: nach Fälligkeit gruppiert, mit Fachsymbolen, Häkchen und Erledigt-Abschnitt |
+| **SymDo - KI-Eingang** | Device | Der KI-Eingang als eigene Kachel: Vorschläge aus Mails und Klassenseiten prüfen und als Aufgabe, Termin, Hausaufgabe oder Notiz übernehmen |
 
 ## Schnellstart
 
@@ -235,6 +236,16 @@ WebUntis kommt, wird gezeigt und nicht bearbeitet. Nichts einzurichten — die
 Aufgaben liegen im Gateway.
 
 → [Ausführliche Anleitung](SymDoHomework/README.md)
+
+## SymDo - KI-Eingang
+
+Der KI-Eingang der App als eigene Kachel: was die KI in weitergeleiteten Mails,
+Elternbriefen und Karten der Klassenseiten gefunden hat, je Nachricht mit
+Zusammenfassung — übernehmen als Aufgabe, Termin, Hausaufgabe oder Notiz,
+anpassen oder verwerfen. Mail-Eingang und KI werden im Gateway eingerichtet,
+dort liegen auch die Vorschläge.
+
+→ [Ausführliche Anleitung](SymDoAIInbox/README.md)
 
 ## SymDo - Essensplan
 

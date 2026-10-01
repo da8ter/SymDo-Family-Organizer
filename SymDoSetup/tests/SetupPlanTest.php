@@ -55,7 +55,7 @@ const BEREIT = 10103;
 
 // ── Die Bausteintabelle ────────────────────────────────────────────────────
 $guids = array_column(SetupPlan::BAUSTEINE, 'guid');
-pruefe('zwoelf Bausteine', count(SetupPlan::BAUSTEINE), 12);
+pruefe('dreizehn Bausteine', count(SetupPlan::BAUSTEINE), 13);
 pruefe('jede GUID nur einmal', count(array_unique($guids)), count($guids));
 pruefe('jede GUID hat die Form einer GUID',
     count(array_filter($guids, static fn(string $g): bool
@@ -64,7 +64,7 @@ pruefe('jede GUID hat die Form einer GUID',
 pruefe('das Gateway steht NICHT in der Tabelle',
     in_array(SetupPlan::GATEWAY_GUID, $guids, true), false);
 pruefe('jeder Baustein hat einen Namen',
-    count(array_filter(array_column(SetupPlan::BAUSTEINE, 'name'), static fn($n) => trim((string)$n) !== '')), 12);
+    count(array_filter(array_column(SetupPlan::BAUSTEINE, 'name'), static fn($n) => trim((string)$n) !== '')), 13);
 /* Die Reihenfolge ist der Vertrag: ein Verweisziel muss VOR dem Verweis
    stehen, sonst zeigt der Ausführer auf eine Instanz, die es noch nicht gibt. */
 $reihe = array_keys(SetupPlan::BAUSTEINE);
