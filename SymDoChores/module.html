@@ -1117,10 +1117,10 @@ function wuerfelHtml() {
   const preisZeile = preis() > 0
     ? '<div class="wpreis">' + escHtml(txt('wheelOnce', '1 × spin =')) + ' ' + preis() + ' <i class="fa-light fa-coins"></i></div>'
     : '';
-  return '<div class="wtext"><div class="wtitel">' + escHtml(txt('wheelTitle', 'Roll the dice')) + '</div>' +
+  return '<div class="wtext"><div class="wtitel">' + escHtml(txt('wheelTitle', 'Draw the chore')) + '</div>' +
     '<div class="whint">' + escHtml(hinweis) + '</div></div>' +
     '<div class="wknopf"><button type="button" class="knopf" id="wuerfel-knopf"' + (grund === '' ? '' : ' disabled') + '>' +
-    '<i class="fa-light fa-dice"></i>' + escHtml(txt('wheelGo', 'Go!')) + '</button>' + preisZeile + '</div>';
+    '<i class="fa-light fa-arrows-spin"></i>' + escHtml(txt('wheelGo', 'Go!')) + '</button>' + preisZeile + '</div>';
 }
 
 function preis() { return Math.max(0, Number(zustand && zustand.spinPrice) || 0); }
@@ -1225,7 +1225,7 @@ function radZeigen(choreId) {
   const a = (zustand.chores || []).find((x) => x.id === choreId);
   if (!a) { return; }
   const kandidaten = (Array.isArray(a.candidates) ? a.candidates : []).filter((id) => mitglied(id));
-  el('blatt-titel').textContent = txt('wheelTitle', 'Roll the dice');
+  el('blatt-titel').textContent = txt('wheelTitle', 'Draw the chore');
   if (kandidaten.length === 0) {
     el('blatt-inhalt').innerHTML = '<div class="leerzeile">' + escHtml(txt('wheelNobody', '')) + '</div>';
     return;

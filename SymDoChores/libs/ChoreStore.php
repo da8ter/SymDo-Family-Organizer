@@ -1349,12 +1349,12 @@ trait ChoreStore
             'praiseMid'   => $this->Translate('Keep it up!'),
             'praiseLow'   => $this->Translate("Let's get started!"),
             /* Das Gluecksrad (18.09.2026). */
-            'wheelTitle'  => $this->Translate('Roll the dice'),
+            'wheelTitle'  => $this->Translate('Draw the chore'),
             'wheelHint'   => $this->Translate('Let the wheel decide who does a chore today.'),
             'wheelPick'   => $this->Translate('Pick a chore'),
             'wheelSpin'   => $this->Translate('Spin'),
             'wheelGo'     => $this->Translate('Go!'),
-            'wheelSpun'   => $this->Translate('already rolled today'),
+            'wheelSpun'   => $this->Translate('already drawn today'),
             'wheelNone'   => $this->Translate('Nothing is due today.'),
             'wheelResult' => $this->Translate('%s does it today!'),
             'wheelWait'   => $this->Translate('The wheel is spinning…'),
@@ -1367,7 +1367,7 @@ trait ChoreStore
             'wheelCost'   => $this->Translate('One spin costs %d coins'),
             'wheelPoor'   => $this->Translate('not enough coins'),
             'wheelNoPayer' => $this->Translate('No child has enough coins.'),
-            'wheelAllSpun' => $this->Translate('Everything has been rolled today.'),
+            'wheelAllSpun' => $this->Translate('Everything has been drawn today.'),
             'wheelPays'   => $this->Translate('%s pays'),
             'wheelOnce'   => $this->Translate('1 × spin ='),
         ];

@@ -21,7 +21,7 @@ Das Gegenstück für den Tag ist **SymDo - Routinen**: Häkchenlisten, die sich 
 
 ## 1. Was die Kachel zeigt
 
-Oben eine Karte je Familienmitglied — Foto, Name, „2/3 erledigt" und ein Fortschrittsring. Darunter die **Tabelle**: eine Zeile je Ämtchen, eine Spalte je Wochentag, und in jeder Zelle das Gesicht dessen, der an diesem Tag dran ist. Daneben der Gesamtfortschritt als Ring und die nächsten offenen Ämtchen, darunter ein Schlusswort und der Kasten **Ämtchen würfeln**.
+Oben eine Karte je Familienmitglied — Foto, Name, „2/3 erledigt" und ein Fortschrittsring. Darunter die **Tabelle**: eine Zeile je Ämtchen, eine Spalte je Wochentag, und in jeder Zelle das Gesicht dessen, der an diesem Tag dran ist. Daneben der Gesamtfortschritt als Ring und die nächsten offenen Ämtchen, darunter ein Schlusswort und der Kasten **Ämtchen auslosen**.
 
 - **Eine Spalte je Wochentag.** Jeder Platz sitzt in der Spalte des Tages, an dem das Ämtchen dran ist; Tage ohne Platz zeigen einen Strich. Der heutige Tag ist hervorgehoben.
 - **Antippen hakt ab.** Erledigt heißt: Gesicht voll und mit Häkchen. Offen heißt: blass. **Ein Haken bleibt** — zurücknehmen geht nicht, und derselbe Platz lässt sich damit auch nicht zweimal abhaken.
@@ -30,10 +30,10 @@ Oben eine Karte je Familienmitglied — Foto, Name, „2/3 erledigt" und ein For
 - **Pause**: wer aussetzt, steht blass mit dem Hinweis da. Das erklärt, warum jemand anders zwei Ämtchen trägt.
 - Die Kachel zeigt **nur die laufende Woche** — der Plan wiederholt sich ja. Wer wissen will, wer nächste Woche dran ist, fragt `CHR_Preview()`.
 - **Symbole und Farben** kommen aus dem Formular: je Ämtchen ein Symbol (Font Awesome) und eine Farbe, je Familienmitglied eine Farbe aus der Mitgliederliste des Gateways. Ohne Wahl nimmt die Kachel eine eingebaute Farbleiter, damit zwei Zeilen nie gleich aussehen.
-- **Ämtchen würfeln.** Der Knopf öffnet ein Blatt: erst ein Ämtchen wählen, das heute ansteht, dann dreht sich ein Glücksrad mit den Gesichtern aller, die dafür in Frage kommen — und wer unter dem Zeiger landet, ist heute dran. Der Platz in der Tabelle wechselt zu dieser Person. Gelost wird im Modul, nicht im Browser: zwei Geräte sehen dasselbe Los. **Je Ämtchen einmal am Tag**; danach zeigt das Blatt nur noch, wer gezogen wurde. Wer aussetzt, ist nicht im Rad. Bei wenigen Mitspielern steht jeder mehrmals auf dem Rad (einer viermal, zwei dreimal, drei und vier zweimal), damit es nach Glücksrad aussieht — an den Chancen ändert das nichts.
+- **Ämtchen auslosen.** Der Knopf öffnet ein Blatt: erst ein Ämtchen wählen, das heute ansteht, dann dreht sich ein Glücksrad mit den Gesichtern aller, die dafür in Frage kommen — und wer unter dem Zeiger landet, ist heute dran. Der Platz in der Tabelle wechselt zu dieser Person. Gelost wird im Modul, nicht im Browser: zwei Geräte sehen dasselbe Los. **Je Ämtchen einmal am Tag**; danach zeigt das Blatt nur noch, wer gezogen wurde. Wer aussetzt, ist nicht im Rad. Bei wenigen Mitspielern steht jeder mehrmals auf dem Rad (einer viermal, zwei dreimal, drei und vier zweimal), damit es nach Glücksrad aussieht — an den Chancen ändert das nichts.
 - **Münzen.** Jedes Ämtchen hat einen Münzwert (Spalte *Münzen* in der Tabelle). Hakt ein **Kind** ab, wandern die Münzen in seinen Beutel — Erwachsene verdienen nichts, und weil ein Haken bleibt, zahlt jeder Platz genau einmal. Der Beutel steht auf der Karte des Kindes; unter *LOS!* steht klein, was ein Dreh kostet.
 - **Drehen kostet.** Ein Dreh am Glücksrad kostet Münzen (*Preis für einmal Drehen*, 0 = kostenlos). Vor der Wahl des Ämtchens fragt das Blatt, **wer bezahlt** — nur Kinder, und nur die mit genug im Beutel. Der Knopf *LOS!* lässt sich nur drücken, wenn mindestens ein Kind zahlen kann und heute noch nicht für alle Ämtchen gedreht wurde; darunter steht, warum nicht. Abgebucht wird erst, wenn das Los steht — ein abgewiesener Dreh kostet nichts.
-- **Was zu sehen ist, entscheidest du**: Übersichtskarten, Gesamtfortschritt, nächste Ämtchen, Schlusswort und Würfel-Kasten lassen sich einzeln abschalten (Kapitel 3). Die Tabelle bleibt immer.
+- **Was zu sehen ist, entscheidest du**: Übersichtskarten, Gesamtfortschritt, nächste Ämtchen, Schlusswort und Glücksrad-Kasten lassen sich einzeln abschalten (Kapitel 3). Die Tabelle bleibt immer.
 
 ## 2. Voraussetzungen
 
@@ -60,7 +60,7 @@ Oben eine Karte je Familienmitglied — Foto, Name, „2/3 erledigt" und ein For
 | Wochenwechsel um | Uhrzeit, zu der die neue Woche beginnt |
 | Preis für einmal Drehen | Was ein Dreh am Glücksrad kostet, in Münzen; 0 = kostenlos, dann fragt das Blatt nicht, wer bezahlt |
 | Übertrag | Nicht erledigte Ämtchen wandern als zusätzliche Plätze in die neue Woche, beim **alten** Zuständigen. Höchstens eine Woche tief. Der Schalter wirkt sofort: ausgeschaltet verschwinden auch die Überträge der laufenden Woche, eingeschaltet sind sie wieder da |
-| Anzeige | Welche Kästen die Kachel zeigt: Übersichtskarten, Gesamtfortschritt, nächste Ämtchen, Schlusswort, Würfel-Kasten |
+| Anzeige | Welche Kästen die Kachel zeigt: Übersichtskarten, Gesamtfortschritt, nächste Ämtchen, Schlusswort, Glücksrad-Kasten |
 
 ## 4. Wie die Rotation rechnet
 

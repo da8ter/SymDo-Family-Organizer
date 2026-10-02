@@ -372,7 +372,7 @@ class SymDoChores extends IPSModuleStrict
                         ['type' => 'CheckBox', 'name' => 'ShowProgress', 'caption' => $this->Translate('Show overall progress')],
                         ['type' => 'CheckBox', 'name' => 'ShowUpNext', 'caption' => $this->Translate('Show the next chores')],
                         ['type' => 'CheckBox', 'name' => 'ShowBanner', 'caption' => $this->Translate('Show the closing note')],
-                        ['type' => 'CheckBox', 'name' => 'ShowWheel', 'caption' => $this->Translate('Show the dice box (wheel of fortune)')],
+                        ['type' => 'CheckBox', 'name' => 'ShowWheel', 'caption' => $this->Translate('Show the wheel of fortune box')],
                     ],
                 ],
             ],
