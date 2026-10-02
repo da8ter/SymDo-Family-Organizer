@@ -43,7 +43,7 @@ function endlos(string $html): array
 
 // An eine Tätigkeit gebunden: laufen nur, solange etwas passiert
 $erlaubt = ['voiceLauschen', 'ai-spin', 'diktatPuls', 'scanner-line-move', 'ladeDreh'];
-$webApp = ['SymDoWebApp', 'SymDoToDoList', 'SymDoShoppingList', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox', 'SymDoEdumaps'];
+$webApp = ['SymDoWebApp', 'SymDoToDoList', 'SymDoShoppingList', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox', 'SymDoBriefing', 'SymDoEdumaps'];
 
 foreach ($webApp as $modul) {
     $html = (string)file_get_contents("$wurzel/$modul/module.html");

@@ -57,7 +57,7 @@ pruefe('Web-App merkt den Wert VOR jeder Umformung und schickt ihn beim Abgleich
 pruefe('Kein 15-s-Takt, wo der Stand einen Pruefwert traegt; der Abgleich beim Sichtbarwerden bleibt',
     [str_contains($web, "    if (kachelStateHash) return;\n    if (document.visibilityState === 'visible') checkRevisions();\n  }, 15000);"),
      str_contains($web, "if (document.visibilityState === 'visible') { checkRevisions(); gatewayNachladen(); }")], [true, true]);
-foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox', 'SymDoEdumaps'] as $m) {
+foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox', 'SymDoBriefing', 'SymDoEdumaps'] as $m) {
     $html = (string)file_get_contents(__DIR__ . '/../../' . $m . '/module.html');
     $php  = (string)file_get_contents(__DIR__ . '/../../' . $m . '/module.php');
     $alle = $php . (is_file(__DIR__ . '/../../' . $m . '/libs/ItemStore.php')

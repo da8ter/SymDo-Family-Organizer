@@ -88,6 +88,10 @@ class SetupPlan
             'name'   => 'SymDo - KI-Eingang',
             'nutzer' => 'DefaultUserID',
         ],
+        'briefing' => [
+            'guid' => '{568937AB-7F27-40DE-9B30-CE24C04107C5}',
+            'name' => 'SymDo - Briefing',
+        ],
         'voice' => [
             'guid'     => '{1F413A34-452C-4A8D-BEFC-CA7CB9DBB1BB}',
             'name'     => 'SymDo - Sprachassistent',

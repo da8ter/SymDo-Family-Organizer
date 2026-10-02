@@ -55,7 +55,7 @@ foreach ($dateien as $datei) {
     }
 }
 pruefe('Jeder message-Listener prueft event.source gegen window und window.parent', $ohneWache, []);
-pruefe('… und es sind die bekannten zwoelf Kacheln', $mitListener, 12);
+pruefe('… und es sind die bekannten dreizehn Kacheln', $mitListener, 13);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

@@ -6365,6 +6365,10 @@ function tabReihenfolge() {
 }
 /** @return {string[]} sichtbare Tabs in der Reihenfolge der Leiste. */
 function visibleTabs() {
+  /* Briefing-Kachel: genau ein Bereich, also keine Leiste. Ohne diesen Riegel
+     haengte die Uebersicht ihre Begleiter an (Nahverkehr, Stundenplan beim
+     Kind) — und mit zwei Bereichen erschien unten die Leiste. */
+  if (store.nurBriefing === true) return ['dashboard'];
   const t = normalizeTabs(window.__SYMDO__ ? window.__SYMDO__.tabs : store.tabs);
   const out = [];
   if (t.dashboard) out.push('dashboard');
@@ -7443,6 +7447,8 @@ function handleMessage(data) {
     store.defaultUserID = data.defaultUserID || '';
     store.gatewayAvailable = !!data.gatewayAvailable;
     store.aiEnabled = !!data.aiEnabled;
+    // Briefing-Kachel (SymDoBriefing): die Uebersicht zeigt nur die Briefing-Karte.
+    store.nurBriefing = data.nurBriefing === true;
     // Sprachdialog: Schalter und Freisprechen-Erlaubnis des Hauses (nur Kachel;
     // die ausgelieferte Web-App liest beides aus window.__SYMDO__).
     store.voiceEnabled = !!data.voiceEnabled;
@@ -11035,9 +11041,62 @@ async function briefingVorlesen() {
   renderDashboard();
 }
 
+/** Die Briefing-Karte der Uebersicht; ohne Text leer. */
+function briefingKarteHtml() {
+  if (!briefingText) return '';
+  const symbol = briefingLaedt ? 'fa-circle-notch fa-spin' : (briefingLaeuft ? 'fa-pause' : 'fa-play');
+  const knopf = briefingTonMoeglich()
+    ? `<button class="briefing-play${briefingLaeuft ? ' laeuft' : ''}" data-briefing="play" ` +
+      `title="${escapeHtml(translate('Read aloud'))}"><i class="fa-light ${symbol}"></i></button>`
+    : '';
+  // Die Ueberschrift traegt beides: die Anrede und den Tag. „Euer" im
+  // Mehrpersonen-Haushalt, weil das Briefing dort auch von den anderen erzaehlt;
+  // am Abend die Kennzeichnung als Vorschau, damit niemand den morgigen Text fuer
+  // den heutigen haelt (dafuer stand vorher eine MORGEN-Marke im Text).
+  const viele = (store.users || []).length > 1;
+  const ueberschrift = briefingVorschau
+    ? translate(viele ? 'Your preview of tomorrow (plural)' : 'Your preview of tomorrow')
+    : translate(viele ? 'Your day (plural)' : 'Your day');
+  // Der Aufklapper steht immer im Markup; briefingKlappHinweis() nimmt ihn nach
+  // dem Zeichnen weg, wenn der Text ohnehin ganz zu sehen ist.
+  // In der Briefing-Kachel ist die Karte der ganze Inhalt: dort ungekappt und
+  // ohne Aufklapper — die Kachel scrollt, wenn der Text laenger ist.
+  const ganz = briefingOffen || store.nurBriefing === true;
+  const klapp = store.nurBriefing === true ? '' : `<button class="briefing-mehr" data-briefing="mehr">` +
+    `${escapeHtml(briefingOffen ? translate('Show less') : translate('Show more'))}` +
+    `<i class="fa-light ${briefingOffen ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></button>`;
+  return `<div class="card briefing-card">` +
+    `<div class="card-head"><h3>${escapeHtml(ueberschrift)}</h3>${knopf}</div>` +
+    `<div class="briefing-text${ganz ? '' : ' gekappt'}">` +
+    `${escapeHtml(briefingText).replace(/\n+/g, '<br><br>')}</div>${klapp}</div>`;
+}
+
+/**
+ * Die Briefing-Kachel (SymDoBriefing): nur die Karte, ohne Kennzahlen, Plan und
+ * Listen. Wiedergabe und Fernstart (PlayBriefing) sind dieselben wie in der
+ * Uebersicht — nur das Zeichnen ist kuerzer.
+ */
+function briefingAllein(el) {
+  const html = briefingKarteHtml() ||
+    `<div class="card briefing-card briefing-leer"><div class="empty-hint">` +
+    `${escapeHtml(translate('There is no briefing to read out yet.'))}</div></div>`;
+  if (!renderInto(el, html)) return;
+  el.querySelectorAll('[data-briefing="play"]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    briefingVorlesen();
+  }));
+  el.querySelectorAll('[data-briefing="mehr"]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    briefingOffen = !briefingOffen;
+    renderDashboard();
+  }));
+  briefingKlappHinweis(el);
+}
+
 // ── Übersicht (Dashboard) ──────────────────────────────────────────────────
 function renderDashboard() {
   const el = document.getElementById('dashboardContent');
+  if (store.nurBriefing) { briefingAllein(el); return; }
   // Ist die Mitglieder-Leiste abgeschaltet, filtert die Uebersicht nicht (die
   // Wache sitzt in memberFiltered). Die Auswahl selbst bleibt bestehen — sie ist
   // bereichsuebergreifend und darf hier nicht fuer alle Tabs geloescht werden.
@@ -11214,30 +11273,7 @@ function renderDashboard() {
 
   // Das Briefing direkt unter den Kacheln: Es erzaehlt genau das, was die Zahlen
   // darueber nur zaehlen. Ohne Text keine Karte — eine leere waere Ballast.
-  if (briefingText) {
-    const symbol = briefingLaedt ? 'fa-circle-notch fa-spin' : (briefingLaeuft ? 'fa-pause' : 'fa-play');
-    const knopf = briefingTonMoeglich()
-      ? `<button class="briefing-play${briefingLaeuft ? ' laeuft' : ''}" data-briefing="play" ` +
-        `title="${escapeHtml(translate('Read aloud'))}"><i class="fa-light ${symbol}"></i></button>`
-      : '';
-    // Die Ueberschrift traegt beides: die Anrede und den Tag. „Euer" im
-    // Mehrpersonen-Haushalt, weil das Briefing dort auch von den anderen erzaehlt;
-    // am Abend die Kennzeichnung als Vorschau, damit niemand den morgigen Text fuer
-    // den heutigen haelt (dafuer stand vorher eine MORGEN-Marke im Text).
-    const viele = (store.users || []).length > 1;
-    const ueberschrift = briefingVorschau
-      ? translate(viele ? 'Your preview of tomorrow (plural)' : 'Your preview of tomorrow')
-      : translate(viele ? 'Your day (plural)' : 'Your day');
-    // Der Aufklapper steht immer im Markup; briefingKlappHinweis() nimmt ihn nach
-    // dem Zeichnen weg, wenn der Text ohnehin ganz zu sehen ist.
-    const klapp = `<button class="briefing-mehr" data-briefing="mehr">` +
-      `${escapeHtml(briefingOffen ? translate('Show less') : translate('Show more'))}` +
-      `<i class="fa-light ${briefingOffen ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></button>`;
-    html += `<div class="card briefing-card">` +
-      `<div class="card-head"><h3>${escapeHtml(ueberschrift)}</h3>${knopf}</div>` +
-      `<div class="briefing-text${briefingOffen ? '' : ' gekappt'}">` +
-      `${escapeHtml(briefingText).replace(/\n+/g, '<br><br>')}</div>${klapp}</div>`;
-  }
+  html += briefingKarteHtml();
 
   // Stundenplan direkt hinter dem Briefing: beides beantwortet die Frage „wie
   // sieht mein Tag aus", und beides steht oben, bevor es um Aufgaben geht.

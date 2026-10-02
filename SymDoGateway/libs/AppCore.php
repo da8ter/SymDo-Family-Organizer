@@ -43,6 +43,8 @@ trait AppCore
     private const HOMEWORK_MODULE_GUID = '{44D18479-4BC8-4468-8F3B-08515D322318}';
     /** SymDoAIInbox — der KI-Eingang als eigene Kachel. */
     private const AIINBOX_MODULE_GUID = '{62F42E2D-BE0A-4490-80C2-CF54355E94C2}';
+    /** SymDoBriefing — das Tagesbriefing als eigene Kachel. */
+    private const BRIEFING_MODULE_GUID = '{568937AB-7F27-40DE-9B30-CE24C04107C5}';
     private const HOOK_PATH            = 'lists/app';
     private const WEBAPP_HOOK_PATH     = 'lists/webapp';
     // Eigener Pfad für den Push-WebSocket. Bewusst getrennt von HOOK_PATH, damit
@@ -854,7 +856,7 @@ trait AppCore
         return in_array($guid, [self::SDWA_MODULE_GUID, self::MEALPLAN_MODULE_GUID,
                                 self::VOICE_MODULE_GUID, self::NOTES_MODULE_GUID,
                                 self::EDUMAPS_MODULE_GUID, self::HOMEWORK_MODULE_GUID,
-                                self::AIINBOX_MODULE_GUID], true);
+                                self::AIINBOX_MODULE_GUID, self::BRIEFING_MODULE_GUID], true);
     }
 
     /**

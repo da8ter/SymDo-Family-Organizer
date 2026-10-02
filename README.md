@@ -76,6 +76,7 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
 | **SymDo - Klassenseiten** | Device | Die Klassenseiten der Schule als eigene Kachel — aus Edumaps und LOGINEO NRW LMS: Karten mit Text, Dateien und Buchungslage, nur lesend |
 | **SymDo - Hausaufgaben** | Device | Die Hausaufgaben der Kinder als eigene Kachel: nach Fälligkeit gruppiert, mit Fachsymbolen, Häkchen und Erledigt-Abschnitt |
 | **SymDo - KI-Eingang** | Device | Der KI-Eingang als eigene Kachel: Vorschläge aus Mails und Klassenseiten prüfen und als Aufgabe, Termin, Hausaufgabe oder Notiz übernehmen |
+| **SymDo - Briefing** | Device | Das Tagesbriefing als eigene Kachel, mit Vorlesen per Knopf oder aus Skripten (`SDBR_PlayBriefing`) |
 
 ## Schnellstart
 
@@ -248,6 +249,17 @@ anpassen oder verwerfen. Mail-Eingang und KI werden im Gateway eingerichtet,
 dort liegen auch die Vorschläge.
 
 → [Ausführliche Anleitung](SymDoAIInbox/README.md)
+
+## SymDo - Briefing
+
+![SymDo — Briefing](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Briefing.png)
+
+Das Tagesbriefing als eigene Kachel: Termine, fällige Aufgaben, Schulzeiten,
+Einkauf und Geburtstage in einem Text, am Abend als Vorschau auf morgen.
+Vorlesen per Knopf oder aus einem Skript (`SDBR_PlayBriefing`). Nichts
+einzurichten — das Briefing entsteht im Gateway.
+
+→ [Ausführliche Anleitung](SymDoBriefing/README.md)
 
 ## SymDo - Essensplan
 

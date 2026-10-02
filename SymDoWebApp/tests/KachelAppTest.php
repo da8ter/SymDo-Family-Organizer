@@ -30,7 +30,7 @@ pruefe('App-Skript beginnt mit der IIFE-Kapselung', str_starts_with($skript, "\n
 pruefe('App-Skript enthält kein schließendes Script-Tag', stripos($skript, '</script') === false);
 pruefe('Version: 16 Hexzeichen, stabil', preg_match('/^[0-9a-f]{16}$/', KachelApp::Version($skript)) === 1 && KachelApp::Version($skript) === KachelApp::Version($skript));
 
-foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox', 'SymDoEdumaps'] as $modul) {
+foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox', 'SymDoBriefing', 'SymDoEdumaps'] as $modul) {
     $kachel = (string) file_get_contents($root . '/' . $modul . '/module.html');
     pruefe("$modul: gleiches App-Skript wie die Web-App (Übernahme gelaufen)", KachelApp::Skript($kachel) === $skript);
     $aus = KachelApp::Auslagern($kachel, $skript);

@@ -72,13 +72,13 @@ pruefe(str_contains($html, "if (q === 'exam') return translate('Source: exam (UN
 $kachel = (string)file_get_contents(__DIR__ . '/../../SymDoTimetable/module.html');
 pruefe(str_contains($kachel, ".stunde.lage-pruefung .fach {") && str_contains($kachel, "symbol(pruefung ? 'fa-file-pen'"),
     'Stundenplan-Kachel: Markierung wie in der Web-App');
-foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox'] as $kopie) {
+foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox', 'SymDoBriefing'] as $kopie) {
     $k = (string)@file_get_contents(__DIR__ . '/../../' . $kopie . '/module.html');
     pruefe(str_contains($k, 'function hwPruefungenHtml(') && str_contains($k, 'data-art="pruefung"'), "Kopie $kopie ist nachgezogen");
 }
 $schluessel = ['Exams', 'Exam', 'exam cancelled', 'Source: exam (UNTIS)', 'Next exam: %1', '%1 day(s) until the exam',
                'Exam today', 'Study start'];
-foreach (['SymDoWebApp', 'SymDoToDoList', 'SymDoShoppingList', 'SymDoHomework', 'SymDoAIInbox', 'SymDoNotes', 'SymDoEdumaps'] as $m) {
+foreach (['SymDoWebApp', 'SymDoToDoList', 'SymDoShoppingList', 'SymDoHomework', 'SymDoAIInbox', 'SymDoBriefing', 'SymDoNotes', 'SymDoEdumaps'] as $m) {
     $de = json_decode((string)file_get_contents(__DIR__ . '/../../' . $m . '/locale.json'), true)['translations']['de'] ?? [];
     pruefe(array_filter($schluessel, static fn($s) => !isset($de[$s])) === [], "Uebersetzungen in $m/locale.json");
 }

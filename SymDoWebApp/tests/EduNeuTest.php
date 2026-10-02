@@ -50,13 +50,13 @@ pruefe('Die Zaehlung liest den Bestand direkt, nicht ueber die Notiz-Helfer',
     [str_contains(substr($html, strpos($html, 'function eduNeuZaehlen('), 900), 'edumaps.folders'),
      str_contains(substr($html, strpos($html, 'function eduNeuZaehlen('), 900), 'notesImOrdner')],
     [true, false]);
-$kopien = ['SymDoShoppingList', 'SymDoToDoList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox'];
+$kopien = ['SymDoShoppingList', 'SymDoToDoList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox', 'SymDoBriefing'];
 pruefe('Alle Kachel-Kopien tragen das Abzeichen (Uebernahme gelaufen)',
     array_map(static fn($m) => str_contains($lesen("$m/module.html"), 'function eduIstNeu'), $kopien),
     array_fill(0, count($kopien), true));
 pruefe('Wortgleiche Kopien sind wortgleich',
-    array_map(static fn($m) => $lesen("$m/module.html") === $html, ['SymDoEdumaps', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox']),
-    [true, true, true, true]);
+    array_map(static fn($m) => $lesen("$m/module.html") === $html, ['SymDoEdumaps', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox', 'SymDoBriefing']),
+    [true, true, true, true, true]);
 pruefe('„New" heisst ueberall „Neu"',
     array_map(static fn($m) => json_decode($lesen("$m/locale.json"), true)['translations']['de']['New'] ?? null,
         array_merge(['SymDoWebApp'], $kopien)),

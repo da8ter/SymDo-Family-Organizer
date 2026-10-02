@@ -64,7 +64,7 @@ pruefe(str_contains($html, 'function hwBlattSchliessen(ctx)') && substr_count($h
     'Speichern und Löschen schließen nur das Blatt, dem die Antwort gilt');
 $locale = json_decode((string)file_get_contents(__DIR__ . '/../locale.json'), true)['translations']['de'] ?? [];
 pruefe(($locale['Pick a subject'] ?? '') === 'Fach wählen', 'locale de: Pick a subject');
-foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox'] as $kopie) {
+foreach (['SymDoToDoList', 'SymDoShoppingList', 'SymDoEdumaps', 'SymDoNotes', 'SymDoHomework', 'SymDoAIInbox', 'SymDoBriefing'] as $kopie) {
     $k = (string)@file_get_contents(__DIR__ . '/../../' . $kopie . '/module.html');
     pruefe(str_contains($k, 'function hwEntwurfAusFund(it, besitzer)') && str_contains($k, 'function mailSortSorte(id, it)'),
         "Kopie $kopie ist nachgezogen");
