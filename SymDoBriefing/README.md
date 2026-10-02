@@ -31,7 +31,7 @@ Einzurichten ist nichts: Das Briefing entsteht im **SymDo Gateway**, die Kachel 
 
 ## 3. Installation
 
-1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/SymDo-Family-Organizer.git`
+1. Bibliothek installieren: im **Module Store** genau nach **SymDo - Family Organizer** suchen. Alternativ über das Module Control mit `https://github.com/da8ter/SymDo-Family-Organizer.git`
 2. Falls noch nicht vorhanden: eine Instanz **SymDo - Gateway** anlegen und das Briefing einrichten
 3. Eine Instanz **SymDo - Briefing** anlegen und in der Kachel-Visualisierung einbinden
 

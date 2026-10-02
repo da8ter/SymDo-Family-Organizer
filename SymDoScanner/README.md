@@ -9,6 +9,8 @@ weiter, aber die Oberfläche steht so lange still, wie ein Abruf dauert.
 
 ## Es gibt nichts einzurichten
 
+**Installation:** Die Bibliothek gibt es im **Module Store** — dort genau nach **SymDo - Family Organizer** suchen. Alternativ über das Module Control mit `https://github.com/da8ter/SymDo-Family-Organizer.git`.
+
 Das **SymDo Gateway** legt seine Scanner selbst an, verbindet sie und trägt
 ein, welche Quellen sie bedienen. Eingerichtet — Konten, Schalter, Zeiten —
 wird alles am Gateway.

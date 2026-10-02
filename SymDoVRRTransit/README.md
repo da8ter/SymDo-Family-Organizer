@@ -112,6 +112,8 @@ bleibt dann leer.
 
 ## 3. Einrichtung
 
+**Installation:** Die Bibliothek gibt es im **Module Store** — dort genau nach **SymDo - Family Organizer** suchen. Alternativ über das Module Control mit `https://github.com/da8ter/SymDo-Family-Organizer.git`.
+
 1. Instanz **SymDo - VRR Transit** anlegen; als übergeordnete Instanz das
    vorhandene SymDo Gateway wählen (die Konsole schlägt es vor).
 2. **Haltestelle suchen** aufklappen, den Ort mit eingeben — das grenzt die

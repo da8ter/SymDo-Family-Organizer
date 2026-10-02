@@ -9,6 +9,8 @@ braucht kein Gateway als Eltern, denn es richtet das Gateway erst ein.
 
 ## Ablauf
 
+**Installation:** Die Bibliothek gibt es im **Module Store** — dort genau nach **SymDo - Family Organizer** suchen. Alternativ über das Module Control mit `https://github.com/da8ter/SymDo-Family-Organizer.git`.
+
 Der Knopf *SymDo-Installationsassistenten starten* öffnet acht Seiten:
 
 1. **Willkommen bei SymDo** — was SymDo mitbringt, und was auf diesem Server

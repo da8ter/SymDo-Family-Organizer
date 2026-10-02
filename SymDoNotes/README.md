@@ -34,7 +34,7 @@ Es gibt **nichts einzurichten**: Die Notizen liegen im **SymDo Gateway**, die Ka
 
 ## 3. Installation
 
-1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/SymDo-Family-Organizer.git`
+1. Bibliothek installieren: im **Module Store** genau nach **SymDo - Family Organizer** suchen. Alternativ über das Module Control mit `https://github.com/da8ter/SymDo-Family-Organizer.git`
 2. Falls noch nicht vorhanden: eine Instanz **SymDo - Gateway** anlegen und die Familienmitglieder eintragen
 3. Eine Instanz **SymDo - Notizen** anlegen und in der Kachel-Visualisierung einbinden
 

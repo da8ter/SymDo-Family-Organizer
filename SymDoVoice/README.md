@@ -50,7 +50,7 @@ Heikle Aktionen — Löschen, Geräte auf der Rückfrage-Liste, Zeitpläne dafü
 
 ## 3. Installation und Einrichtung
 
-1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/SymDo-Family-Organizer.git`
+1. Bibliothek installieren: im **Module Store** genau nach **SymDo - Family Organizer** suchen. Alternativ über das Module Control mit `https://github.com/da8ter/SymDo-Family-Organizer.git`
 2. Im **SymDo - Gateway** den Bereich *Sprachdialog* öffnen: **Sprachdialog aktivieren**, Modell und Stimme wählen, die **Datenschutz-Einwilligung** erteilen. Der OpenAI-Schlüssel ist der der KI-Funktionen
 3. **Testverbindung** im Gateway drücken — sie prägt einen Zugang für zehn Sekunden und beweist Schlüssel und Modellfreigabe, ohne eine Sekunde Ton zu bezahlen
 4. Eine Instanz **SymDo - Sprachassistent** anlegen und in der Kachel-Visualisierung einbinden

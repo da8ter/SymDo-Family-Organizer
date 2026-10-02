@@ -68,6 +68,8 @@ Meldung entsteht.
 
 ## Einrichtung
 
+**Installation:** Die Bibliothek gibt es im **Module Store** — dort genau nach **SymDo - Family Organizer** suchen. Alternativ über das Module Control mit `https://github.com/da8ter/SymDo-Family-Organizer.git`.
+
 1. **Kinder**: Mit SymDo-Gateway gibt es hier nichts anzulegen — die Kinder sind
    genau die Familienmitglieder mit der Rolle **Kind**, in deren Reihenfolge, mit
    Name und Foto von dort. Angelegt, umbenannt und entfernt wird im Gateway;

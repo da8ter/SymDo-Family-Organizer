@@ -35,7 +35,7 @@ Dieses Modul stellt eine kompakte **Übersichts-Kachel** für die Tile-Visualisi
 
 ## 3. Installation
 
-1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/SymDo-Family-Organizer.git`
+1. Bibliothek installieren: im **Module Store** genau nach **SymDo - Family Organizer** suchen. Alternativ über das Module Control mit `https://github.com/da8ter/SymDo-Family-Organizer.git`
 2. In Symcon eine Instanz vom Typ **SymDo - ToDo Liste** anlegen (Datenquelle), falls noch nicht vorhanden
 3. Eine Instanz vom Typ **SymDo - ToDo Übersicht** anlegen
 4. Instanz in der Kachel-Visualisierung einbinden

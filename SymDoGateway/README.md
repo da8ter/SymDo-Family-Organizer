@@ -92,7 +92,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 
 ## 3. Installation
 
-1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/SymDo-Family-Organizer.git`
+1. Bibliothek installieren: im **Module Store** genau nach **SymDo - Family Organizer** suchen. Alternativ über das Module Control mit `https://github.com/da8ter/SymDo-Family-Organizer.git`
 2. Falls noch nicht vorhanden: **SymDo - ToDo Liste**- und **SymDo - Einkaufsliste**-Instanzen anlegen
 3. Eine Instanz **SymDo - Gateway** anlegen
 4. Eine Instanz **SymDo - Web App** anlegen und in der Kachel-Visualisierung einbinden

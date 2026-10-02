@@ -22,8 +22,7 @@ Dieses Modul stellt eine Einkaufsliste für die Tile-Visualisierung bereit.
 
 ## Installation
 
-1. Bibliothek über das Module Control installieren:
-   - `https://github.com/da8ter/SymDo-Family-Organizer.git`
+1. Bibliothek installieren: im **Module Store** genau nach **SymDo - Family Organizer** suchen. Alternativ über das Module Control mit `https://github.com/da8ter/SymDo-Family-Organizer.git`
 2. In Symcon eine Instanz vom Typ **SymDo - Einkaufsliste** anlegen
 3. Instanz in der Kachel-Visualisierung einbinden
 4. Optional im Backend Kategorien, Suchvorschläge und Favoritenlisten konfigurieren

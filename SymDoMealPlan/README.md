@@ -34,6 +34,8 @@ legt die Zutaten in den Einkaufswagen.
 
 ## Einrichtung
 
+**Installation:** Die Bibliothek gibt es im **Module Store** — dort genau nach **SymDo - Family Organizer** suchen. Alternativ über das Module Control mit `https://github.com/da8ter/SymDo-Family-Organizer.git`.
+
 1. Instanz **SymDo - Essensplan** anlegen und die Einkaufsliste wählen.
 2. Die Instanz in die Kachel-Visualisierung einbinden.
 3. Tag antippen, Gericht wählen — fertig.

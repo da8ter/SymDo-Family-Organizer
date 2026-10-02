@@ -42,6 +42,8 @@ Oben eine Karte je Familienmitglied — Foto, Name, „2/3 erledigt" und ein For
 
 ## 3. Einrichtung
 
+**Installation:** Die Bibliothek gibt es im **Module Store** — dort genau nach **SymDo - Family Organizer** suchen. Alternativ über das Module Control mit `https://github.com/da8ter/SymDo-Family-Organizer.git`.
+
 1. Instanz **SymDo - Ämtchenplan** anlegen und in der Kachel-Visualisierung einbinden. Die Konsole schlägt beim Anlegen ein vorhandenes Gateway als übergeordnete Instanz vor
 2. **Teilnehmer** eintragen, in der Reihenfolge, in der rotiert werden soll. *Last* 2 heißt doppelt so viele Ämtchen, *Pause* lässt jemanden aussetzen
 3. **Ämtchen** eintragen: Symbol, Farbe, Name, **an welchen Wochentagen** (ein Haken je Tag), wer in Frage kommt — alle Teilnehmer, nur die Kinder, nur die Erwachsenen oder eine feste Person — und ob der Kreis **wöchentlich oder täglich** weiterrückt
