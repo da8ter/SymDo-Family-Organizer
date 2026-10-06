@@ -64,6 +64,9 @@ class SymDoVoice extends IPSModuleStrict
         // die laufende Anfrage eines Sprachgeräts (nonce, gewinner, quelle).
         $this->RegisterAttributeInteger('EspBereit', 0);
         $this->RegisterAttributeString('EspStand', '');
+        // Kopplung: offener Code (Hash, Frist, Versuche) und die Hashes der gekoppelten Browser
+        $this->RegisterAttributeString('EspCode', '');
+        $this->RegisterAttributeString('EspKopplungen', '[]');
     }
 
     public function ApplyChanges(): void
@@ -124,7 +127,10 @@ class SymDoVoice extends IPSModuleStrict
             // Ton über das Tablet — nur die beiden Wege des BROWSERS. Was vom
             // Sprachgerät kommt, läuft über SDVC_Geraet* (siehe libs/EspTablet.php).
             case 'EspHier':
-                $this->WriteAttributeInteger('EspBereit', time());
+                $this->EspHier((string)$Value);
+                return;
+            case 'EspKoppeln':
+                $this->EspKoppeln((string)$Value);
                 return;
             case 'EspMic':
                 $this->EspMic((string)$Value);
@@ -242,6 +248,8 @@ class SymDoVoice extends IPSModuleStrict
                 'caption' => $this->Translate('More settings appear after the next Symcon restart.')];
         }
 
+        $elements = array_merge($elements, $this->EspFormular());
+
         // Die Messergebnisse der Machbarkeitsprobe (Etappe 0) bleiben ablesbar.
         $zeilen = [];
         foreach ((array)json_decode((string)@$this->ReadAttributeString('ProbeResult'), true) as $b) {
@@ -350,6 +358,7 @@ class SymDoVoice extends IPSModuleStrict
             'freisprechen' => $this->FreisprechenErlaubt(),
             'weckwort'     => $this->WeckwortImHaus(),
             'espMikro'     => $this->EspGeraete() !== [],
+            'instanz'      => $this->InstanceID,
         ];
     }
 

@@ -169,6 +169,70 @@ class TabletCalc
             && ($stand['geheim'] ?? '') !== '' && hash_equals((string)$stand['geheim'], $geheim);
     }
 
+    // ── Kopplung: nur gekoppelte Browser dürfen ein Gespräch übernehmen ──────
+
+    /** So lange gilt ein Kopplungscode. */
+    public const CODE_SEKUNDEN = 600;
+    /** Danach ist der Code verbraucht (1 zu 200 000 für Raten). */
+    public const CODE_VERSUCHE = 5;
+    /** Höchstens so viele gekoppelte Browser; der älteste fällt heraus. */
+    public const KOPPLUNGEN_MAX = 10;
+
+    /** @return array{code:string, stand:array{hash:string, bis:int, versuche:int}} */
+    public static function NeuerCode(int $jetzt): array
+    {
+        $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        return ['code' => $code, 'stand' => ['hash' => hash('sha256', $code), 'bis' => $jetzt + self::CODE_SEKUNDEN, 'versuche' => 0]];
+    }
+
+    /**
+     * Eingegebenen Code prüfen.
+     * @param array{hash?:string, bis?:int, versuche?:int}|null $stand
+     * @return array{ok:bool, grund:string, stand:?array}  stand null = Code weg (verbraucht, abgelaufen, zu oft falsch)
+     */
+    public static function CodePruefen(?array $stand, string $eingabe, int $jetzt): array
+    {
+        if (!is_array($stand) || ($stand['hash'] ?? '') === '' || (int)($stand['bis'] ?? 0) < $jetzt) {
+            return ['ok' => false, 'grund' => 'kein_code', 'stand' => null];
+        }
+        if (preg_match('/^[0-9]{6}$/', $eingabe) === 1 && hash_equals((string)$stand['hash'], hash('sha256', $eingabe))) {
+            return ['ok' => true, 'grund' => '', 'stand' => null];   // einmal verwendbar
+        }
+        $stand['versuche'] = (int)($stand['versuche'] ?? 0) + 1;
+        return ['ok' => false, 'grund' => 'falsch', 'stand' => $stand['versuche'] >= self::CODE_VERSUCHE ? null : $stand];
+    }
+
+    /** Token, den der Browser bei der Kopplung selbst erzeugt (32 Byte Hex). */
+    public static function TokenGueltig(string $hex): bool
+    {
+        return preg_match('/^[0-9a-f]{64}$/', $hex) === 1;
+    }
+
+    /** @param list<array{hash:string}> $liste */
+    public static function Gekoppelt(array $liste, string $token): bool
+    {
+        if (!self::TokenGueltig($token)) {
+            return false;
+        }
+        $h = hash('sha256', $token);
+        $treffer = false;
+        foreach ($liste as $k) {
+            $treffer = (is_array($k) && hash_equals((string)($k['hash'] ?? ''), $h)) || $treffer;
+        }
+        return $treffer;
+    }
+
+    /**
+     * @param list<array{hash:string, name:string, at:int}> $liste
+     * @return list<array{hash:string, name:string, at:int}>
+     */
+    public static function Koppeln(array $liste, string $token, string $name, int $jetzt): array
+    {
+        $name = trim((string)preg_replace('/[^\p{L}\p{N} .,()\/_-]+/u', '', mb_substr($name, 0, 60)));
+        $liste[] = ['hash' => hash('sha256', $token), 'name' => $name !== '' ? $name : 'Browser', 'at' => $jetzt];
+        return array_values(array_slice($liste, -self::KOPPLUNGEN_MAX));
+    }
+
     public static function Bereit(int $letztesZeichen, int $jetzt): bool
     {
         return $letztesZeichen > 0 && $jetzt - $letztesZeichen <= self::BEREIT_SEKUNDEN;

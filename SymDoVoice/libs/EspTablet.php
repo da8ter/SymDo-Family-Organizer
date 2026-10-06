@@ -12,6 +12,11 @@ declare(strict_types=1);
  * nicht über RequestAction — dessen Idents kann jeder Browser der Visu rufen.
  * Der Ton geht verschlüsselt mit dem Schlüssel des führenden Browsers hinaus:
  * Kachel-Pushes erreichen jeden offenen Visu-Client.
+ *
+ * Nur GEKOPPELTE Browser zählen als bereit und dürfen übernehmen: Symcon
+ * unterscheidet die Browser einer Visu nicht, also beweist jeder seine
+ * Kopplung mit einem eigenen Token. Den Code dafür gibt es nur im
+ * Instanzformular (SDVC_EspKoppelCode), nie über RequestAction.
  */
 trait EspTablet
 {
@@ -93,6 +98,97 @@ trait EspTablet
                      'name' => (string)($w['name'] ?? '')]);
     }
 
+    /** @return list<array{hash:string, name:string, at:int}> */
+    private function EspKopplungen(): array
+    {
+        $l = json_decode((string)@$this->ReadAttributeString('EspKopplungen'), true);
+        return is_array($l) ? array_values(array_filter($l, 'is_array')) : [];
+    }
+
+    /** Kopplungscode für das Instanzformular (SDVC_EspKoppelCode). */
+    public function EspKoppelCode(): string
+    {
+        $neu = TabletCalc::NeuerCode(time());
+        $this->WriteAttributeString('EspCode', (string)json_encode($neu['stand']));
+        return sprintf($this->Translate("Pairing code: %s\n\nValid for 10 minutes and only once. Open this tile on the tablet and enter the code there."), $neu['code']);
+    }
+
+    /** Alle gekoppelten Browser vergessen (SDVC_EspEntkoppeln). */
+    public function EspEntkoppeln(): string
+    {
+        $this->WriteAttributeString('EspKopplungen', '[]');
+        $this->WriteAttributeString('EspCode', '');
+        $this->WriteAttributeInteger('EspBereit', 0);
+        // Ein laufendes Tablet-Gespräch endet sofort: das Mikrofon am Gerät geht zu.
+        $stand = $this->EspStand();
+        if ($stand['gewinner'] !== '') {
+            $this->MicAnGeraet($stand['quelle'], 'stop', $stand['nonce']);
+            $this->Push(['type' => 'espEnde', 'nonce' => $stand['nonce']]);
+        }
+        $this->WriteAttributeString('EspStand', '');
+        $this->Push(['type' => 'espKopplung', 'client' => '*', 'ok' => false]);
+        @$this->ReloadForm();
+        return $this->Translate('All pairings removed. Tablets have to be paired again.');
+    }
+
+    /** Browser gibt den Code ein und bringt seinen selbst erzeugten Token mit. */
+    private function EspKoppeln(string $json): void
+    {
+        $m = json_decode($json, true);
+        $client = is_array($m) ? (string)($m['client'] ?? '') : '';
+        $token = is_array($m) ? (string)($m['token'] ?? '') : '';
+        if (!TabletCalc::ClientGueltig($client) || !TabletCalc::TokenGueltig($token)) {
+            return;
+        }
+        $stand = json_decode((string)$this->ReadAttributeString('EspCode'), true);
+        $p = TabletCalc::CodePruefen(is_array($stand) ? $stand : null, (string)($m['code'] ?? ''), time());
+        $this->WriteAttributeString('EspCode', $p['stand'] === null ? '' : (string)json_encode($p['stand']));
+        if ($p['ok']) {
+            $this->WriteAttributeString('EspKopplungen', (string)json_encode(
+                TabletCalc::Koppeln($this->EspKopplungen(), $token, (string)($m['name'] ?? ''), time())));
+            $this->WriteAttributeInteger('EspBereit', time());
+            $this->LogMessage('SymDo Voice: Browser für das Sprachgerät gekoppelt', KL_NOTIFY);
+            @$this->ReloadForm();
+        }
+        // Der Token selbst geht nie hinaus — nur ob es geklappt hat.
+        $this->Push(['type' => 'espKopplung', 'client' => $client, 'ok' => $p['ok'], 'grund' => $p['grund']]);
+    }
+
+    /** Lebenszeichen: zählt nur von einem gekoppelten Browser. */
+    private function EspHier(string $json): void
+    {
+        $m = json_decode($json, true);
+        $token = is_array($m) ? (string)($m['token'] ?? '') : '';
+        if (TabletCalc::Gekoppelt($this->EspKopplungen(), $token)) {
+            $this->WriteAttributeInteger('EspBereit', time());
+            return;
+        }
+        $client = is_array($m) ? (string)($m['client'] ?? '') : '';
+        if (TabletCalc::ClientGueltig($client)) {
+            $this->Push(['type' => 'espKopplung', 'client' => $client, 'ok' => false, 'grund' => 'unbekannt']);
+        }
+    }
+
+    /** Formularteil: nur wenn ein Sprachgerät diese Kachel gewählt hat. */
+    private function EspFormular(): array
+    {
+        if ($this->EspGeraete() === []) {
+            return [];
+        }
+        $zeilen = [['type' => 'Label', 'caption' => $this->Translate('A voice device uses this tile as speaker. Only paired browsers may take over its conversations — anyone who takes over hears the room.')]];
+        foreach ($this->EspKopplungen() as $k) {
+            $zeilen[] = ['type' => 'Label', 'caption' => '• ' . (string)($k['name'] ?? '') . ' — ' . date('d.m.Y H:i', (int)($k['at'] ?? 0))];
+        }
+        if (count($zeilen) === 1) {
+            $zeilen[] = ['type' => 'Label', 'caption' => $this->Translate('No browser paired yet.')];
+        }
+        $zeilen[] = ['type' => 'RowLayout', 'items' => [
+            ['type' => 'Button', 'caption' => $this->Translate('Pair tablet'), 'onClick' => 'echo SDVC_EspKoppelCode($id);'],
+            ['type' => 'Button', 'caption' => $this->Translate('Remove all pairings'), 'onClick' => 'echo SDVC_EspEntkoppeln($id);'],
+        ]];
+        return [['type' => 'ExpansionPanel', 'caption' => $this->Translate('Voice device: paired tablets'), 'expanded' => true, 'items' => $zeilen]];
+    }
+
     /** Ein Browser sagt zu, hält das Mikrofon offen oder beendet. */
     private function EspMic(string $json): void
     {
@@ -109,7 +205,9 @@ trait EspTablet
             // Ohne Schlüssel keine Zusage: der Ton ginge sonst lesbar an alle Fenster.
             $schluessel = (string)($m['schluessel'] ?? '');
             $geheim = (string)($m['geheim'] ?? '');
+            // Und nur von einem gekoppelten Browser: sonst hörte jeder Visu-Client den Raum.
             $z = TabletCalc::SchluesselGueltig($schluessel) && TabletCalc::GeheimGueltig($geheim)
+                && TabletCalc::Gekoppelt($this->EspKopplungen(), (string)($m['token'] ?? ''))
                 ? TabletCalc::Zusage(['nonce' => $stand['nonce'], 'gewinner' => $stand['gewinner']], $nonce, $client)
                 : ['weiter' => false];
             if ($z['weiter']) {

@@ -137,6 +137,20 @@ body.blob #status { background: color-mix(in srgb, var(--bg) 70%, transparent); 
   100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--lausch) 0%, transparent); }
 }
 @media (prefers-reduced-motion: reduce) { #lauschAn .welle { animation: none; } }
+/* Kopplung mit einem Sprachgerät (esp-mikro.js): nur sichtbar, solange dieser
+   Browser nicht gekoppelt ist. Stil wie die Web-App-Knöpfe. */
+#espKoppeln { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 0;
+  padding: 10px 12px; border-radius: 12px; font-size: 13px;
+  background: color-mix(in srgb, var(--text) 7%, transparent); position: relative; z-index: 3; }
+#espKoppeln[hidden] { display: none; }
+#espKoppeln span { flex: 1 1 160px; color: var(--dezent); }
+#espKoppeln input { width: 7.5em; font: inherit; font-size: 15px; letter-spacing: .2em; text-align: center;
+  color: var(--text); background: color-mix(in srgb, var(--text) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); border-radius: 12px; padding: 7px 8px; }
+#espKoppeln button { border: 0; border-radius: 12px; padding: 8px 14px; font: inherit; font-weight: 600;
+  background: var(--akzent); color: #fff; cursor: pointer; }
+body.blob #espKoppeln { position: absolute; left: var(--sym-ms); right: var(--sb-pad);
+  bottom: calc(var(--sym-mb) + 64px); margin: 0; }
 </style>
 <div id="wrap">
   <div id="kopf">
@@ -147,6 +161,11 @@ body.blob #status { background: color-mix(in srgb, var(--bg) 70%, transparent); 
 „Was steht morgen an?" oder „Was ist noch auf der Einkaufsliste?"</div></div>
   <!-- Alternative Darstellung: die tonreagierende Blase (voice-blob.js füllt sie). -->
   <div id="buehne" hidden></div>
+  <div id="espKoppeln" hidden>
+    <span>Sprachgerät: dieses Tablet koppeln — Code aus der Instanz der Kachel</span>
+    <input id="espCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" aria-label="Kopplungscode">
+    <button type="button" id="espKoppelnKnopf">Koppeln</button>
+  </div>
   <div id="fuss">
     <!-- Unuebersehbar, solange das Mikrofon fuer das Weckwort offen steht. Der
          Plan verlangt das ausdruecklich: Dauerlauschen darf man nie uebersehen.
@@ -542,6 +561,7 @@ var Freihand = (function () {
 if (window.SymDoEspMikro) {
   espMikro = SymDoEspMikro.erzeuge({
     kern: kern,
+    koppelUi: { panel: el('espKoppeln'), eingabe: el('espCode'), knopf: el('espKoppelnKnopf') },
     senden: function (ident, wert) {
       try { if (typeof requestAction === 'function') { requestAction(ident, wert); } } catch (e) {}
     },
@@ -577,7 +597,7 @@ function handleMessage(daten) {
     return;
   }
   if (espMikro && Object.prototype.hasOwnProperty.call(daten, 'espMikro')) {
-    espMikro.aktivieren(daten.espMikro === true);
+    espMikro.aktivieren(daten.espMikro === true, Number(daten.instanz) || 0);
   }
   /* type 'state': bislang trägt er nur die gewählte Darstellung. */
   if (daten.darstellung) { Blase.modus(daten.darstellung); }

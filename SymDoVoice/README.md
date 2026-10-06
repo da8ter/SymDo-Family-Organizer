@@ -97,14 +97,16 @@ Die Erkennung läuft **auf dem Gerät**. Solange das Weckwort nicht gefallen ist
 Ein **SymDo-Sprachgerät** (ESP32, Modul *SymDo - Sprachgerät*) kann für diese Kachel das Mikrofon sein. Weckwort und Fernfeld-Mikrofon kommen vom Gerät, die Antwort kommt aus dem Tablet.
 
 1. In der Instanz des Sprachgeräts unter **Ton über Tablet** diese Kachel wählen.
-2. Die Kachel auf dem Tablet geöffnet lassen. Nach dem Laden **einmal auf die Kachel tippen**, solange sie „Einmal tippen: Ton fürs Sprachgerät freigeben" zeigt. Browser spielen Ton erst nach einer Berührung ab.
+2. **Tablet koppeln:** In der Instanz dieser Kachel unter *Sprachgerät: gekoppelte Tablets* auf **Tablet koppeln** drücken. Es erscheint ein 6-stelliger Code, 10 Minuten und nur einmal gültig. Am Tablet zeigt die Kachel ein Eingabefeld, dort den Code eingeben. Ein Tablet muss das nur einmal tun, es merkt sich die Kopplung.
+3. Die Kachel auf dem Tablet geöffnet lassen. Nach dem Laden **einmal auf die Kachel tippen**, solange sie „Einmal tippen: Ton fürs Sprachgerät freigeben" zeigt. Browser spielen Ton erst nach einer Berührung ab.
 
 Danach gilt:
 - Weckwort oder Taste am Gerät startet das Gespräch in der Kachel.
 - Eine zweite Taste am Gerät oder ein Tipp auf den Knopf der Kachel beendet es.
 - Ist keine Kachel bereit (Tablet aus, Visu zu, Ton nicht freigegeben), spricht das Gerät wie gewohnt selbst. Wartezeit: sofort, wenn sich seit 75 Sekunden keine Kachel gemeldet hat, sonst höchstens 2,5 Sekunden.
 - Sind mehrere Browser mit der Kachel offen, übernimmt der erste. Nur er kann das Gespräch halten oder beenden, und nur er kann den Ton entschlüsseln.
-- **Wer übernehmen darf:** Jeder Browser, der diese Kachel in seiner Visu hat, kann ein Gespräch übernehmen und hört dann den Raum. Symcon unterscheidet die Browser einer Visu nicht. Legt die Kachel deshalb nur in die Visualisierung des Tablets, mit eigenem Zugang, und nicht in eine Visu, die über Connect von außen erreichbar ist.
+- **Wer übernehmen darf:** nur gekoppelte Browser. Wer ein Gespräch übernimmt, hört den Raum. Andere Fenster mit dieser Kachel sehen nur das Eingabefeld für den Code. Den Code gibt es nur im Instanzformular, also nur für jemanden mit Zugang zur Symcon-Konsole.
+- **Kopplung aufheben:** *Alle Kopplungen aufheben* im Instanzformular. Danach müssen alle Tablets neu gekoppelt werden. Die Liste darüber zeigt, welche Browser gekoppelt sind und wann. Gespeichert wird je Browser nur ein Hash; den Schlüssel selbst kennt nur der Browser (localStorage). Löscht der Browser seine Website-Daten, muss er neu gekoppelt werden.
 - Solange SymDo spricht, und eine knappe Sekunde danach, geht vom Gerät Stille zum Anbieter. Sonst hörte die KI sich selbst aus dem Tablet. Dazwischenreden geht in dieser Betriebsart deshalb nicht.
 - Weil das Mikrofon vom Gerät kommt, braucht die Kachel keine Mikrofon-Freigabe im Browser. Sie funktioniert so auch in einer Visu über die lokale http-Adresse.
 

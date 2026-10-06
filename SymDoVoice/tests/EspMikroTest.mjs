@@ -125,17 +125,51 @@ const kern = window.SymDoVoiceKern.erzeuge({
 const gesendet = [];
 let hinweis = '';
 let esp = null;
-esp = E.erzeuge({ kern, senden: (i, w) => gesendet.push([i, w]), onHinweis: (t) => { hinweis = t; } });
+// Kopplungsfeld und localStorage als Attrappen
+const speicher = new Map();
+globalThis.localStorage = { getItem: (k) => (speicher.has(k) ? speicher.get(k) : null), setItem: (k, v) => speicher.set(k, String(v)), removeItem: (k) => speicher.delete(k) };
+const knopfListener = {};
+const ui = {
+  panel: { hidden: true },
+  eingabe: { value: '', addEventListener() {} },
+  knopf: { addEventListener(art, fn) { knopfListener[art] = fn; } },
+};
+esp = E.erzeuge({ kern, koppelUi: ui, senden: (i, w) => gesendet.push([i, w]), onHinweis: (t) => { hinweis = t; } });
+const letzte = (ident) => { const z = gesendet.filter(([i]) => i === ident); return z.length ? JSON.parse(z[z.length - 1][1]) : null; };
 
-esp.aktivieren(true);
-pruefe(hinweis.includes('tippen'), 'ohne Ton-Freigabe: Hinweis zum Tippen');
-pruefe(!gesendet.some(([i]) => i === 'EspHier'), 'ohne Ton-Freigabe: kein Lebenszeichen (Gerät spricht selbst)');
-esp.nachricht({ type: 'espWake', nonce: 'abcd1234' });
-pruefe(!gesendet.some(([i]) => i === 'EspMic'), 'ohne Ton-Freigabe: Weckwort wird nicht angenommen');
-
+esp.aktivieren(true, 12173);
+pruefe(ui.panel.hidden === false, 'ungekoppelt: Kopplungsfeld sichtbar');
 tonZustand = 'running';
 dokListener.pointerdown.forEach((f) => f());
-pruefe(hinweis === '' && gesendet.some(([i]) => i === 'EspHier'), 'nach dem Tippen: Hinweis weg, Lebenszeichen gesendet');
+pruefe(!gesendet.some(([i]) => i === 'EspHier'), 'ungekoppelt: kein Lebenszeichen, auch mit freigegebenem Ton (Gerät spricht selbst)');
+esp.nachricht({ type: 'espWake', nonce: 'aaaa0000' });
+pruefe(!gesendet.some(([i]) => i === 'EspMic'), 'ungekoppelt: Weckruf wird nicht angenommen');
+
+ui.eingabe.value = '12 34';
+knopfListener.click();
+pruefe(!gesendet.some(([i]) => i === 'EspKoppeln') && hinweis.includes('6-stellig'), 'zu kurzer Code: nichts gesendet, Hinweis');
+ui.eingabe.value = '123456';
+knopfListener.click();
+const kopp = letzte('EspKoppeln');
+pruefe(kopp && kopp.code === '123456' && /^[0-9a-f]{64}$/.test(kopp.token) && kopp.name.length > 0, 'Kopplung: Code, selbst erzeugter Token und Gerätename gehen ans Modul');
+esp.nachricht({ type: 'espKopplung', client: 'fremdesfenster', ok: true });
+pruefe(!esp.gekoppelt(), 'Antwort für ein anderes Fenster zählt nicht');
+esp.nachricht({ type: 'espKopplung', client: kopp.client, ok: false, grund: 'falsch' });
+esp.nachricht({ type: 'espKopplung', client: kopp.client, ok: false, grund: 'falsch' });
+pruefe(!esp.gekoppelt() && hinweis.includes('falsch') && ui.panel.hidden === false, 'falscher Code (doppelt zugestellt): Hinweis bleibt stehen');
+knopfListener.click();
+const kopp2 = letzte('EspKoppeln');
+pruefe(kopp2.token !== kopp.token, 'jeder Versuch mit frischem Token');
+esp.nachricht({ type: 'espKopplung', client: kopp2.client, ok: true });
+esp.nachricht({ type: 'espKopplung', client: kopp2.client, ok: true });
+pruefe(esp.gekoppelt() && speicher.get('symdo.espMikro.token.12173') === kopp2.token && ui.panel.hidden === true, 'gekoppelt: Token im localStorage je Instanz, Feld weg');
+const lebenszeichen = letzte('EspHier');
+pruefe(lebenszeichen && lebenszeichen.token === kopp2.token && lebenszeichen.client === kopp2.client, 'gekoppelt: Lebenszeichen mit Token');
+
+// Neu laden: Token kommt aus dem Speicher
+const esp2 = E.erzeuge({ kern, koppelUi: { panel: { hidden: true }, eingabe: { value: '', addEventListener() {} }, knopf: { addEventListener() {} } }, senden: () => {} });
+esp2.aktivieren(true, 12173);
+pruefe(esp2.gekoppelt(), 'nach dem Neuladen gekoppelt (localStorage)');
 
 esp.nachricht({ type: 'espWake', nonce: 'abcd1234' });
 const zusage = gesendet.filter(([i]) => i === 'EspMic').map(([, w]) => JSON.parse(w));
@@ -143,6 +177,7 @@ pruefe(zusage.length === 1 && zusage[0].aktion === 'start' && zusage[0].nonce ==
 const ich = zusage[0].client;
 pruefe(/^[0-9a-f]{64}$/.test(zusage[0].schluessel || ''), 'Zusage trägt einen frischen 32-Byte-Schlüssel');
 pruefe(/^[0-9a-f]{32}$/.test(zusage[0].geheim || ''), 'Zusage trägt ein Geheimnis für stop/keep');
+pruefe(zusage[0].token === kopp2.token, 'Zusage trägt den Kopplungs-Token');
 const schluesselVon = (nonce) => {
   const z = gesendet.filter(([i, w]) => i === 'EspMic' && JSON.parse(w).aktion === 'start' && JSON.parse(w).nonce === nonce).map(([, w]) => JSON.parse(w));
   return z.length ? Buffer.from(z[z.length - 1].schluessel, 'hex') : null;
@@ -229,6 +264,14 @@ pruefe(kern.istOffen(), 'eigenes Gespräch läuft (Vorbedingung)');
 const vorher = gesendet.length;
 esp.nachricht({ type: 'espWake', nonce: 'dead0003' });
 pruefe(gesendet.length === vorher, 'laufendes Gespräch (eigenes Mikrofon): Weckwort des Geräts wird nicht angenommen');
+
+// Ein unbekannter Token (z. B. in einer anderen Symcon-Instanz entkoppelt) wird verworfen
+esp.nachricht({ type: 'espKopplung', client: ich, ok: false, grund: 'falsch' });
+pruefe(esp.gekoppelt(), 'späte Fehlermeldung ohne laufende Code-Eingabe ändert die Kopplung nicht');
+
+// Alle Kopplungen aufgehoben: Token weg, Feld wieder da
+esp.nachricht({ type: 'espKopplung', client: '*', ok: false });
+pruefe(!esp.gekoppelt() && !speicher.has('symdo.espMikro.token.12173') && ui.panel.hidden === false, 'entkoppelt: Token gelöscht, Kopplungsfeld wieder sichtbar');
 
 console.log((fehler === 0 ? 'OK' : 'FEHLER') + ' — ' + zahl + ' Prüfungen, ' + fehler + ' fehlgeschlagen');
 process.exit(fehler === 0 ? 0 : 1);

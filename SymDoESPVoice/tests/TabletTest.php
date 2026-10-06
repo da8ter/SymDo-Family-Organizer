@@ -89,8 +89,31 @@ pruefe(!TabletCalc::DarSteuern($mitGeheim, '0a1b2c3d', 'fenster1', '') && !Table
 pruefe(TabletCalc::GeheimGueltig(str_repeat('ab', 16)) && !TabletCalc::GeheimGueltig('ab') && !TabletCalc::GeheimGueltig(str_repeat('AB', 16)), 'Geheimnis: 16 Byte Hex');
 pruefe(TabletCalc::Bereit(1000, 1070) && !TabletCalc::Bereit(1000, 1100) && !TabletCalc::Bereit(0, 5), 'Lebenszeichen gilt 75 s');
 
+// ── Kopplung ───────────────────────────────────────────────────────────────
+$c = TabletCalc::NeuerCode(1000);
+pruefe(preg_match('/^[0-9]{6}$/', $c['code']) === 1 && $c['stand']['bis'] === 1600 && !str_contains(json_encode($c['stand']), $c['code']), 'Code: 6 Ziffern, 10 Minuten, nur der Hash wird gespeichert');
+pruefe(TabletCalc::CodePruefen($c['stand'], $c['code'], 1100) === ['ok' => true, 'grund' => '', 'stand' => null], 'richtiger Code: ok und danach verbraucht');
+pruefe(TabletCalc::CodePruefen($c['stand'], $c['code'], 1601)['ok'] === false, 'abgelaufener Code zählt nicht');
+pruefe(TabletCalc::CodePruefen(null, $c['code'], 1100)['grund'] === 'kein_code', 'ohne offenen Code: abgewiesen');
+$st = $c['stand'];
+$falsch = $c['code'] === '000000' ? '000001' : '000000';
+for ($i = 1; $i <= 4; $i++) {
+    $r = TabletCalc::CodePruefen($st, $falsch, 1100);
+    $st = $r['stand'];
+}
+pruefe(is_array($st) && $st['versuche'] === 4, 'Fehlversuche werden gezählt');
+$r = TabletCalc::CodePruefen($st, $falsch, 1100);
+pruefe($r['stand'] === null && TabletCalc::CodePruefen($r['stand'], $c['code'], 1100)['ok'] === false, 'nach 5 Fehlversuchen ist der Code weg, auch der richtige zählt nicht mehr');
+$T1 = str_repeat('a1', 32);
+$liste = TabletCalc::Koppeln([], $T1, 'iPad Safari<script>', 1000);
+pruefe(TabletCalc::Gekoppelt($liste, $T1) && !TabletCalc::Gekoppelt($liste, str_repeat('b2', 32)) && !TabletCalc::Gekoppelt($liste, ''), 'nur der gekoppelte Token zählt');
+pruefe(!str_contains(json_encode($liste), $T1) && $liste[0]['name'] === 'iPad Safariscript', 'gespeichert wird der Hash, der Name ohne Sonderzeichen');
+for ($i = 0; $i < 12; $i++) { $liste = TabletCalc::Koppeln($liste, str_pad(dechex($i), 64, 'c', STR_PAD_LEFT), 'x', 2000 + $i); }
+pruefe(count($liste) === TabletCalc::KOPPLUNGEN_MAX && !TabletCalc::Gekoppelt($liste, $T1), 'höchstens 10 Kopplungen, die älteste fällt heraus');
+
 // ── Symcon-Attrappen ───────────────────────────────────────────────────────
 const KR_READY = 10103;
+const KL_NOTIFY = 10203;
 $GLOBALS['aufrufe'] = [];
 $GLOBALS['instanzen'] = [];   // id => ['modul' => GUID, 'cfg' => []]
 function SDEV_MicSteuern(int $id, string $json): void { $GLOBALS['aufrufe'][] = [$id, 'Mic', $json]; }
@@ -134,9 +157,15 @@ class KachelAttrappe
 {
     use EspTablet;
     public int $InstanceID = 30000;
-    public array $attr = ['EspBereit' => 0, 'EspStand' => ''];
+    public array $attr = ['EspBereit' => 0, 'EspStand' => '', 'EspCode' => '', 'EspKopplungen' => '[]'];
     public array $pushes = [];
     public function ReadAttributeInteger(string $n): int { return (int)$this->attr[$n]; }
+    public function WriteAttributeInteger(string $n, int $w): void { $this->attr[$n] = $w; }
+    public function Translate(string $t): string { return $t; }
+    public function LogMessage(string $t, int $a): void {}
+    public function ReloadForm(): void {}
+    public function hier(string $j): void { $this->EspHier($j); }
+    public function koppeln(string $j): void { $this->EspKoppeln($j); }
     public function ReadAttributeString(string $n): string { return (string)$this->attr[$n]; }
     public function WriteAttributeString(string $n, string $w): void { $this->attr[$n] = $w; }
     public function Push(array $d): void { $this->pushes[] = $d; }
@@ -188,6 +217,26 @@ $k->wake('{"sdev":20000,"nonce":"0a1b2c3d","hf":true}');
 $a = $GLOBALS['aufrufe'][0] ?? [];
 pruefe(($a[0] ?? 0) === 20000 && ($a[1] ?? '') === 'Mic' && json_decode((string)$a[2], true) === ['aktion' => 'nein', 'nonce' => '0a1b2c3d'] && $k->pushes === [], 'kein Browser bereit: Kachel lehnt ab');
 
+// Lebenszeichen und Kopplung über die Kachel
+$TK = str_repeat('7e', 32);
+$k->hier('{"token":"' . $TK . '","client":"fenstera"}');
+pruefe($k->attr['EspBereit'] === 0 && ($k->pushes[0]['type'] ?? '') === 'espKopplung' && $k->pushes[0]['ok'] === false, 'Lebenszeichen ohne Kopplung zählt nicht, Browser erfährt es');
+$k->pushes = [];
+$k->koppeln('{"code":"123456","client":"fenstera","token":"' . $TK . '","name":"iPad"}');
+pruefe(($k->pushes[0]['grund'] ?? '') === 'kein_code' && $k->attr['EspKopplungen'] === '[]', 'ohne Code aus dem Formular keine Kopplung');
+$text = $k->EspKoppelCode();
+preg_match('/([0-9]{6})/', $text, $treffer);
+$k->pushes = [];
+$k->koppeln('{"code":"' . $treffer[1] . '","client":"fenstera","token":"' . $TK . '","name":"iPad Safari"}');
+pruefe(($k->pushes[0] ?? []) === ['type' => 'espKopplung', 'client' => 'fenstera', 'ok' => true, 'grund' => ''] && $k->attr['EspCode'] === '', 'Code aus dem Formular koppelt, danach verbraucht');
+pruefe(!str_contains((string)json_encode($k->pushes), $TK) && !str_contains($k->attr['EspKopplungen'], $TK), 'der Token wird weder gepusht noch im Klartext gespeichert');
+$k->koppeln('{"code":"' . $treffer[1] . '","client":"fensterb","token":"' . str_repeat('8f', 32) . '","name":"Handy"}');
+pruefe(count(json_decode($k->attr['EspKopplungen'], true)) === 1, 'derselbe Code koppelt kein zweites Gerät');
+$k->attr['EspBereit'] = 0;
+$k->hier('{"token":"' . $TK . '","client":"fenstera"}');
+pruefe($k->attr['EspBereit'] > 0, 'gekoppelt: Lebenszeichen zählt');
+$k->pushes = [];
+
 // Fremde Instanz darf kein Weckwort einspeisen
 $GLOBALS['aufrufe'] = [];
 $k->attr['EspBereit'] = time();
@@ -203,12 +252,16 @@ $SA = str_repeat('1a', 32);
 $GA = str_repeat('3c', 16);
 $k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fensterx","schluessel":"' . $SA . '"}');
 pruefe($GLOBALS['aufrufe'] === [], 'Zusage ohne Geheimnis zählt nicht');
-$k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fenstera","schluessel":"' . $SA . '","geheim":"' . $GA . '"}');
-$k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fensterb","schluessel":"' . str_repeat('2b', 32) . '","geheim":"' . str_repeat('4d', 16) . '"}');
+$k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fensterz","schluessel":"' . $SA . '","geheim":"' . $GA . '"}');
+pruefe($GLOBALS['aufrufe'] === [], 'Zusage ohne Kopplungs-Token zählt nicht (ungekoppelter Visu-Client)');
+$k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fensterz","schluessel":"' . $SA . '","geheim":"' . $GA . '","token":"' . str_repeat('8f', 32) . '"}');
+pruefe($GLOBALS['aufrufe'] === [], 'Zusage mit erfundenem Token zählt nicht');
+$k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fenstera","schluessel":"' . $SA . '","geheim":"' . $GA . '","token":"' . $TK . '"}');
+$k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fensterb","schluessel":"' . str_repeat('2b', 32) . '","geheim":"' . str_repeat('4d', 16) . '","token":"' . $TK . '"}');
 $starts = array_values(array_filter($GLOBALS['aufrufe'], static fn($x) => $x[1] === 'Mic'));
 pruefe(count($starts) === 1 && json_decode((string)$starts[0][2], true) === ['aktion' => 'start', 'nonce' => '0a1b2c3d'], 'nur eine Zusage geht ans Gerät');
 $gew = array_values(array_filter($k->pushes, static fn($p) => $p['type'] === 'espGewaehlt'));
-pruefe(count($gew) === 4 && $gew[2]['client'] === 'fenstera' && $gew[3]['client'] === 'fenstera', 'alle Fenster erfahren: A führt');
+pruefe(count($gew) === 6 && $gew[4]['client'] === 'fenstera' && $gew[5]['client'] === 'fenstera', 'alle Fenster erfahren: A führt');
 pruefe(!str_contains((string)json_encode($k->pushes), $GA) && !str_contains((string)json_encode($k->pushes), $SA), 'Schlüssel und Geheimnis von A werden nie gepusht');
 $k->pushes = [];
 $k->GeraetTon(base64_encode("\x00\x05" . $ton));
@@ -229,14 +282,29 @@ $GLOBALS['aufrufe'] = [];
 $k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fensterc"}');
 pruefe($GLOBALS['aufrufe'] === [], 'nach dem Ende öffnet eine späte Zusage kein Mikrofon');
 
+// Alle Kopplungen aufheben — mitten in einem Gespräch
+$k->attr['EspBereit'] = time();
+$k->wake('{"sdev":20000,"nonce":"0b0b0b0b"}');
+$k->mic('{"aktion":"start","nonce":"0b0b0b0b","client":"fenstera","schluessel":"' . $SA . '","geheim":"' . $GA . '","token":"' . $TK . '"}');
+$GLOBALS['aufrufe'] = [];
+$k->pushes = [];
+$k->EspEntkoppeln();
+$stops = array_values(array_filter($GLOBALS['aufrufe'], static fn($x) => $x[1] === 'Mic' && json_decode((string)$x[2], true)['aktion'] === 'stop'));
+pruefe(count($stops) === 1 && ($k->pushes[0]['type'] ?? '') === 'espEnde' && $k->attr['EspStand'] === '', 'Entkoppeln beendet ein laufendes Tablet-Gespräch sofort');
+$k->pushes = [];
+$k->GeraetTon(base64_encode("\x00\x09" . $ton));
+pruefe($k->pushes === [], 'danach geht kein Ton mehr hinaus');
+$k->hier('{"token":"' . $TK . '","client":"fenstera"}');
+pruefe($k->attr['EspKopplungen'] === '[]' && $k->attr['EspBereit'] === 0, 'Entkoppeln: alle Browser vergessen, keiner mehr bereit');
+
 // Riegel auf die Modul-Dateien
 $sdev = (string)file_get_contents(__DIR__ . '/../module.php');
 $voice = (string)file_get_contents(__DIR__ . '/../../SymDoVoice/module.php');
 pruefe(str_contains($sdev, 'SetReceiveDataFilter(TabletCalc::Filter($geraet))'), 'SDEV empfängt Ereignis und Mikrofon');
 $weiter = (string)file_get_contents(__DIR__ . '/../libs/TabletWeiterleitung.php');
 pruefe(!str_contains($sdev, "case 'Mic':") && str_contains($weiter, 'public function MicSteuern(string $Json): void'), 'Gerätebefehle nur über SDEV_MicSteuern, nicht über RequestAction');
-pruefe(str_contains($voice, "case 'EspHier':") && str_contains($voice, "case 'EspMic':") && !preg_match("/case 'Esp(Wake|Audio|Ende)'/", $voice),
-    'Kachel: der Browser erreicht nur EspHier und EspMic');
+pruefe(str_contains($voice, "case 'EspHier':") && str_contains($voice, "case 'EspMic':") && str_contains($voice, "case 'EspKoppeln':")
+    && !preg_match("/case 'Esp(Wake|Audio|Ende|KoppelCode|Entkoppeln)'/", $voice), 'Kachel: der Browser erreicht nur EspHier, EspMic und EspKoppeln — keinen Code');
 pruefe(!str_contains($weiter, 'IPS_RequestAction') && !str_contains((string)file_get_contents(__DIR__ . '/../../SymDoVoice/libs/EspTablet.php'), 'IPS_RequestAction'),
     'zwischen Gerät und Kachel kein RequestAction');
 pruefe(str_contains($voice, "esp-mikro.js"), 'Kachel liefert esp-mikro.js mit');

@@ -15,6 +15,12 @@
  * Ohne freigegebenen Ton (Autoplay-Sperre) meldet sich die Kachel nicht als
  * bereit: das Gerät spricht dann selbst.
  *
+ * Kopplung: Nur ein gekoppelter Browser zählt als bereit und darf übernehmen —
+ * wer übernimmt, hört den Raum. Den Code gibt es im Instanzformular; der
+ * Browser erzeugt dazu einen eigenen Token und hebt ihn im localStorage auf.
+ *   Kachel → EspKoppeln {code, client, token, name}
+ *   Modul → {type:'espKopplung', client, ok, grund}   ('*' = alle entkoppelt)
+ *
  * Die Visu stellt jede Nachricht ZWEIMAL zu (handleMessage und postMessage,
  * gemessen 06.10.2026). Für Zustände egal, für Ton nicht: Pakete werden nach
  * ihrer Nummer entdoppelt, ein Weckruf nur einmal beantwortet. */
@@ -141,6 +147,7 @@ function erzeuge(opt) {
   var senden = opt.senden;                       // (ident, wert) → requestAction
   var kern = opt.kern;
   var aufHinweis = opt.onHinweis || function () {};
+  var ui = opt.koppelUi || null;          // {panel, eingabe, knopf}
   var client = Math.random().toString(36).slice(2, 12) + Date.now().toString(36).slice(-4);
 
   var aktiv = false;          // ein Sprachgerät hat diese Kachel gewählt
@@ -154,6 +161,9 @@ function erzeuge(opt) {
   var letzterWeckruf = '';
   var schluessel = null;      // je Gespräch neu, verlässt das Fenster nur zum Modul
   var geheim = '';            // dito; beweist stop/keep — die Fensterkennung kennen alle
+  var instanz = 0;
+  var token = '';             // Kopplung dieses Browsers (nur Modul und localStorage kennen ihn)
+  var neuerToken = '';        // während der Code-Eingabe
 
   function jetzt() { return Date.now(); }
   function zufall(n) { var b = new Uint8Array(n); crypto.getRandomValues(b); return b; }
@@ -162,11 +172,45 @@ function erzeuge(opt) {
   function tonBereit() { return !!(ctx && ctx.state === 'running'); }
 
   function bereitMelden() {
-    if (aktiv && tonBereit() && !document.hidden) { senden('EspHier', ''); }
+    if (aktiv && token && tonBereit() && !document.hidden) {
+      senden('EspHier', JSON.stringify({ token: token, client: client }));
+    }
   }
 
   function hinweisPruefen() {
-    aufHinweis(aktiv && !tonBereit() ? 'Einmal tippen: Ton fürs Sprachgerät freigeben' : '');
+    if (ui) { ui.panel.hidden = !(aktiv && !token); }
+    aufHinweis(aktiv && token && !tonBereit() ? 'Einmal tippen: Ton fürs Sprachgerät freigeben' : '');
+  }
+
+  function speicherSchluessel() { return 'symdo.espMikro.token.' + (instanz || 0); }
+  function tokenLaden() {
+    try { token = String(localStorage.getItem(speicherSchluessel()) || ''); } catch (e) { token = token || ''; }
+    if (!/^[0-9a-f]{64}$/.test(token)) { token = ''; }
+  }
+  function tokenSetzen(t) {
+    token = t;
+    try { if (t) { localStorage.setItem(speicherSchluessel(), t); } else { localStorage.removeItem(speicherSchluessel()); } } catch (e) {}
+  }
+
+  /* Kurzer Name fürs Instanzformular, damit man die Kopplungen auseinanderhält. */
+  function geraeteName() {
+    var ua = String((navigator && navigator.userAgent) || '');
+    var geraet = /iPad/.test(ua) ? 'iPad' : /iPhone/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android'
+      : /Mac OS X/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : 'Gerät';
+    var browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome'
+      : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+    return geraet + ' ' + browser;
+  }
+
+  function koppeln() {
+    var code = String((ui && ui.eingabe.value) || '').replace(/\D/g, '');
+    if (code.length !== 6) { aufHinweis('Bitte den 6-stelligen Code aus der Instanz eingeben.'); return; }
+    neuerToken = hex(zufall(32));
+    senden('EspKoppeln', JSON.stringify({ code: code, client: client, token: neuerToken, name: geraeteName() }));
+  }
+  if (ui) {
+    ui.knopf.addEventListener('click', koppeln);
+    ui.eingabe.addEventListener('keydown', function (e) { if (e.key === 'Enter') { koppeln(); } });
   }
 
   /* Autoplay: ohne Geste bleibt ein AudioContext „suspended". Jede Berührung
@@ -186,8 +230,9 @@ function erzeuge(opt) {
     bereitMelden();
   }
 
-  function aktivieren(ja) {
+  function aktivieren(ja, inst) {
     aktiv = !!ja;
+    if (inst && inst !== instanz) { instanz = inst; tokenLaden(); }
     if (bereitUhr) { clearInterval(bereitUhr); bereitUhr = 0; }
     if (aktiv) {
       tonFreigeben();
@@ -260,12 +305,12 @@ function erzeuge(opt) {
     switch (d.type) {
       case 'espWake':
         if (d.nonce === letzterWeckruf) { return true; }
-        if (!aktiv || !tonBereit() || document.hidden || kern.istOffen() || laufend) { return true; }
+        if (!aktiv || !token || !tonBereit() || document.hidden || kern.istOffen() || laufend) { return true; }
         letzterWeckruf = angebot = String(d.nonce || '');
         schluessel = zufall(32);
         geheim = hex(zufall(16));
         senden('EspMic', JSON.stringify({ aktion: 'start', nonce: angebot, client: client,
-          schluessel: hex(schluessel), geheim: geheim }));
+          schluessel: hex(schluessel), geheim: geheim, token: token }));
         return true;
       case 'espGewaehlt':
         if (!angebot || d.nonce !== angebot) { return true; }
@@ -282,6 +327,24 @@ function erzeuge(opt) {
         puffer.rein(p.werte);
         return true;
       }
+      case 'espKopplung':
+        if (d.client !== client && d.client !== '*') { return true; }
+        if (d.ok === true && neuerToken) {
+          tokenSetzen(neuerToken);
+          neuerToken = '';
+          if (ui) { ui.eingabe.value = ''; }
+          tonFreigeben();
+          aufHinweis('Gekoppelt — das Sprachgerät kann jetzt über dieses Tablet sprechen.');
+        } else if (d.client === '*' || d.grund === 'unbekannt') {
+          tokenSetzen('');   // Kopplung aufgehoben oder unbekannt
+          hinweisPruefen();
+        } else if (neuerToken && d.ok !== true) {
+          neuerToken = '';
+          aufHinweis(d.grund === 'falsch' ? 'Code falsch.' : 'Kein gültiger Code — bitte in der Instanz einen neuen erzeugen.');
+          if (ui) { ui.panel.hidden = false; }
+        }
+        /* Alles andere ist die zweite Zustellung derselben Antwort. */
+        return true;
       case 'espEnde':
         if (laufend && d.nonce === laufend) {
           beenden(false);
@@ -301,7 +364,8 @@ function erzeuge(opt) {
     aktivieren: aktivieren,
     nachricht: nachricht,
     zustand: zustand,
-    laeuft: function () { return !!laufend; }
+    laeuft: function () { return !!laufend; },
+    gekoppelt: function () { return !!token; }
   };
 }
 

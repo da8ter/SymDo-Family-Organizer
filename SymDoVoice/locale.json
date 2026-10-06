@@ -15,7 +15,14 @@
       "Clear reports": "Berichte löschen",
       "Tile view": "Kacheldarstellung",
       "Conversation (text)": "Gesprächsverlauf (Text)",
-      "Animated blob (reacts to the voice)": "Animierte Blase (reagiert auf die Stimme)"
+      "Animated blob (reacts to the voice)": "Animierte Blase (reagiert auf die Stimme)",
+      "Pairing code: %s\n\nValid for 10 minutes and only once. Open this tile on the tablet and enter the code there.": "Kopplungscode: %s\n\n10 Minuten und nur einmal gültig. Diese Kachel am Tablet öffnen und den Code dort eingeben.",
+      "All pairings removed. Tablets have to be paired again.": "Alle Kopplungen aufgehoben. Tablets müssen neu gekoppelt werden.",
+      "A voice device uses this tile as speaker. Only paired browsers may take over its conversations — anyone who takes over hears the room.": "Ein Sprachgerät nutzt diese Kachel als Lautsprecher. Nur gekoppelte Browser dürfen seine Gespräche übernehmen – wer übernimmt, hört den Raum.",
+      "No browser paired yet.": "Noch kein Browser gekoppelt.",
+      "Pair tablet": "Tablet koppeln",
+      "Remove all pairings": "Alle Kopplungen aufheben",
+      "Voice device: paired tablets": "Sprachgerät: gekoppelte Tablets"
     },
     "en": {
       "SymDo Voice": "SymDo - Voice Assistant"
