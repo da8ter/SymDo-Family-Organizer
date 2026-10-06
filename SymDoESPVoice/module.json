@@ -1,0 +1,12 @@
+{
+    "id": "{DDF91F65-36AE-4539-BBFC-6F1F1D943A9E}",
+    "name": "SymDo ESPVoice",
+    "type": 3,
+    "vendor": "Stephan Sprick",
+    "aliases": [],
+    "parentRequirements": ["{043EA491-0325-4ADD-8FC2-A30C8EEB4D3F}"],
+    "childRequirements": [],
+    "implemented": ["{7F7632D9-FA40-4F38-8DEA-C83CD4325A32}"],
+    "prefix": "SDEV",
+    "url": "https://github.com/da8ter/SymDo-Family-Organizer/tree/main/SymDoESPVoice"
+}
