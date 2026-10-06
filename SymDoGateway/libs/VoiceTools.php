@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 // Das Zeitraum-Enum von verlauf_lesen steht in der reinen Rechenklasse.
 require_once __DIR__ . '/VoiceVerlaufCalc.php';
+require_once __DIR__ . '/VoiceGeraetProfilCalc.php';
 
 /**
  * Sprachdialog — Werkzeugschicht.
@@ -568,6 +569,12 @@ trait VoiceTools
            Sitzung aufhält, die geprägt wurde, bevor jemand den Schalter umlegte
            oder die Einwilligung widerrief. */
         if (($katalog[$name]['tor'] ?? '') === 'geraete') {
+            /* Sprachgeraet ohne Schalterlaubnis (Profil am Geraeteeintrag): auch
+               dann zu, wenn das Modell das Werkzeug trotzdem aufruft. */
+            if (($ctx['geraete'] ?? true) === false) {
+                $this->VoiceLogEintrag($name, 'Gerätesteuerung für dieses Sprachgerät nicht erlaubt', false);
+                return $this->VoiceErr('nicht_erlaubt', $this->Translate('This voice device may not control devices.'));
+            }
             $zu = $this->VoiceGeraeteTorZu();
             if ($zu !== null) {
                 $this->VoiceLogEintrag($name, 'Gerätesteuerung gesperrt: ' . (string)($zu['error']['code'] ?? '?'), false);
@@ -3286,7 +3293,7 @@ trait VoiceTools
      * Der Systemteil der Sitzung: wer spricht, wer zum Haushalt gehört, welche
      * Listen es gibt — KEINE Kennungen, KEINE Inhalte. Deckel 1200 Zeichen.
      */
-    private function VoiceInstructions(string $userId): string
+    private function VoiceInstructions(string $userId, string $raum = '', bool $geraeteErlaubt = true): string
     {
         $wer = '';
         $familie = [];
@@ -3318,7 +3325,8 @@ trait VoiceTools
             }
         }
         // Gerätesteuerung: nur bei offenem Riegel kennt der Prompt die Werkzeuge.
-        $geraete = $this->VoiceGeraeteOk();
+        // Ein Sprachgeraet ohne Schalterlaubnis (Profil) bekommt die Geraete gar nicht erst angeboten.
+        $geraete = $geraeteErlaubt && $this->VoiceGeraeteOk();
         $zeilen = [
             'Du bist SymDo, der Sprachassistent dieses Haushalts. Sprich Deutsch, antworte in ein bis zwei kurzen Sätzen, außer man bittet um mehr oder es geht um eine Erklärung aus dem Handbuch — dort nimmst du drei bis fünf Sätze.',
             'Heute ist ' . $this->VoiceDatumZeile() . '.',
@@ -3377,6 +3385,9 @@ trait VoiceTools
         $zeilen[] = 'Sprich wie ein Mensch, nicht wie ein Programm. Erzähle NIEMALS, was du technisch tust: keine Werkzeug- oder Funktionsnamen, keine Kennungen, keine Bestätigungscodes, kein "ich suche den Termin über den Titel", kein "ich bereite das Löschen vor". Wenn etwas einen Moment dauert, sage höchstens "einen Moment" — und sonst nichts.';
         $zeilen[] = 'Beim Hinzufügen von Einkäufen teile jeden Artikel in drei Felder: "name" nur der reine Artikel, "menge" nur die Zahl bzw. Maßangabe, "info" das Gebinde und alle Zusätze. Beispiel: "5 Dosen Cola im Karton" → name "Cola", menge "5", info "Dosen im Karton". "2 Liter Milch" → name "Milch", menge "2 Liter", info null.';
         $zeilen[] = 'Beim Löschen gilt IMMER zwei Schritte: Rufe loeschen zuerst OHNE marke auf; du bekommst eine Rückfrage und eine "marke" zurück, aber es ist noch NICHTS gelöscht. Sprich die Rückfrage, warte auf ein klares Ja und rufe loeschen dann erneut mit genau dieser marke auf. Bei Nein oder Unsicherheit rufe nicht erneut auf und erfinde niemals eine marke.';
+        if ($geraete && VoiceGeraetProfilCalc::RaumHinweis($raum) !== '') {
+            $zeilen[] = VoiceGeraetProfilCalc::RaumHinweis($raum);
+        }
         if ($geraete) {
             $zeilen[] = 'Bei Geräten gilt: Nenne sie beim Namen und gib "raum" mit, wenn der Nutzer einen Raum sagt. Meldet das Werkzeug mehrere Treffer, frag, welches gemeint ist, und rate nie. Manche Geräte verlangen eine Rückfrage: geraet_steuern oder szene_starten antworten dann mit einer Frage und einer "marke", und es ist noch NICHTS geschaltet. Sprich die Frage, warte auf ein klares Ja und rufe dasselbe Werkzeug erneut mit genau dieser marke auf. Bei Nein oder Unsicherheit rufe nicht erneut auf und erfinde niemals eine marke. Sagt das Werkzeug, der Sprechende dürfe das nicht, sage genau das freundlich und suche keinen anderen Weg.';
             $zeilen[] = 'Für später oder regelmäßig nimm zeitplan_anlegen, nie geraet_steuern: "in 55 Minuten" → nach_minuten 55; eine Uhrzeit → uhrzeit als HH:MM; "jeden Tag"/"täglich" → wiederholung taeglich, "werktags", "am Wochenende" oder einzelne Tage → woechentlich mit wochentage; sonst "keine" (einmalig; ohne Datum heißt das heute, wenn die Zeit noch kommt, sonst morgen). Dabei wird JETZT nichts geschaltet; wiederhole in deiner Antwort, was wann geschaltet wird. "Licht an für 10 Minuten" sind zwei Schritte: sofort geraet_steuern an, dann zeitplan_anlegen aus mit nach_minuten 10. Geplantes zeigt zeitplaene_lesen, weg damit geht zeitplan_loeschen — bei mehreren Treffern nenne sie und frag, welcher gemeint ist.';

@@ -129,6 +129,47 @@ trait DeviceRegistry
         $this->RefreshDeviceListFormField();
     }
 
+    /**
+     * Sprachprofil eines gekoppelten Sprachgeraets (ESP32) setzen: Mitglied,
+     * Raum, Schalterlaubnis. Leeres Profil ("") entfernt es — das Geraet gilt
+     * dann wieder als normale App. Siehe VoiceGeraetProfilCalc.
+     *
+     * Profile: {"userId":"…","raum":"Küche","geraete":true}
+     */
+    public function SetDeviceVoiceProfile(string $DeviceId, string $Profile): bool
+    {
+        $deviceId = trim($DeviceId);
+        if ($deviceId === '') {
+            return false;
+        }
+        $roh = trim($Profile);
+        $profil = null;
+        if ($roh !== '') {
+            $daten = json_decode($roh, true);
+            if (!is_array($daten)) {
+                return false;
+            }
+            $profil = VoiceGeraetProfilCalc::Normalisieren($daten);
+        }
+        $gefunden = false;
+        $ok = $this->ModifyPairedDevices(function (array $devices) use ($deviceId, $profil, &$gefunden): array {
+            foreach ($devices as &$device) {
+                if (($device['id'] ?? '') === $deviceId) {
+                    $gefunden = true;
+                    if ($profil === null) {
+                        unset($device['voice']);
+                    } else {
+                        $device['voice'] = $profil;
+                    }
+                }
+            }
+            unset($device);
+            return $devices;
+        });
+        $this->RefreshDeviceListFormField();
+        return $ok && $gefunden;
+    }
+
     public function RemoveRevokedDevices(): void
     {
         $this->ModifyPairedDevices(static function (array $devices): array {
@@ -516,6 +557,9 @@ trait DeviceRegistry
                 'status'     => ($device['revoked'] ?? false) === true
                     ? $this->Translate('Revoked')
                     : $this->Translate('Active'),
+                'voice'      => is_array($device['voice'] ?? null)
+                    ? trim((string)($device['voice']['raum'] ?? '') . ' ' . (string)($device['voice']['userId'] ?? ''))
+                    : '',
                 'push'       => (string)($device['pushEndpoint'] ?? '') === ''
                     ? '—'
                     : $this->Translate('On'),

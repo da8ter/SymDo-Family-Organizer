@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/VoiceLiveCalc.php';
+require_once __DIR__ . '/VoiceGeraetProfilCalc.php';
 
 /**
  * Sprachdialog (SymDo Voice) — Sitzungsseite.
@@ -257,6 +258,9 @@ trait Voice
 
     private function VoiceHandleAction(array $body, ?array $device): array
     {
+        /* Sprachgeraet mit Profil (ESP32): Mitglied, Raum, Schalterlaubnis und
+           Kachel kommen vom Geraeteeintrag, nicht aus dem Rumpf. */
+        $body = VoiceGeraetProfilCalc::Anwenden($body, $device);
         $action = (string)($body['action'] ?? '');
         switch ($action) {
             case 'open':
@@ -528,7 +532,8 @@ trait Voice
             return ['ok' => true, 'live' => true, 'model' => VoiceLiveCalc::MODELL, 'ttl' => $ttl,
                     'sessionSeconds' => max(30, $sitzung), 'pingSeconds' => 30];
         }
-        $r = $this->VoiceMintSecret($ttl, (string)($body['userId'] ?? ''));
+        $r = $this->VoiceMintSecret($ttl, (string)($body['userId'] ?? ''),
+            (string)($body['_raum'] ?? ''), ($body['_geraete'] ?? true) !== false);
         if (!($r['ok'] ?? false)) {
             return $r;
         }
@@ -587,6 +592,8 @@ trait Voice
             'tile'      => (int)($body['tile'] ?? 0),
             'userId'    => (string)($body['userId'] ?? ''),
             'defaults'  => is_array($body['defaults'] ?? null) ? $body['defaults'] : [],
+            // Sprachgeraet ohne Schalterlaubnis — gilt fuer jeden Werkzeugaufruf der Sitzung.
+            'geraete'   => ($body['_geraete'] ?? true) !== false,
             'startedAt' => time(),
             'lastPing'  => time(),
             'accrued'   => time(),
@@ -648,6 +655,8 @@ trait Voice
         /* Die call_id des MODELLAUFRUFS (nicht die der Sitzung): sie ist der
            Schluessel gegen eine doppelt zugestellte Anfrage. */
         $ctx['fnId'] = (string)($body['fnId'] ?? '');
+        $ctx['geraete'] = (($anruf['geraete'] ?? null) ?? ($body['_geraete'] ?? true)) !== false
+            && ($body['_geraete'] ?? true) !== false;
         $name = (string)($body['name'] ?? '');
         $args = $body['arguments'] ?? '{}';
         return $this->VoiceRunTool($name, is_string($args) ? $args : (string)json_encode($args), $ctx);
@@ -668,7 +677,7 @@ trait Voice
     // ------------------------------------------------------------------
 
     /** @return array<string,mixed> */
-    private function VoiceMintSecret(int $seconds, string $userId = ''): array
+    private function VoiceMintSecret(int $seconds, string $userId = '', string $raum = '', bool $geraete = true): array
     {
         $key = trim((string) $this->AiProp('AiOpenAIKey'));
         if ($key === '') {
@@ -683,7 +692,7 @@ trait Voice
             'session' => [
                 'type'  => 'realtime',
                 'model' => $modell,
-                'instructions' => $this->VoiceInstructions($userId),
+                'instructions' => $this->VoiceInstructions($userId, $raum, $geraete),
                 'output_modalities' => ['audio'],
                 'audio' => [
                     'input' => [
@@ -750,7 +759,7 @@ trait Voice
         $rumpf = VoiceLiveCalc::SitzungsRumpf([
             'sprech'           => VoiceLiveCalc::SprechAnweisung($this->VoiceNameVon($userId), $this->VoiceDatumZeile()),
             'backend'          => trim($this->ReadPropertyString('VoiceLiveBackend')),
-            'backendAnweisung' => $this->VoiceInstructions($userId),
+            'backendAnweisung' => $this->VoiceInstructions($userId, (string)($body['_raum'] ?? ''), ($body['_geraete'] ?? true) !== false),
             'werkzeuge'        => $this->VoiceToolSpec(),
             'stimme'           => trim($this->ReadPropertyString('VoiceLiveVoice')),
         ], $sdp);

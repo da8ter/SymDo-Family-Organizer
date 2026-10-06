@@ -93,7 +93,7 @@ pruefe(str_contains($voice, 'v1/realtime/client_secrets'), 'Voice.php: Realtime-
 $liveSdp = substr($voice, strpos($voice, 'private function VoiceLiveSdp'), 2600);
 pruefe(str_contains($liveSdp, 'VoiceTorZu()') && str_contains($liveSdp, 'VoiceBudgetLeft()'), 'livesdp: Einwilligung + Budget geprüft');
 pruefe(str_contains($liveSdp, "str_starts_with(\$sdp, 'v=')") && str_contains($liveSdp, '65536'), 'livesdp: SDP geprüft und begrenzt');
-pruefe(str_contains($liveSdp, 'VoiceInstructions($userId)') && str_contains($liveSdp, 'VoiceToolSpec()'), 'livesdp: dieselbe Anweisung und dieselben Werkzeuge wie Realtime');
+pruefe(str_contains($liveSdp, 'VoiceInstructions($userId, (string)($body[\'_raum\']') && str_contains($liveSdp, 'VoiceToolSpec()'), 'livesdp: dieselbe Anweisung (mit Geräteprofil) und dieselben Werkzeuge wie Realtime');
 
 $kern = (string)file_get_contents(__DIR__ . '/../libs/voice-core.js');
 pruefe(str_contains($kern, 'function handschlagLive('), 'Kern: Live-Handschlag');
