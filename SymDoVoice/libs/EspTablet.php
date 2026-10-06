@@ -17,6 +17,11 @@ declare(strict_types=1);
  * unterscheidet die Browser einer Visu nicht, also beweist jeder seine
  * Kopplung mit einem eigenen Token. Den Code dafür gibt es nur im
  * Instanzformular (SDVC_EspKoppelCode), nie über RequestAction.
+ *
+ * Offener Code und Gesprächsschlüssel liegen in Instanz-Puffern, nicht in
+ * Attributen: Attribute stehen im Klartext in der für alle lesbaren
+ * settings.json. Antworten an einen Browser tragen seine zufällige
+ * Anfragekennung (rid) — die Fensterkennung allein kennen alle Fenster.
  */
 trait EspTablet
 {
@@ -38,7 +43,7 @@ trait EspTablet
     /** @return array{nonce:string, gewinner:string, quelle:int} */
     private function EspStand(): array
     {
-        $s = json_decode((string)@$this->ReadAttributeString('EspStand'), true);
+        $s = json_decode($this->GetBuffer('EspStand'), true);
         return [
             'nonce'    => is_array($s) ? (string)($s['nonce'] ?? '') : '',
             'gewinner' => is_array($s) ? (string)($s['gewinner'] ?? '') : '',
@@ -74,7 +79,7 @@ trait EspTablet
         $e = json_decode($Json, true);
         $stand = $this->EspStand();
         if (is_array($e) && ($e['nonce'] ?? '') !== '' && ($e['nonce'] ?? '') === $stand['nonce']) {
-            $this->WriteAttributeString('EspStand', '');
+            $this->SetBuffer('EspStand', '');
             $this->Push(['type' => 'espEnde', 'nonce' => $stand['nonce']]);
         }
     }
@@ -93,7 +98,7 @@ trait EspTablet
             $this->MicAnGeraet($sdev, 'nein', $nonce);
             return;
         }
-        $this->WriteAttributeString('EspStand', (string)json_encode(['nonce' => $nonce, 'gewinner' => '', 'quelle' => $sdev]));
+        $this->SetBuffer('EspStand', (string)json_encode(['nonce' => $nonce, 'gewinner' => '', 'quelle' => $sdev]));
         $this->Push(['type' => 'espWake', 'nonce' => $nonce, 'hf' => ($w['hf'] ?? false) === true,
                      'name' => (string)($w['name'] ?? '')]);
     }
@@ -109,7 +114,7 @@ trait EspTablet
     public function EspKoppelCode(): string
     {
         $neu = TabletCalc::NeuerCode(time());
-        $this->WriteAttributeString('EspCode', (string)json_encode($neu['stand']));
+        $this->SetBuffer('EspCode', (string)json_encode($neu['stand']));
         return sprintf($this->Translate("Pairing code: %s\n\nValid for 10 minutes and only once. Open this tile on the tablet and enter the code there."), $neu['code']);
     }
 
@@ -117,7 +122,7 @@ trait EspTablet
     public function EspEntkoppeln(): string
     {
         $this->WriteAttributeString('EspKopplungen', '[]');
-        $this->WriteAttributeString('EspCode', '');
+        $this->SetBuffer('EspCode', '');
         $this->WriteAttributeInteger('EspBereit', 0);
         // Ein laufendes Tablet-Gespräch endet sofort: das Mikrofon am Gerät geht zu.
         $stand = $this->EspStand();
@@ -125,7 +130,7 @@ trait EspTablet
             $this->MicAnGeraet($stand['quelle'], 'stop', $stand['nonce']);
             $this->Push(['type' => 'espEnde', 'nonce' => $stand['nonce']]);
         }
-        $this->WriteAttributeString('EspStand', '');
+        $this->SetBuffer('EspStand', '');
         $this->Push(['type' => 'espKopplung', 'client' => '*', 'ok' => false]);
         @$this->ReloadForm();
         return $this->Translate('All pairings removed. Tablets have to be paired again.');
@@ -137,12 +142,23 @@ trait EspTablet
         $m = json_decode($json, true);
         $client = is_array($m) ? (string)($m['client'] ?? '') : '';
         $token = is_array($m) ? (string)($m['token'] ?? '') : '';
-        if (!TabletCalc::ClientGueltig($client) || !TabletCalc::TokenGueltig($token)) {
+        $rid = is_array($m) ? (string)($m['rid'] ?? '') : '';
+        if (!TabletCalc::ClientGueltig($client) || !TabletCalc::TokenGueltig($token) || !TabletCalc::GeheimGueltig($rid)) {
             return;
         }
-        $stand = json_decode((string)$this->ReadAttributeString('EspCode'), true);
-        $p = TabletCalc::CodePruefen(is_array($stand) ? $stand : null, (string)($m['code'] ?? ''), time());
-        $this->WriteAttributeString('EspCode', $p['stand'] === null ? '' : (string)json_encode($p['stand']));
+        // Prüfen und Versuch zählen in EINEM Schritt — sonst schafften parallele
+        // Anfragen mehr als CODE_VERSUCHE Rateversuche.
+        $sem = 'SDVC_Koppeln_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($sem, 3000)) {
+            return;
+        }
+        try {
+            $stand = json_decode($this->GetBuffer('EspCode'), true);
+            $p = TabletCalc::CodePruefen(is_array($stand) ? $stand : null, (string)($m['code'] ?? ''), time());
+            $this->SetBuffer('EspCode', $p['stand'] === null ? '' : (string)json_encode($p['stand']));
+        } finally {
+            IPS_SemaphoreLeave($sem);
+        }
         if ($p['ok']) {
             $this->WriteAttributeString('EspKopplungen', (string)json_encode(
                 TabletCalc::Koppeln($this->EspKopplungen(), $token, (string)($m['name'] ?? ''), time())));
@@ -151,7 +167,7 @@ trait EspTablet
             @$this->ReloadForm();
         }
         // Der Token selbst geht nie hinaus — nur ob es geklappt hat.
-        $this->Push(['type' => 'espKopplung', 'client' => $client, 'ok' => $p['ok'], 'grund' => $p['grund']]);
+        $this->Push(['type' => 'espKopplung', 'client' => $client, 'rid' => $rid, 'ok' => $p['ok'], 'grund' => $p['grund']]);
     }
 
     /** Lebenszeichen: zählt nur von einem gekoppelten Browser. */
@@ -164,8 +180,11 @@ trait EspTablet
             return;
         }
         $client = is_array($m) ? (string)($m['client'] ?? '') : '';
-        if (TabletCalc::ClientGueltig($client)) {
-            $this->Push(['type' => 'espKopplung', 'client' => $client, 'ok' => false, 'grund' => 'unbekannt']);
+        $rid = is_array($m) ? (string)($m['rid'] ?? '') : '';
+        if (TabletCalc::ClientGueltig($client) && TabletCalc::GeheimGueltig($rid)) {
+            // Nur der Browser, der DIESE Anfrage gestellt hat, kennt die rid — ein
+            // fremder kann so kein gekoppeltes Tablet zum Vergessen bringen.
+            $this->Push(['type' => 'espKopplung', 'client' => $client, 'rid' => $rid, 'ok' => false, 'grund' => 'unbekannt']);
         }
     }
 
@@ -214,7 +233,7 @@ trait EspTablet
                 $stand['gewinner'] = $client;
                 $stand['schluessel'] = $schluessel;
                 $stand['geheim'] = $geheim;
-                $this->WriteAttributeString('EspStand', (string)json_encode($stand));
+                $this->SetBuffer('EspStand', (string)json_encode($stand));
                 $this->MicAnGeraet($stand['quelle'], 'start', $nonce);
             }
             // Alle Fenster erfahren, wer das Gespräch führt — die anderen lassen los.
@@ -226,7 +245,7 @@ trait EspTablet
         if (in_array($aktion, ['stop', 'keep'], true) && TabletCalc::DarSteuern($stand, $nonce, $client, (string)($m['geheim'] ?? ''))) {
             $this->MicAnGeraet($stand['quelle'], $aktion, $nonce);
             if ($aktion === 'stop') {
-                $this->WriteAttributeString('EspStand', '');
+                $this->SetBuffer('EspStand', '');
             }
         }
     }

@@ -18,8 +18,10 @@
  * Kopplung: Nur ein gekoppelter Browser zählt als bereit und darf übernehmen —
  * wer übernimmt, hört den Raum. Den Code gibt es im Instanzformular; der
  * Browser erzeugt dazu einen eigenen Token und hebt ihn im localStorage auf.
- *   Kachel → EspKoppeln {code, client, token, name}
- *   Modul → {type:'espKopplung', client, ok, grund}   ('*' = alle entkoppelt)
+ *   Kachel → EspKoppeln {code, client, token, name, rid}
+ *   Modul → {type:'espKopplung', client, rid, ok, grund}   ('*' = alle entkoppelt)
+ * rid ist eine zufällige Anfragekennung: Die Fensterkennung kennen alle Fenster,
+ * die rid nur das fragende — so kann kein fremdes Fenster ein Tablet entkoppeln.
  *
  * Die Visu stellt jede Nachricht ZWEIMAL zu (handleMessage und postMessage,
  * gemessen 06.10.2026). Für Zustände egal, für Ton nicht: Pakete werden nach
@@ -164,6 +166,8 @@ function erzeuge(opt) {
   var instanz = 0;
   var token = '';             // Kopplung dieses Browsers (nur Modul und localStorage kennen ihn)
   var neuerToken = '';        // während der Code-Eingabe
+  var koppelRid = '';         // Anfragekennung der laufenden Code-Eingabe
+  var hierRids = [];          // Anfragekennungen der letzten Lebenszeichen
 
   function jetzt() { return Date.now(); }
   function zufall(n) { var b = new Uint8Array(n); crypto.getRandomValues(b); return b; }
@@ -173,7 +177,10 @@ function erzeuge(opt) {
 
   function bereitMelden() {
     if (aktiv && token && tonBereit() && !document.hidden) {
-      senden('EspHier', JSON.stringify({ token: token, client: client }));
+      var rid = hex(zufall(16));
+      hierRids.push(rid);
+      if (hierRids.length > 8) { hierRids.shift(); }
+      senden('EspHier', JSON.stringify({ token: token, client: client, rid: rid }));
     }
   }
 
@@ -206,7 +213,8 @@ function erzeuge(opt) {
     var code = String((ui && ui.eingabe.value) || '').replace(/\D/g, '');
     if (code.length !== 6) { aufHinweis('Bitte den 6-stelligen Code aus der Instanz eingeben.'); return; }
     neuerToken = hex(zufall(32));
-    senden('EspKoppeln', JSON.stringify({ code: code, client: client, token: neuerToken, name: geraeteName() }));
+    koppelRid = hex(zufall(16));
+    senden('EspKoppeln', JSON.stringify({ code: code, client: client, token: neuerToken, name: geraeteName(), rid: koppelRid }));
   }
   if (ui) {
     ui.knopf.addEventListener('click', koppeln);
@@ -327,24 +335,36 @@ function erzeuge(opt) {
         puffer.rein(p.werte);
         return true;
       }
-      case 'espKopplung':
-        if (d.client !== client && d.client !== '*') { return true; }
-        if (d.ok === true && neuerToken) {
-          tokenSetzen(neuerToken);
-          neuerToken = '';
-          if (ui) { ui.eingabe.value = ''; }
-          tonFreigeben();
-          aufHinweis('Gekoppelt — das Sprachgerät kann jetzt über dieses Tablet sprechen.');
-        } else if (d.client === '*' || d.grund === 'unbekannt') {
-          tokenSetzen('');   // Kopplung aufgehoben oder unbekannt
+      case 'espKopplung': {
+        if (d.client === '*') {   // „Alle Kopplungen aufheben" im Instanzformular
+          tokenSetzen('');
           hinweisPruefen();
-        } else if (neuerToken && d.ok !== true) {
-          neuerToken = '';
-          aufHinweis(d.grund === 'falsch' ? 'Code falsch.' : 'Kein gültiger Code — bitte in der Instanz einen neuen erzeugen.');
-          if (ui) { ui.panel.hidden = false; }
+          return true;
         }
-        /* Alles andere ist die zweite Zustellung derselben Antwort. */
+        if (d.client !== client || !d.rid) { return true; }
+        if (d.rid === koppelRid) {
+          koppelRid = '';
+          if (d.ok === true && neuerToken) {
+            tokenSetzen(neuerToken);
+            if (ui) { ui.eingabe.value = ''; }
+            tonFreigeben();
+            aufHinweis('Gekoppelt — das Sprachgerät kann jetzt über dieses Tablet sprechen.');
+          } else {
+            aufHinweis(d.grund === 'falsch' ? 'Code falsch.' : 'Kein gültiger Code — bitte in der Instanz einen neuen erzeugen.');
+            if (ui) { ui.panel.hidden = false; }
+          }
+          neuerToken = '';
+          return true;
+        }
+        var i = hierRids.indexOf(d.rid);
+        if (i >= 0 && d.grund === 'unbekannt') {
+          hierRids.splice(i, 1);
+          tokenSetzen('');   // das Modul kennt diesen Token nicht (mehr)
+          hinweisPruefen();
+        }
+        /* Alles andere: fremde Anfrage oder zweite Zustellung derselben Antwort. */
         return true;
+      }
       case 'espEnde':
         if (laufend && d.nonce === laufend) {
           beenden(false);

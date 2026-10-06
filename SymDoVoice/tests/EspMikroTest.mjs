@@ -151,17 +151,20 @@ pruefe(!gesendet.some(([i]) => i === 'EspKoppeln') && hinweis.includes('6-stelli
 ui.eingabe.value = '123456';
 knopfListener.click();
 const kopp = letzte('EspKoppeln');
+pruefe(/^[0-9a-f]{32}$/.test(kopp.rid || ''), 'Kopplung trägt eine zufällige Anfragekennung');
 pruefe(kopp && kopp.code === '123456' && /^[0-9a-f]{64}$/.test(kopp.token) && kopp.name.length > 0, 'Kopplung: Code, selbst erzeugter Token und Gerätename gehen ans Modul');
 esp.nachricht({ type: 'espKopplung', client: 'fremdesfenster', ok: true });
 pruefe(!esp.gekoppelt(), 'Antwort für ein anderes Fenster zählt nicht');
-esp.nachricht({ type: 'espKopplung', client: kopp.client, ok: false, grund: 'falsch' });
-esp.nachricht({ type: 'espKopplung', client: kopp.client, ok: false, grund: 'falsch' });
+esp.nachricht({ type: 'espKopplung', client: kopp.client, rid: kopp.rid, ok: false, grund: 'falsch' });
+esp.nachricht({ type: 'espKopplung', client: kopp.client, rid: kopp.rid, ok: false, grund: 'falsch' });
 pruefe(!esp.gekoppelt() && hinweis.includes('falsch') && ui.panel.hidden === false, 'falscher Code (doppelt zugestellt): Hinweis bleibt stehen');
 knopfListener.click();
 const kopp2 = letzte('EspKoppeln');
 pruefe(kopp2.token !== kopp.token, 'jeder Versuch mit frischem Token');
-esp.nachricht({ type: 'espKopplung', client: kopp2.client, ok: true });
-esp.nachricht({ type: 'espKopplung', client: kopp2.client, ok: true });
+esp.nachricht({ type: 'espKopplung', client: kopp2.client, rid: 'ffffffffffffffffffffffffffffffff', ok: true });
+pruefe(!esp.gekoppelt(), 'Erfolg mit fremder Anfragekennung zählt nicht');
+esp.nachricht({ type: 'espKopplung', client: kopp2.client, rid: kopp2.rid, ok: true });
+esp.nachricht({ type: 'espKopplung', client: kopp2.client, rid: kopp2.rid, ok: true });
 pruefe(esp.gekoppelt() && speicher.get('symdo.espMikro.token.12173') === kopp2.token && ui.panel.hidden === true, 'gekoppelt: Token im localStorage je Instanz, Feld weg');
 const lebenszeichen = letzte('EspHier');
 pruefe(lebenszeichen && lebenszeichen.token === kopp2.token && lebenszeichen.client === kopp2.client, 'gekoppelt: Lebenszeichen mit Token');
@@ -265,9 +268,22 @@ const vorher = gesendet.length;
 esp.nachricht({ type: 'espWake', nonce: 'dead0003' });
 pruefe(gesendet.length === vorher, 'laufendes Gespräch (eigenes Mikrofon): Weckwort des Geräts wird nicht angenommen');
 
-// Ein unbekannter Token (z. B. in einer anderen Symcon-Instanz entkoppelt) wird verworfen
-esp.nachricht({ type: 'espKopplung', client: ich, ok: false, grund: 'falsch' });
-pruefe(esp.gekoppelt(), 'späte Fehlermeldung ohne laufende Code-Eingabe ändert die Kopplung nicht');
+// Angriff: ein fremdes Fenster kennt unsere Kennung (aus espGewaehlt) und schickt
+// ein ungültiges Lebenszeichen damit — die Antwort trägt SEINE rid, nicht unsere
+esp.nachricht({ type: 'espKopplung', client: ich, rid: '0123456789abcdef0123456789abcdef', ok: false, grund: 'unbekannt' });
+esp.nachricht({ type: 'espKopplung', client: ich, ok: false, grund: 'unbekannt' });
+pruefe(esp.gekoppelt(), 'fremde „unbekannt"-Antwort entkoppelt dieses Tablet nicht');
+// Echt: das Modul kennt unseren Token nicht mehr und antwortet auf UNSER Lebenszeichen
+dokListener.visibilitychange.forEach((f) => f());
+const meinHier = letzte('EspHier');
+esp.nachricht({ type: 'espKopplung', client: ich, rid: meinHier.rid, ok: false, grund: 'unbekannt' });
+pruefe(!esp.gekoppelt() && ui.panel.hidden === false, 'Antwort auf das eigene Lebenszeichen: Token verworfen, Feld wieder da');
+// wieder koppeln für den Rest
+ui.eingabe.value = '654321';
+knopfListener.click();
+const kopp3 = letzte('EspKoppeln');
+esp.nachricht({ type: 'espKopplung', client: kopp3.client, rid: kopp3.rid, ok: true });
+pruefe(esp.gekoppelt(), 'erneut gekoppelt');
 
 // Alle Kopplungen aufgehoben: Token weg, Feld wieder da
 esp.nachricht({ type: 'espKopplung', client: '*', ok: false });

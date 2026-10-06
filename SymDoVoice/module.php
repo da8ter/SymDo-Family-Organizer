@@ -60,12 +60,10 @@ class SymDoVoice extends IPSModuleStrict
         // Berichte der Machbarkeitsprobe (Etappe 0), je Umgebung der jüngste.
         $this->RegisterAttributeString('ProbeResult', '[]');
 
-        // Ton über das Tablet: letztes Lebenszeichen eines bereiten Browsers und
-        // die laufende Anfrage eines Sprachgeräts (nonce, gewinner, quelle).
+        // Ton über das Tablet: letztes Lebenszeichen eines gekoppelten Browsers und
+        // die Hashes der gekoppelten Browser. Laufendes Gespräch (mit Schlüssel)
+        // und offener Kopplungscode stehen in Puffern — nicht in settings.json.
         $this->RegisterAttributeInteger('EspBereit', 0);
-        $this->RegisterAttributeString('EspStand', '');
-        // Kopplung: offener Code (Hash, Frist, Versuche) und die Hashes der gekoppelten Browser
-        $this->RegisterAttributeString('EspCode', '');
         $this->RegisterAttributeString('EspKopplungen', '[]');
     }
 
