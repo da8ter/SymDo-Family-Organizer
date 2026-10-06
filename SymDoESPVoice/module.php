@@ -49,10 +49,10 @@ class SymDoESPVoice extends IPSModuleStrict
         $optionen = [];
         foreach (EspStatusCalc::ZUSTAENDE as $wert => $text) {
             $optionen[] = ['Value' => $wert, 'Caption' => $this->Translate($text), 'IconActive' => false, 'IconValue' => '',
-                           'ColorActive' => false, 'ColorValue' => -1, 'ContentColorActive' => false, 'ContentColorValue' => -1];
+                           'Color' => -1];
         }
         $this->RegisterVariableInteger('STATE', $this->Translate('State'), [
-            'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
+            'PRESENTATION' => VARIABLE_PRESENTATION_ENUMERATION,
             'ICON'         => 'Microphone',
             'OPTIONS'      => json_encode($optionen, JSON_UNESCAPED_UNICODE),
         ], 20);
@@ -71,7 +71,7 @@ class SymDoESPVoice extends IPSModuleStrict
             'SUFFIX'       => ' %',
             'MIN'          => 0,
             'MAX'          => 100,
-            'STEP'         => 5,
+            'STEP_SIZE'    => 5,
         ], 50);
         $this->EnableAction('VOLUME');
         $this->RegisterVariableInteger('BRIGHTNESS', $this->Translate('Brightness'), [
@@ -80,7 +80,7 @@ class SymDoESPVoice extends IPSModuleStrict
             'SUFFIX'       => ' %',
             'MIN'          => 5,
             'MAX'          => 100,
-            'STEP'         => 5,
+            'STEP_SIZE'    => 5,
         ], 60);
         $this->EnableAction('BRIGHTNESS');
         $this->RegisterVariableString('QUESTION', $this->Translate('Last question'), [
