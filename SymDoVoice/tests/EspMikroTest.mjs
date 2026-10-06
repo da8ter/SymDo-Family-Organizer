@@ -142,6 +142,7 @@ const zusage = gesendet.filter(([i]) => i === 'EspMic').map(([, w]) => JSON.pars
 pruefe(zusage.length === 1 && zusage[0].aktion === 'start' && zusage[0].nonce === 'abcd1234' && /^[a-z0-9]{6,32}$/.test(zusage[0].client), 'Weckwort: Zusage mit Nonce und Fensterkennung');
 const ich = zusage[0].client;
 pruefe(/^[0-9a-f]{64}$/.test(zusage[0].schluessel || ''), 'Zusage trägt einen frischen 32-Byte-Schlüssel');
+pruefe(/^[0-9a-f]{32}$/.test(zusage[0].geheim || ''), 'Zusage trägt ein Geheimnis für stop/keep');
 const schluesselVon = (nonce) => {
   const z = gesendet.filter(([i, w]) => i === 'EspMic' && JSON.parse(w).aktion === 'start' && JSON.parse(w).nonce === nonce).map(([, w]) => JSON.parse(w));
   return z.length ? Buffer.from(z[z.length - 1].schluessel, 'hex') : null;
@@ -214,7 +215,8 @@ await warte(50);
 kern.stop('vom Nutzer beendet');
 await warte(20);
 const stop = gesendet.filter(([i]) => i === 'EspMic').map(([, w]) => JSON.parse(w)).filter((m) => m.aktion === 'stop');
-pruefe(stop.length === 1 && stop[0].nonce === 'cafe0002' && stop[0].client === ich, 'Gespräch in der Kachel beendet → stop ans Gerät');
+const zusageCafe = gesendet.map(([, w]) => { try { return JSON.parse(w); } catch (e) { return {}; } }).find((m) => m.aktion === 'start' && m.nonce === 'cafe0002');
+pruefe(stop.length === 1 && stop[0].nonce === 'cafe0002' && stop[0].client === ich && stop[0].geheim === zusageCafe.geheim, 'Gespräch in der Kachel beendet → stop mit dem Geheimnis der Zusage');
 
 // Läuft schon ein Gespräch, wird kein zweites angenommen
 await warte(10);

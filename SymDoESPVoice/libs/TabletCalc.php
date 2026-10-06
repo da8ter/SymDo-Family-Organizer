@@ -152,10 +152,21 @@ class TabletCalc
         return ['stand' => $stand, 'weiter' => true];
     }
 
-    /** Stop/Keep zählen nur vom Fenster, das das Gespräch führt. */
-    public static function DarSteuern(array $stand, string $nonce, string $client): bool
+    /** Geheimnis des führenden Fensters (16 Byte Hex). Anders als die Fensterkennung wird es nie gepusht. */
+    public static function GeheimGueltig(string $hex): bool
     {
-        return $nonce !== '' && $nonce === $stand['nonce'] && $client !== '' && $client === $stand['gewinner'];
+        return preg_match('/^[0-9a-f]{32}$/', $hex) === 1;
+    }
+
+    /**
+     * Stop/Keep zählen nur vom Fenster, das das Gespräch führt. Die Kennung
+     * allein reicht nicht — espGewaehlt nennt sie allen Fenstern —, es braucht
+     * das Geheimnis aus der Zusage.
+     */
+    public static function DarSteuern(array $stand, string $nonce, string $client, string $geheim): bool
+    {
+        return $nonce !== '' && $nonce === $stand['nonce'] && $client !== '' && $client === $stand['gewinner']
+            && ($stand['geheim'] ?? '') !== '' && hash_equals((string)$stand['geheim'], $geheim);
     }
 
     public static function Bereit(int $letztesZeichen, int $jetzt): bool

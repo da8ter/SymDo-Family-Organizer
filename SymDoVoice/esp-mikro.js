@@ -6,10 +6,10 @@
  * ein MediaStream, den der Gesprächskern statt des eigenen Mikrofons nimmt.
  *
  *   Modul → {type:'espWake', nonce}       Gerät fragt, ob jemand übernimmt
- *   Kachel → EspMic {aktion:'start', nonce, client, schluessel}
+ *   Kachel → EspMic {aktion:'start', nonce, client, schluessel, geheim}
  *   Modul → {type:'espGewaehlt', nonce, client}   nur EIN Fenster führt
  *   Modul → {type:'espAudio', n, d}       Pakete, XChaCha20 mit unserem Schlüssel
- *   Kachel → EspMic stop | keep (alle 15 s)
+ *   Kachel → EspMic stop | keep (alle 15 s), nur mit dem Geheimnis aus der Zusage
  *   Modul → {type:'espEnde', nonce}       Taste am Gerät
  *
  * Ohne freigegebenen Ton (Autoplay-Sperre) meldet sich die Kachel nicht als
@@ -153,8 +153,11 @@ function erzeuge(opt) {
   var gesehen = [];           // zuletzt angenommene Paketnummern
   var letzterWeckruf = '';
   var schluessel = null;      // je Gespräch neu, verlässt das Fenster nur zum Modul
+  var geheim = '';            // dito; beweist stop/keep — die Fensterkennung kennen alle
 
   function jetzt() { return Date.now(); }
+  function zufall(n) { var b = new Uint8Array(n); crypto.getRandomValues(b); return b; }
+  function hex(b) { return Array.prototype.map.call(b, function (x) { return (x < 16 ? '0' : '') + x.toString(16); }).join(''); }
 
   function tonBereit() { return !!(ctx && ctx.state === 'running'); }
 
@@ -218,9 +221,10 @@ function erzeuge(opt) {
 
   function beenden(sagGeraet) {
     if (!laufend) { return; }
-    if (sagGeraet) { senden('EspMic', JSON.stringify({ aktion: 'stop', nonce: laufend, client: client })); }
+    if (sagGeraet) { senden('EspMic', JSON.stringify({ aktion: 'stop', nonce: laufend, client: client, geheim: geheim })); }
     laufend = '';
     schluessel = null;
+    geheim = '';
     if (keepUhr) { clearInterval(keepUhr); keepUhr = 0; }
     stromAbbauen();
   }
@@ -233,7 +237,7 @@ function erzeuge(opt) {
     var strom;
     try { strom = stromAnlegen(); } catch (e) { beenden(true); return; }
     keepUhr = setInterval(function () {
-      if (laufend) { senden('EspMic', JSON.stringify({ aktion: 'keep', nonce: laufend, client: client })); }
+      if (laufend) { senden('EspMic', JSON.stringify({ aktion: 'keep', nonce: laufend, client: client, geheim: geheim })); }
     }, 15000);
     kern.start({ mikro: strom }).then(function (ok) {
       if (ok === false) { beenden(true); }
@@ -258,15 +262,15 @@ function erzeuge(opt) {
         if (d.nonce === letzterWeckruf) { return true; }
         if (!aktiv || !tonBereit() || document.hidden || kern.istOffen() || laufend) { return true; }
         letzterWeckruf = angebot = String(d.nonce || '');
-        schluessel = new Uint8Array(32);
-        crypto.getRandomValues(schluessel);
+        schluessel = zufall(32);
+        geheim = hex(zufall(16));
         senden('EspMic', JSON.stringify({ aktion: 'start', nonce: angebot, client: client,
-          schluessel: Array.prototype.map.call(schluessel, function (b) { return (b < 16 ? '0' : '') + b.toString(16); }).join('') }));
+          schluessel: hex(schluessel), geheim: geheim }));
         return true;
       case 'espGewaehlt':
         if (!angebot || d.nonce !== angebot) { return true; }
         angebot = '';
-        if (d.client === client) { uebernehmen(String(d.nonce)); } else { schluessel = null; }
+        if (d.client === client) { uebernehmen(String(d.nonce)); } else { schluessel = null; geheim = ''; }
         return true;
       case 'espAudio': {
         if (!laufend || !puffer) { return true; }

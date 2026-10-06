@@ -39,6 +39,7 @@ trait EspTablet
             'gewinner' => is_array($s) ? (string)($s['gewinner'] ?? '') : '',
             'quelle'   => is_array($s) ? (int)($s['quelle'] ?? 0) : 0,
             'schluessel' => is_array($s) ? (string)($s['schluessel'] ?? '') : '',
+            'geheim'     => is_array($s) ? (string)($s['geheim'] ?? '') : '',
         ];
     }
 
@@ -103,15 +104,18 @@ trait EspTablet
         $nonce = (string)($m['nonce'] ?? '');
         $client = (string)($m['client'] ?? '');
         $stand = $this->EspStand();
+        $this->SendDebug('EspMic', $aktion . ' ' . $nonce . ' von ' . $client . ($client === $stand['gewinner'] ? ' (führt)' : ''), 0);
         if ($aktion === 'start') {
             // Ohne Schlüssel keine Zusage: der Ton ginge sonst lesbar an alle Fenster.
             $schluessel = (string)($m['schluessel'] ?? '');
-            $z = TabletCalc::SchluesselGueltig($schluessel)
+            $geheim = (string)($m['geheim'] ?? '');
+            $z = TabletCalc::SchluesselGueltig($schluessel) && TabletCalc::GeheimGueltig($geheim)
                 ? TabletCalc::Zusage(['nonce' => $stand['nonce'], 'gewinner' => $stand['gewinner']], $nonce, $client)
                 : ['weiter' => false];
             if ($z['weiter']) {
                 $stand['gewinner'] = $client;
                 $stand['schluessel'] = $schluessel;
+                $stand['geheim'] = $geheim;
                 $this->WriteAttributeString('EspStand', (string)json_encode($stand));
                 $this->MicAnGeraet($stand['quelle'], 'start', $nonce);
             }
@@ -121,7 +125,7 @@ trait EspTablet
             }
             return;
         }
-        if (in_array($aktion, ['stop', 'keep'], true) && TabletCalc::DarSteuern($stand, $nonce, $client)) {
+        if (in_array($aktion, ['stop', 'keep'], true) && TabletCalc::DarSteuern($stand, $nonce, $client, (string)($m['geheim'] ?? ''))) {
             $this->MicAnGeraet($stand['quelle'], $aktion, $nonce);
             if ($aktion === 'stop') {
                 $this->WriteAttributeString('EspStand', '');

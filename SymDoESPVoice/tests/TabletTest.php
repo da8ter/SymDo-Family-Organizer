@@ -82,7 +82,11 @@ pruefe($z['weiter'] && $z['stand']['gewinner'] === 'fenster1', 'erste Zusage gew
 $z2 = TabletCalc::Zusage($z['stand'], '0a1b2c3d', 'fenster2');
 pruefe(!$z2['weiter'] && $z2['stand']['gewinner'] === 'fenster1', 'zweite Zusage verliert');
 pruefe(!TabletCalc::Zusage($s, 'ffffffff', 'fenster1')['weiter'] && !TabletCalc::Zusage($s, '0a1b2c3d', 'X!')['weiter'], 'falsche Nonce oder Kennung: keine Zusage');
-pruefe(TabletCalc::DarSteuern($z['stand'], '0a1b2c3d', 'fenster1') && !TabletCalc::DarSteuern($z['stand'], '0a1b2c3d', 'fenster2'), 'nur der Gewinner darf stoppen');
+$mitGeheim = $z['stand'] + ['geheim' => str_repeat('5e', 16)];
+pruefe(TabletCalc::DarSteuern($mitGeheim, '0a1b2c3d', 'fenster1', str_repeat('5e', 16)) && !TabletCalc::DarSteuern($mitGeheim, '0a1b2c3d', 'fenster2', str_repeat('5e', 16)), 'nur der Gewinner darf stoppen');
+pruefe(!TabletCalc::DarSteuern($mitGeheim, '0a1b2c3d', 'fenster1', '') && !TabletCalc::DarSteuern($mitGeheim, '0a1b2c3d', 'fenster1', str_repeat('00', 16))
+    && !TabletCalc::DarSteuern($z['stand'], '0a1b2c3d', 'fenster1', ''), 'die (allen bekannte) Fensterkennung allein reicht nicht');
+pruefe(TabletCalc::GeheimGueltig(str_repeat('ab', 16)) && !TabletCalc::GeheimGueltig('ab') && !TabletCalc::GeheimGueltig(str_repeat('AB', 16)), 'Geheimnis: 16 Byte Hex');
 pruefe(TabletCalc::Bereit(1000, 1070) && !TabletCalc::Bereit(1000, 1100) && !TabletCalc::Bereit(0, 5), 'Lebenszeichen gilt 75 s');
 
 // ── Symcon-Attrappen ───────────────────────────────────────────────────────
@@ -136,6 +140,7 @@ class KachelAttrappe
     public function ReadAttributeString(string $n): string { return (string)$this->attr[$n]; }
     public function WriteAttributeString(string $n, string $w): void { $this->attr[$n] = $w; }
     public function Push(array $d): void { $this->pushes[] = $d; }
+    public function SendDebug(string $a, string $b, int $c): void {}
     public function wake(string $j): void { $this->GeraetWeckruf($j); }
     public function mic(string $j): void { $this->EspMic($j); }
 }
@@ -195,12 +200,16 @@ pruefe(($k->pushes[0]['type'] ?? '') === 'espWake' && $k->pushes[0]['nonce'] ===
 $k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fensterx"}');
 pruefe($GLOBALS['aufrufe'] === [], 'Zusage ohne Schlüssel zählt nicht');
 $SA = str_repeat('1a', 32);
-$k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fenstera","schluessel":"' . $SA . '"}');
-$k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fensterb","schluessel":"' . str_repeat('2b', 32) . '"}');
+$GA = str_repeat('3c', 16);
+$k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fensterx","schluessel":"' . $SA . '"}');
+pruefe($GLOBALS['aufrufe'] === [], 'Zusage ohne Geheimnis zählt nicht');
+$k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fenstera","schluessel":"' . $SA . '","geheim":"' . $GA . '"}');
+$k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fensterb","schluessel":"' . str_repeat('2b', 32) . '","geheim":"' . str_repeat('4d', 16) . '"}');
 $starts = array_values(array_filter($GLOBALS['aufrufe'], static fn($x) => $x[1] === 'Mic'));
 pruefe(count($starts) === 1 && json_decode((string)$starts[0][2], true) === ['aktion' => 'start', 'nonce' => '0a1b2c3d'], 'nur eine Zusage geht ans Gerät');
 $gew = array_values(array_filter($k->pushes, static fn($p) => $p['type'] === 'espGewaehlt'));
-pruefe(count($gew) === 3 && $gew[1]['client'] === 'fenstera' && $gew[2]['client'] === 'fenstera', 'alle Fenster erfahren: A führt');
+pruefe(count($gew) === 4 && $gew[2]['client'] === 'fenstera' && $gew[3]['client'] === 'fenstera', 'alle Fenster erfahren: A führt');
+pruefe(!str_contains((string)json_encode($k->pushes), $GA) && !str_contains((string)json_encode($k->pushes), $SA), 'Schlüssel und Geheimnis von A werden nie gepusht');
 $k->pushes = [];
 $k->GeraetTon(base64_encode("\x00\x05" . $ton));
 $p = $k->pushes[0] ?? [];
@@ -208,10 +217,13 @@ pruefe(($p['type'] ?? '') === 'espAudio' && !isset($p['d']) === false
     && sodium_crypto_stream_xchacha20_xor((string)base64_decode($p['d']), (string)base64_decode($p['n']), (string)hex2bin($SA)) === "\x00\x05" . $ton
     && !str_contains((string)base64_decode($p['d']), str_repeat("\x7f", 64)), 'Ton geht nur mit dem Schlüssel von A lesbar hinaus');
 $GLOBALS['aufrufe'] = [];
-$k->mic('{"aktion":"stop","nonce":"0a1b2c3d","client":"fensterb"}');
+$k->mic('{"aktion":"stop","nonce":"0a1b2c3d","client":"fensterb","geheim":"' . str_repeat('4d', 16) . '"}');
 pruefe($GLOBALS['aufrufe'] === [], 'Verlierer kann nicht stoppen');
 $k->mic('{"aktion":"keep","nonce":"0a1b2c3d","client":"fenstera"}');
-$k->mic('{"aktion":"stop","nonce":"0a1b2c3d","client":"fenstera"}');
+$k->mic('{"aktion":"stop","nonce":"0a1b2c3d","client":"fenstera","geheim":"' . str_repeat('00', 16) . '"}');
+pruefe($GLOBALS['aufrufe'] === [], 'mit der gepushten Kennung von A, aber ohne sein Geheimnis: weder keep noch stop');
+$k->mic('{"aktion":"keep","nonce":"0a1b2c3d","client":"fenstera","geheim":"' . $GA . '"}');
+$k->mic('{"aktion":"stop","nonce":"0a1b2c3d","client":"fenstera","geheim":"' . $GA . '"}');
 pruefe(count($GLOBALS['aufrufe']) === 2 && json_decode((string)$GLOBALS['aufrufe'][1][2], true)['aktion'] === 'stop' && $k->attr['EspStand'] === '', 'Gewinner: keep und stop gehen ans Gerät, danach ist die Anfrage zu');
 $GLOBALS['aufrufe'] = [];
 $k->mic('{"aktion":"start","nonce":"0a1b2c3d","client":"fensterc"}');

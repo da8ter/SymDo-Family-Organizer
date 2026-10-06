@@ -103,7 +103,8 @@ Danach gilt:
 - Weckwort oder Taste am Gerät startet das Gespräch in der Kachel.
 - Eine zweite Taste am Gerät oder ein Tipp auf den Knopf der Kachel beendet es.
 - Ist keine Kachel bereit (Tablet aus, Visu zu, Ton nicht freigegeben), spricht das Gerät wie gewohnt selbst. Wartezeit: sofort, wenn sich seit 75 Sekunden keine Kachel gemeldet hat, sonst höchstens 2,5 Sekunden.
-- Sind mehrere Browser mit der Kachel offen, übernimmt der erste.
+- Sind mehrere Browser mit der Kachel offen, übernimmt der erste. Nur er kann das Gespräch halten oder beenden, und nur er kann den Ton entschlüsseln.
+- **Wer übernehmen darf:** Jeder Browser, der diese Kachel in seiner Visu hat, kann ein Gespräch übernehmen und hört dann den Raum. Symcon unterscheidet die Browser einer Visu nicht. Legt die Kachel deshalb nur in die Visualisierung des Tablets, mit eigenem Zugang, und nicht in eine Visu, die über Connect von außen erreichbar ist.
 - Solange SymDo spricht, und eine knappe Sekunde danach, geht vom Gerät Stille zum Anbieter. Sonst hörte die KI sich selbst aus dem Tablet. Dazwischenreden geht in dieser Betriebsart deshalb nicht.
 - Weil das Mikrofon vom Gerät kommt, braucht die Kachel keine Mikrofon-Freigabe im Browser. Sie funktioniert so auch in einer Visu über die lokale http-Adresse.
 
