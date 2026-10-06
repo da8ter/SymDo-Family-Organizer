@@ -316,7 +316,9 @@ class SymDoESPVoice extends IPSModuleStrict
         if (!EspStatusCalc::GeraetGueltig($geraet) || strlen($schluessel) !== 64 || !$this->HasActiveParent()) {
             return false;
         }
-        $nutzlast = EspStatusCalc::Befehl($cmd, $wert, $schluessel, time());
+        // Millisekunden: das Gerät nimmt nur strikt steigende ts an — so gehen auch
+        // zwei Befehle in derselben Sekunde (Lautstärke + Helligkeit) durch.
+        $nutzlast = EspStatusCalc::Befehl($cmd, $wert, $schluessel, (int)floor(microtime(true) * 1000));
         $this->SendDebug('Befehl', $nutzlast, 0);
         $this->SendDataToParent((string)json_encode([
             'DataID'           => self::MQTT_TX,

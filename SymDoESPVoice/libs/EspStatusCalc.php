@@ -71,8 +71,8 @@ final class EspStatusCalc
     /**
      * Signierter Befehl an das Gerät. Alle Geräte teilen sich den MQTT-Zugang;
      * erst die Signatur mit dem gerätegenauen Schlüssel (aus dem Gateway-Profil)
-     * macht einen Befehl echt. ts schützt gegen Wiederholung (das Gerät nimmt
-     * nur steigende ts im Fenster ±60 s an).
+     * macht einen Befehl echt. ts (Unix-Zeit in MILLISEKUNDEN) schützt gegen
+     * Wiederholung: das Gerät nimmt nur strikt steigende ts im Fenster ±60 s an.
      * Signiert wird  "<cmd>|<value>|<ts>"  (value leer, wenn keiner).
      */
     public static function Befehl(string $cmd, int|null $wert, string $schluesselHex, int $ts): string

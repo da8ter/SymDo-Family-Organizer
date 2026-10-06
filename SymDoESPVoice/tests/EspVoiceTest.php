@@ -67,7 +67,7 @@ pruefe(str_contains($m, 'hex2bin($roh)') && str_contains($m, "'Payload'         
 pruefe(str_contains($m, 'ServerNurFuerSprachgeraete($server)') && substr_count($m, 'ServerNurFuerSprachgeraete(') >= 3,
     'MQTT-Zugang nur von einem Server, an dem ausschließlich Sprachgeräte hängen');
 pruefe(str_contains($m, "RegisterPropertyBoolean('ShareTranscript', false)"), 'Mitschrift-Schalter standardmäßig aus');
-pruefe(str_contains($m, "EspStatusCalc::Befehl(\$cmd, \$wert, \$schluessel, time())") && str_contains($m, 'strlen($schluessel) !== 64'), 'jeder Befehl signiert, ohne Schlüssel kein Befehl');
+pruefe(str_contains($m, "EspStatusCalc::Befehl(\$cmd, \$wert, \$schluessel, (int)floor(microtime(true) * 1000))") && str_contains($m, 'strlen($schluessel) !== 64'), 'jeder Befehl signiert, ohne Schlüssel kein Befehl');
 pruefe(!preg_match("/'~[A-Z]/", $m), 'keine Variablenprofile');
 pruefe(substr_count($m, 'EnableAction(') === 2, 'nur Lautstärke und Helligkeit schaltbar');
 
