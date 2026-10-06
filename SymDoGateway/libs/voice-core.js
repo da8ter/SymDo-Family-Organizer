@@ -185,9 +185,16 @@ function erzeuge(opt) {
    * der das Problem löst. Trifft in der Visu-App auf dem iPhone jeden, der die
    * lokale Adresse eingetragen hat.
    *
+   * Mit fremder Tonquelle (Sprachgerät als Mikrofon) entfällt die Mikrofonfrage
+   * — es bleibt nur WebRTC zum Anbieter.
+   *
    * @return {string} Fehlertext, oder '' wenn alles vorhanden ist.
    */
-  function umgebungsFehler() {
+  function umgebungsFehler(fremdeQuelle) {
+    if (fremdeQuelle) {
+      return typeof RTCPeerConnection === 'undefined'
+        ? 'Dieser Browser kann keine Sprachverbindung aufbauen.' : '';
+    }
     var sicher = (typeof window.isSecureContext === 'boolean') ? window.isSecureContext : true;
     if (!sicher) {
       return 'Sprache braucht eine verschlüsselte Verbindung. Öffne die Visu über die '
@@ -202,12 +209,15 @@ function erzeuge(opt) {
     return '';
   }
 
-  function start() {
+  /* optionen.mikro: fertiger MediaStream statt des eigenen Mikrofons — etwa
+     der Ton eines SymDo-Sprachgeräts (esp-mikro.js). Ohne Optionen wie bisher. */
+  function start(optionen) {
     if (!beendet) { return Promise.resolve(false); }
     beendet = false;
     zustand('verbinde');
 
-    var hindernis = umgebungsFehler();
+    var fremd = (optionen && optionen.mikro) || null;
+    var hindernis = umgebungsFehler(!!fremd);
     if (hindernis !== '') {
       beendet = true;
       zustand('fehler', hindernis);
@@ -243,7 +253,7 @@ function erzeuge(opt) {
       return r.live === true ? handschlagLive(r) : handschlag(r);
     };
     return Promise.all([
-      navigator.mediaDevices.getUserMedia({
+      fremd ? Promise.resolve(fremd) : navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       }),
       markeP

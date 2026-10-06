@@ -20,6 +20,7 @@ Der Sprachdialog spricht Deutsch, versteht natürliche Sätze und kann **nur**, 
 - **4. Konfiguration der Kachel**
 - **5. Bedienung**
 - **6. Freihändig mit Weckwort „Hey SymDo"**
+- **6a. Sprachgerät als Mikrofon, Ton über das Tablet**
 - **7. Datenschutz und Grenzen**
 - **8. PHP-Befehlsreferenz**
 
@@ -91,9 +92,27 @@ Nach dem Weckwort **schreibt der Erkenner weiter mit**, was gesagt wird, und rei
 
 Die Erkennung läuft **auf dem Gerät**. Solange das Weckwort nicht gefallen ist, verlässt kein Ton das Gerät; erst dann öffnet die Kachel das Gespräch mit dem Anbieter. Das setzt einen Browser mit lokaler Spracherkennung voraus (Chrome oder Edge ab 139, deutsches Sprachpaket installiert). Auf Geräten ohne diese Erkennung sagt die Kachel das — einen Rückfall auf eine Cloud-Erkennung gibt es bewusst nicht.
 
+## 6a. Sprachgerät als Mikrofon, Ton über das Tablet
+
+Ein **SymDo-Sprachgerät** (ESP32, Modul *SymDo - Sprachgerät*) kann für diese Kachel das Mikrofon sein. Weckwort und Fernfeld-Mikrofon kommen vom Gerät, die Antwort kommt aus dem Tablet.
+
+1. In der Instanz des Sprachgeräts unter **Ton über Tablet** diese Kachel wählen.
+2. Die Kachel auf dem Tablet geöffnet lassen. Nach dem Laden **einmal auf die Kachel tippen**, solange sie „Einmal tippen: Ton fürs Sprachgerät freigeben" zeigt. Browser spielen Ton erst nach einer Berührung ab.
+
+Danach gilt:
+- Weckwort oder Taste am Gerät startet das Gespräch in der Kachel.
+- Eine zweite Taste am Gerät oder ein Tipp auf den Knopf der Kachel beendet es.
+- Ist keine Kachel bereit (Tablet aus, Visu zu, Ton nicht freigegeben), spricht das Gerät wie gewohnt selbst. Wartezeit: sofort, wenn sich seit 75 Sekunden keine Kachel gemeldet hat, sonst höchstens 2,5 Sekunden.
+- Sind mehrere Browser mit der Kachel offen, übernimmt der erste.
+- Solange SymDo spricht, und eine knappe Sekunde danach, geht vom Gerät Stille zum Anbieter. Sonst hörte die KI sich selbst aus dem Tablet. Dazwischenreden geht in dieser Betriebsart deshalb nicht.
+- Weil das Mikrofon vom Gerät kommt, braucht die Kachel keine Mikrofon-Freigabe im Browser. Sie funktioniert so auch in einer Visu über die lokale http-Adresse.
+
+Mitglied, Standardlisten und Rechte sind die **dieser Kachel**, nicht die des Geräts.
+
 ## 7. Datenschutz und Grenzen
 
 - Während eines Gesprächs geht der **Raumton direkt vom Gerät zum KI-Anbieter** (WebRTC), samt den Stimmen aller Anwesenden. Deshalb die eigene Einwilligung im Gateway, jederzeit widerrufbar; ein Widerruf beendet laufende Gespräche sofort
+- Mit einem Sprachgerät als Mikrofon läuft der Raumton erst vom Gerät über Symcon zur Kachel und von dort zum Anbieter: im Heimnetz unverschlüsselt per MQTT und über die Visu-Verbindung. Symcon speichert ihn nicht. Das Gerät öffnet das Mikrofon nur nach Weckwort oder Taste am Gerät selbst
 - Werkzeugantworten können Auszüge aus Listen, Terminen, Notizen und Plänen enthalten; auf dem Symcon-Server wird **kein Ton gespeichert**
 - Der Assistent kann **nur**, was die Werkzeuge hergeben: keine allgemeinen Wissens- oder Rechenfragen, keine Anrufe, keine E-Mails. Im Haus schaltet er ausschließlich, was das Gateway freigegeben hat
 - Jede Schaltung, jeder angelegte und gelöschte Zeitplan steht im **Meldungsfenster** von Symcon; die letzten Werkzeugaufrufe stehen im Protokoll des Gateways

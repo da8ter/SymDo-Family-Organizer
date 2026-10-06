@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/libs/EspStatusCalc.php';
+require_once __DIR__ . '/libs/TabletCalc.php';
+require_once __DIR__ . '/libs/TabletWeiterleitung.php';
 
 /**
  * SymDoESPVoice — ein SymDo-Sprachgerät (ESP32) in Symcon.
@@ -15,9 +17,15 @@ require_once __DIR__ . '/libs/EspStatusCalc.php';
  *
  *   SDEV_StartConversation(<id>)   Gespräch auslösen (z. B. von der Klingel)
  *   SDEV_Reboot(<id>)              Gerät neu starten
+ *
+ * Ton über das Tablet: Ist eine SymDo-Voice-Kachel gewählt, führt sie das
+ * Gespräch. Das Gerät liefert nur das Mikrofon, diese Instanz reicht Weckwort,
+ * Mikrofon-Pakete und Ende an die Kachel weiter (siehe TabletCalc).
  */
 class SymDoESPVoice extends IPSModuleStrict
 {
+    use TabletWeiterleitung;
+
     private const GATEWAY_MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
     private const MQTT_SERVER_GUID    = '{C6D2AEB3-6E1F-4B2E-8E69-3A1A00246850}';
     private const MQTT_TX             = '{043EA491-0325-4ADD-8FC2-A30C8EEB4D3F}';
@@ -39,6 +47,8 @@ class SymDoESPVoice extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShareTranscript', false);
         // Firmware-Quelle für Updates: http(s)-Adresse oder Datei auf dem Symcon-Rechner
         $this->RegisterPropertyString('FirmwareSource', '');
+        // SymDo-Voice-Kachel, die das Gespräch führt (0 = das Gerät spricht selbst)
+        $this->RegisterPropertyInteger('SpeakerTile', 0);
         // Gerätegenauer Schlüssel für signierte MQTT-Befehle (siehe EspStatusCalc::Befehl)
         $this->RegisterAttributeString('CmdKey', '');
 
@@ -119,7 +129,7 @@ class SymDoESPVoice extends IPSModuleStrict
             $this->SetStatus(104);
             return;
         }
-        $this->SetReceiveDataFilter('.*' . preg_quote(EspStatusCalc::ThemaStatus($geraet), '/') . '.*');
+        $this->SetReceiveDataFilter(TabletCalc::Filter($geraet));
         $this->SetSummary($geraet);
         $server = (int)(IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
         if ($server !== 0 && !$this->ServerNurFuerSprachgeraete($server)) {
@@ -145,12 +155,25 @@ class SymDoESPVoice extends IPSModuleStrict
             return '';
         }
         $geraet = trim($this->ReadPropertyString('DeviceId'));
-        if ((string)($d['Topic'] ?? '') !== EspStatusCalc::ThemaStatus($geraet)) {
-            return '';
-        }
+        $thema = (string)($d['Topic'] ?? '');
         // Module Strict: der MQTT-Server reicht die Nutzlast hex-kodiert durch.
         $roh = (string)($d['Payload'] ?? '');
         $nutzlast = ctype_xdigit($roh) && strlen($roh) % 2 === 0 ? (string)hex2bin($roh) : $roh;
+        if ($thema === TabletCalc::ThemaMikro($geraet)) {
+            $paket = TabletCalc::Paket($nutzlast);
+            $kachel = $this->KachelID();
+            if ($paket !== null && $kachel !== 0) {
+                @IPS_RequestAction($kachel, 'EspAudio', $paket);
+            }
+            return '';
+        }
+        if ($thema === TabletCalc::ThemaEreignis($geraet)) {
+            $this->Ereignis($nutzlast);
+            return '';
+        }
+        if ($thema !== EspStatusCalc::ThemaStatus($geraet)) {
+            return '';
+        }
         $this->SendDebug('Status', $nutzlast, 0);
         $s = EspStatusCalc::Status($nutzlast);
         $ziel = ['online' => 'ONLINE', 'zustand' => 'STATE', 'akku' => 'BATTERY', 'laedt' => 'CHARGING',
@@ -171,6 +194,14 @@ class SymDoESPVoice extends IPSModuleStrict
     public function RequestAction(string $Ident, mixed $Value): void
     {
         switch ($Ident) {
+            case 'Mic':
+                // Von der Voice-Kachel: {aktion: start|nein|stop|keep, nonce}
+                $m = json_decode((string)$Value, true);
+                $wert = is_array($m) ? TabletCalc::MicWert((string)($m['aktion'] ?? ''), (string)($m['nonce'] ?? '')) : null;
+                if ($wert !== null) {
+                    $this->Senden('mic', $wert);
+                }
+                return;
             case 'VOLUME':
                 $this->Senden('volume', max(0, min(100, (int)$Value)));
                 $this->SetValue('VOLUME', max(0, min(100, (int)$Value)));
@@ -341,6 +372,8 @@ class SymDoESPVoice extends IPSModuleStrict
                 ['type' => 'Select', 'name' => 'WakeWord', 'caption' => $this->Translate('Wake word'), 'options' => $woerter],
                 ['type' => 'ValidationTextBox', 'name' => 'WakeCustom', 'caption' => $this->Translate('Custom phrase (English, 2–5 words)')],
                 ['type' => 'Label', 'caption' => $this->Translate('The wake word only listens if hands-free is enabled in the SymDo Gateway.')],
+                ['type' => 'SelectInstance', 'name' => 'SpeakerTile', 'width' => '400px', 'validModules' => [self::$VOICE_TILE_GUID],
+                 'caption' => $this->Translate('Sound via tablet: SymDo Voice tile (empty = the device speaks itself)')],
                 ['type' => 'ValidationTextBox', 'name' => 'FirmwareSource', 'caption' => $this->Translate('Firmware source (URL or file on the Symcon host)')],
             ],
             'actions' => [

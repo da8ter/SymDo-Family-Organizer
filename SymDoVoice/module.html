@@ -318,10 +318,14 @@ var Blase = (function () {
   };
 })();
 
+/* Ton über das Tablet (esp-mikro.js): ein Sprachgerät liefert das Mikrofon. */
+var espMikro = null;
+
 var kern = SymDoVoiceKern.erzeuge({
   post: post,
   audioEl: el('ton'),
   onState: function (z, detail) {
+    if (espMikro) { espMikro.zustand(z); }
     Blase.zustand(z);
     mikPunkt.classList.toggle('an', kern.istOffen());
     knopf.classList.toggle('laeuft', kern.istOffen());
@@ -535,8 +539,21 @@ var Freihand = (function () {
   };
 })();
 
+if (window.SymDoEspMikro) {
+  espMikro = SymDoEspMikro.erzeuge({
+    kern: kern,
+    senden: function (ident, wert) {
+      try { if (typeof requestAction === 'function') { requestAction(ident, wert); } } catch (e) {}
+    },
+    onHinweis: function (text) {
+      if (!kern.istOffen() && !hinweis.classList.contains('fehler')) { hinweis.textContent = text; }
+    }
+  });
+}
+
 /* Debug-Haken fuer Pruefstaende und die Browser-Konsole. */
 window.__voiceKern = kern;
+window.__espMikro = espMikro;
 window.__freihand = Freihand;
 
 knopf.addEventListener('click', function () {
@@ -554,6 +571,13 @@ function handleMessage(daten) {
     var cb = __wartend[daten.txn];
     if (cb) { delete __wartend[daten.txn]; cb(daten.json || { ok: false }); }
     return;
+  }
+  if (espMikro && typeof daten.type === 'string' && daten.type.indexOf('esp') === 0) {
+    espMikro.nachricht(daten);
+    return;
+  }
+  if (espMikro && Object.prototype.hasOwnProperty.call(daten, 'espMikro')) {
+    espMikro.aktivieren(daten.espMikro === true);
   }
   /* type 'state': bislang trägt er nur die gewählte Darstellung. */
   if (daten.darstellung) { Blase.modus(daten.darstellung); }

@@ -30,6 +30,7 @@ Ein ESP32-S3-Gerät mit Mikrofon, Lautsprecher und rundem Display, etwa die *Spo
   - **Weckwort:** „Hi ESP“, „Alexa“, „Jarvis“, „Computer“, ein eigener englischer Ausdruck oder aus (nur Taste).
 - **Letzte Frage und Antwort** in Symcon, nur wenn eingeschaltet
 - **Gespräch starten und Neustart** aus Symcon, z. B. von der Klingel
+- **Ton über das Tablet:** Das Gerät ist nur Mikrofon, die SymDo-Voice-Kachel führt das Gespräch und antwortet über das Tablet. Ist keine Kachel bereit, spricht das Gerät selbst
 - **Durchsagen und Tagesbriefing** am Gerät, aus Skripten oder Ereignissen; läuft ein Gespräch, kommen sie danach
 - **Firmware-Update über Symcon:** per WLAN, mit Prüfsumme und automatischem Rückfall
 
@@ -60,6 +61,7 @@ Ein ESP32-S3-Gerät mit Mikrofon, Lautsprecher und rundem Display, etwa die *Spo
 | Darf Geräte schalten | Aus = Licht, Rollläden usw. sind für dieses Gerät gesperrt |
 | Weckwort | Fertiges Wort, eigener englischer Ausdruck (2–5 Wörter) oder aus |
 | Letzte Frage und Antwort anzeigen | Aus = nichts davon verlässt das Gerät in Richtung MQTT |
+| Ton über Tablet | SymDo-Voice-Kachel, die das Gespräch führt; leer = das Gerät spricht selbst. Details im README der Kachel, Abschnitt 6a |
 | Firmware-Quelle | https-Adresse oder Datei auf dem Symcon-Rechner für **Firmware aktualisieren** |
 
 Beim Übernehmen schreibt die Instanz das Profil ins Gateway. Das Gerät holt es beim Start und danach alle 10 Minuten ab.
@@ -97,4 +99,5 @@ echo SDEV_UpdateFirmware(12345); // Firmware aus der eingetragenen Quelle einspi
 - **Steuerkanal:** Zustand auf `symdo/esp/<gerät>/status` (retained, Last Will = offline), Befehle auf `symdo/esp/<gerät>/cmd`.
 - **Eigener MQTT-Server:** Symcons MQTT-Server kennt keine Themenrechte, und alle Geräte bekommen seinen Zugang. Die Instanz gibt den Zugang deshalb nur heraus, wenn an diesem Server ausschließlich Sprachgeräte hängen. Sonst meldet sie Status 202.
 - **Signierte Befehle:** Jeder Befehl trägt eine HMAC-SHA256-Signatur mit einem Schlüssel, den nur diese Instanz und dieses Gerät kennen, dazu einen Zeitstempel. Unsignierte, fremde oder wiederholte Befehle weist das Gerät ab. Ein anderes Gerät am selben Server kann also kein Mikrofon einschalten.
+- **Ton über das Tablet:** Nach Weckwort oder Taste fragt das Gerät auf `symdo/esp/<gerät>/event` nach, ob eine Kachel übernimmt. Nur auf ein signiertes `start` mit der Kennung genau dieser Anfrage schickt es Mikrofon-Pakete (G.711, 100 ms) auf `symdo/esp/<gerät>/mic`. Es hört auf bei `stop`, bei Tastendruck oder nach 45 Sekunden ohne Lebenszeichen der Kachel
 - **Bekannte Grenze:** Die Verbindung Gerät–Gateway läuft im Heimnetz per http, wie bei der App über die lokale Adresse. Token, Befehlsschlüssel und MQTT-Zugang sind damit im lokalen Netz nicht verschlüsselt.

@@ -1,0 +1,203 @@
+// Prüfstand für „Ton über das Tablet" (esp-mikro.js) und die fremde Tonquelle
+// im Gesprächskern. Lädt beide Skripte in Node mit Fenster-, Audio- und
+// WebRTC-Attrappen.
+//   node SymDoVoice/tests/EspMikroTest.mjs
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const hier = dirname(fileURLToPath(import.meta.url));
+let fehler = 0, zahl = 0;
+function pruefe(ok, was) { zahl++; if (!ok) { fehler++; console.log('  FEHLT: ' + was); } }
+const warte = (ms) => new Promise((r) => setTimeout(r, ms));
+
+globalThis.window = globalThis;
+globalThis.addEventListener = () => {};
+globalThis.isSecureContext = false;   // lokale http-Visu: mit Sprachgerät trotzdem möglich
+const dokListener = {};
+globalThis.document = { hidden: false, addEventListener(art, fn) { (dokListener[art] = dokListener[art] || []).push(fn); } };
+let gumGerufen = 0;
+Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
+  mediaDevices: { getUserMedia: () => { gumGerufen++; return Promise.reject(new Error('kein Mikrofon')); } },
+} });
+let hinzugefuegt = [];
+globalThis.RTCPeerConnection = class {
+  constructor() { this.localDescription = null; this.iceGatheringState = 'complete'; this.connectionState = 'new'; }
+  addTrack(t, s) { hinzugefuegt.push(s); }
+  createDataChannel(name) { return { name, readyState: 'open', send() {}, close() {}, addEventListener() {} }; }
+  createOffer() { return Promise.resolve({ type: 'offer', sdp: 'v=0\r\n' }); }
+  setLocalDescription(a) { this.localDescription = a; return Promise.resolve(); }
+  setRemoteDescription() { this.connectionState = 'connected'; if (this.onconnectionstatechange) { this.onconnectionstatechange(); } return Promise.resolve(); }
+  getSenders() { return []; }
+  addEventListener() {} removeEventListener() {} close() {}
+};
+globalThis.fetch = () => Promise.resolve({ ok: true, status: 201, headers: { get: () => '/v1/realtime/calls/rtc_1' }, text: () => Promise.resolve('v=0\r\n') });
+
+// Audio-Attrappe: genug für ScriptProcessor → MediaStreamDestination
+let tonZustand = 'suspended';
+const verbunden = [];
+class Knoten { connect(z) { verbunden.push([this.art, z.art]); } disconnect() {} }
+globalThis.AudioContext = class {
+  constructor() { this.sampleRate = 48000; this.destination = Object.assign(new Knoten(), { art: 'lautsprecher' }); this.onstatechange = null; }
+  get state() { return tonZustand; }
+  resume() { return Promise.resolve(); }
+  createScriptProcessor() { const k = Object.assign(new Knoten(), { art: 'proc' }); globalThis.__proc = k; return k; }
+  createMediaStreamDestination() {
+    const spur = { enabled: true, stop() {} };
+    return Object.assign(new Knoten(), { art: 'ziel', stream: { getAudioTracks: () => [spur], getTracks: () => [spur], __esp: true } });
+  }
+  createGain() { return Object.assign(new Knoten(), { art: 'stumm', gain: { value: 1 } }); }
+};
+globalThis.atob = (b) => Buffer.from(b, 'base64').toString('binary');
+
+new Function(readFileSync(join(hier, '../../SymDoGateway/libs/voice-core.js'), 'utf8'))();
+new Function(readFileSync(join(hier, '../esp-mikro.js'), 'utf8'))();
+const E = window.SymDoEspMikro;
+
+// ── µ-law: genau der Kodierer der Firmware (tablet.c), hier nachgebaut ──
+function ulaw(s) {
+  const vorz = (s >> 8) & 0x80;
+  let v = vorz ? -s : s;
+  if (v > 32635) { v = 32635; }
+  v += 0x84;
+  let exp = 7;
+  for (let m = 0x4000; (v & m) === 0 && exp > 0; m >>= 1) { exp--; }
+  const mant = (v >> (exp + 3)) & 0x0f;
+  return (~(vorz | (exp << 4) | mant)) & 0xff;
+}
+let schlimmst = 0;
+for (const s of [0, 1, -1, 100, -100, 1000, -1000, 8000, -8000, 20000, -20000, 32767, -32768]) {
+  const zurueck = E._ULAW[ulaw(s)] * 32768;
+  const erlaubt = Math.max(8, Math.abs(s) / 16);   // µ-law: ~6 % relativer Fehler
+  schlimmst = Math.max(schlimmst, Math.abs(zurueck - Math.max(-32635, Math.min(32635, s))) / erlaubt);
+}
+pruefe(schlimmst <= 1, 'µ-law: Firmware-Kodierer und Kachel-Dekodierer passen zusammen');
+pruefe(E._ULAW[ulaw(5000)] > 0 && E._ULAW[ulaw(-5000)] < 0, 'µ-law: Vorzeichen bleibt');
+
+function paket(nr, werte) {
+  const b = Buffer.alloc(2 + werte.length);
+  b[0] = nr >> 8; b[1] = nr & 0xff;
+  werte.forEach((s, i) => { b[2 + i] = ulaw(s); });
+  return b.toString('base64');
+}
+const p = E._dekodieren(paket(258, new Array(1600).fill(4000)));
+pruefe(p && p.nr === 258 && p.werte.length === 1600, 'Paket: Nummer und 1600 Werte');
+pruefe(E._dekodieren('') === null && E._dekodieren('%%%') === null, 'Paket: Unsinn wird verworfen');
+
+// ── Zitterpuffer ──
+const P = new E._Puffer(2400, 9600);
+const raus = new Float32Array(480);
+P.rein(new Float32Array(1600).fill(0.5));
+P.raus(raus, 1 / 3);
+pruefe(raus.every((x) => x === 0), 'Puffer: unter dem Vorlauf kommt Stille');
+P.rein(new Float32Array(1600).fill(0.5));
+P.raus(raus, 1 / 3);
+pruefe(raus.every((x) => Math.abs(x - 0.5) < 1e-6), 'Puffer: ab Vorlauf kommt der Ton, auf 48 kHz gestreckt');
+for (let i = 0; i < 20; i++) { P.rein(new Float32Array(1600).fill(0.25)); }
+pruefe(P.menge - P.pos <= 9600 + 1600, 'Puffer: Rückstau wird gekappt (Verzögerung wächst nicht)');
+const leer = new E._Puffer(10, 100000);
+leer.rein(new Float32Array(20).fill(1));
+const lang = new Float32Array(200);
+leer.raus(lang, 1);
+pruefe(lang[0] === 1 && lang[199] === 0 && leer.laeuft === false, 'Puffer: leergelaufen → Stille und wieder Vorlauf');
+
+// ── Ablauf mit Kern und Modul-Attrappe ──
+const posts = [];
+const kern = window.SymDoVoiceKern.erzeuge({
+  post(pl) {
+    posts.push(pl);
+    if (pl.action === 'open') { return Promise.resolve({ ok: true, value: 'ek_1', model: 'gpt-realtime-mini', pingSeconds: 30, sessionSeconds: 300 }); }
+    return Promise.resolve({ ok: true });
+  },
+  onState(z) { esp && esp.zustand(z); },
+});
+const gesendet = [];
+let hinweis = '';
+let esp = null;
+esp = E.erzeuge({ kern, senden: (i, w) => gesendet.push([i, w]), onHinweis: (t) => { hinweis = t; } });
+
+esp.aktivieren(true);
+pruefe(hinweis.includes('tippen'), 'ohne Ton-Freigabe: Hinweis zum Tippen');
+pruefe(!gesendet.some(([i]) => i === 'EspHier'), 'ohne Ton-Freigabe: kein Lebenszeichen (Gerät spricht selbst)');
+esp.nachricht({ type: 'espWake', nonce: 'abcd1234' });
+pruefe(!gesendet.some(([i]) => i === 'EspMic'), 'ohne Ton-Freigabe: Weckwort wird nicht angenommen');
+
+tonZustand = 'running';
+dokListener.pointerdown.forEach((f) => f());
+pruefe(hinweis === '' && gesendet.some(([i]) => i === 'EspHier'), 'nach dem Tippen: Hinweis weg, Lebenszeichen gesendet');
+
+esp.nachricht({ type: 'espWake', nonce: 'abcd1234' });
+const zusage = gesendet.filter(([i]) => i === 'EspMic').map(([, w]) => JSON.parse(w));
+pruefe(zusage.length === 1 && zusage[0].aktion === 'start' && zusage[0].nonce === 'abcd1234' && /^[a-z0-9]{6,32}$/.test(zusage[0].client), 'Weckwort: Zusage mit Nonce und Fensterkennung');
+const ich = zusage[0].client;
+
+esp.nachricht({ type: 'espGewaehlt', nonce: 'abcd1234', client: 'anderesfenster' });
+await warte(20);
+pruefe(!kern.istOffen() && !esp.laeuft(), 'anderes Fenster gewählt: dieses bleibt still');
+
+const vorWeck = gesendet.length;
+esp.nachricht({ type: 'espWake', nonce: 'beef0001' });
+esp.nachricht({ type: 'espWake', nonce: 'beef0001' });
+pruefe(gesendet.length === vorWeck + 1, 'doppelt zugestellter Weckruf: nur eine Zusage');
+esp.nachricht({ type: 'espGewaehlt', nonce: 'beef0001', client: ich });
+esp.nachricht({ type: 'espGewaehlt', nonce: 'beef0001', client: ich });
+await warte(50);
+pruefe(esp.laeuft() && kern.istOffen(), 'gewählt: Gespräch läuft');
+pruefe(gumGerufen === 0, 'kein Browser-Mikrofon gefragt (auch auf http)');
+pruefe(hinzugefuegt.some((s) => s && s.__esp), 'der Ton des Geräts geht als Mikrofon zum Anbieter');
+pruefe(verbunden.some(([a, b]) => a === 'proc' && b === 'ziel') && verbunden.some(([a, b]) => a === 'stumm' && b === 'lautsprecher'),
+  'Prozessor hängt am Strom, Lautsprecher nur stumm');
+
+// Pakete fließen in den Puffer, Echo-Sperre während SymDo spricht
+const proc = globalThis.__proc;
+const ausgabe = { outputBuffer: { getChannelData: () => buf } };
+let buf = new Float32Array(2048);
+for (let i = 0; i < 3; i++) { esp.nachricht({ type: 'espAudio', d: paket(i, new Array(1600).fill(8000)) }); }
+proc.onaudioprocess(ausgabe);
+pruefe(buf.some((x) => x > 0.2), 'Pakete kommen als Ton am Strom an');
+// Doppelzustellung der Visu: dasselbe Paket zweimal darf nicht zweimal in den Puffer
+const zaehle = () => { let n = 0; const b = new Float32Array(48000); const alt = buf; buf = b; proc.onaudioprocess(ausgabe); buf = alt; for (const x of b) { if (x !== 0) { n++; } } return n; };
+zaehle();   // Puffer leeren
+for (let i = 0; i < 3; i++) { const d = paket(100 + i, new Array(1600).fill(8000)); esp.nachricht({ type: 'espAudio', d }); esp.nachricht({ type: 'espAudio', d }); }
+const tonWerte = zaehle();
+pruefe(Math.abs(tonWerte - 3 * 1600 * 3) <= 3, 'doppelt zugestellte Pakete zählen einmal (' + tonWerte + ' Werte bei 48 kHz, erwartet 14400)');
+kern.handleServerEvent({ type: 'output_audio_buffer.started' });
+for (let i = 0; i < 10; i++) { esp.nachricht({ type: 'espAudio', d: paket(10 + i, new Array(1600).fill(8000)) }); }
+for (let i = 0; i < 12; i++) { buf = new Float32Array(2048); proc.onaudioprocess(ausgabe); }
+pruefe(buf.every((x) => x === 0), 'während SymDo spricht: Stille statt Echo');
+kern.handleServerEvent({ type: 'output_audio_buffer.stopped' });
+esp.nachricht({ type: 'espAudio', d: paket(30, new Array(1600).fill(8000)) });
+buf = new Float32Array(2048); proc.onaudioprocess(ausgabe);
+pruefe(buf.every((x) => x === 0), 'kurz nach dem Sprechen: noch gesperrt (Pakete sind unterwegs)');
+
+// Taste am Gerät beendet
+esp.nachricht({ type: 'espEnde', nonce: 'falsch00' });
+pruefe(kern.istOffen(), 'Ende mit fremder Nonce wird ignoriert');
+esp.nachricht({ type: 'espEnde', nonce: 'beef0001' });
+await warte(20);
+pruefe(!kern.istOffen() && !esp.laeuft(), 'Taste am Gerät beendet das Gespräch');
+pruefe(!gesendet.some(([i, w]) => i === 'EspMic' && JSON.parse(w).aktion === 'stop'), 'nach Taste kein stop zurück (Gerät ist schon aus)');
+
+// Ende in der Kachel → stop ans Gerät
+esp.nachricht({ type: 'espWake', nonce: 'cafe0002' });
+esp.nachricht({ type: 'espGewaehlt', nonce: 'cafe0002', client: ich });
+await warte(50);
+kern.stop('vom Nutzer beendet');
+await warte(20);
+const stop = gesendet.filter(([i]) => i === 'EspMic').map(([, w]) => JSON.parse(w)).filter((m) => m.aktion === 'stop');
+pruefe(stop.length === 1 && stop[0].nonce === 'cafe0002' && stop[0].client === ich, 'Gespräch in der Kachel beendet → stop ans Gerät');
+
+// Läuft schon ein Gespräch, wird kein zweites angenommen
+await warte(10);
+globalThis.isSecureContext = true;
+const eigeneSpur = { enabled: true, stop() {} };
+navigator.mediaDevices.getUserMedia = () => Promise.resolve({ getAudioTracks: () => [eigeneSpur], getTracks: () => [eigeneSpur] });
+kern.start();
+await warte(30);
+pruefe(kern.istOffen(), 'eigenes Gespräch läuft (Vorbedingung)');
+const vorher = gesendet.length;
+esp.nachricht({ type: 'espWake', nonce: 'dead0003' });
+pruefe(gesendet.length === vorher, 'laufendes Gespräch (eigenes Mikrofon): Weckwort des Geräts wird nicht angenommen');
+
+console.log((fehler === 0 ? 'OK' : 'FEHLER') + ' — ' + zahl + ' Prüfungen, ' + fehler + ' fehlgeschlagen');
+process.exit(fehler === 0 ? 0 : 1);

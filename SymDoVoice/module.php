@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../SymDoESPVoice/libs/TabletCalc.php';
+require_once __DIR__ . '/libs/EspTablet.php';
+
 /**
  * SymDo Voice — Zweiwege-Sprachdialog mit der KI.
  *
@@ -12,6 +15,8 @@ declare(strict_types=1);
  */
 class SymDoVoice extends IPSModuleStrict
 {
+    use EspTablet;
+
     private const GATEWAY_GUID  = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
     private const SHOPPING_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';
     private const TODO_GUID     = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
@@ -54,6 +59,11 @@ class SymDoVoice extends IPSModuleStrict
 
         // Berichte der Machbarkeitsprobe (Etappe 0), je Umgebung der jüngste.
         $this->RegisterAttributeString('ProbeResult', '[]');
+
+        // Ton über das Tablet: letztes Lebenszeichen eines bereiten Browsers und
+        // die laufende Anfrage eines Sprachgeräts (nonce, gewinner, quelle).
+        $this->RegisterAttributeInteger('EspBereit', 0);
+        $this->RegisterAttributeString('EspStand', '');
     }
 
     public function ApplyChanges(): void
@@ -110,6 +120,27 @@ class SymDoVoice extends IPSModuleStrict
             case 'GetState':
                 $this->Push($this->PayloadBauen());
                 return;
+
+            // Ton über das Tablet (Sprachgerät SymDoESPVoice als Mikrofon)
+            case 'EspHier':
+                $this->WriteAttributeInteger('EspBereit', time());
+                return;
+            case 'EspWake':
+                $this->EspWake((string)$Value);
+                return;
+            case 'EspMic':
+                $this->EspMic((string)$Value);
+                return;
+            case 'EspAudio':
+                $this->Push(['type' => 'espAudio', 'd' => (string)$Value]);
+                return;
+            case 'EspEnde':
+                $e = json_decode((string)$Value, true);
+                $stand = $this->EspStand();
+                if (is_array($e) && ($e['nonce'] ?? '') !== '' && ($e['nonce'] ?? '') === $stand['nonce']) {
+                    $this->Push(['type' => 'espEnde', 'nonce' => $stand['nonce']]);
+                }
+                return;
         }
         parent::RequestAction($Ident, $Value);
     }
@@ -160,6 +191,12 @@ class SymDoVoice extends IPSModuleStrict
         $blase = @file_get_contents(__DIR__ . '/../SymDoGateway/libs/voice-blob.js');
         if (is_string($blase)) {
             $kopf .= '<script>' . $blase . '</script>';
+        }
+        /* Ton über das Tablet: Mikrofon-Pakete eines Sprachgeräts als Mikrofon des
+           Gesprächs. Ruht, solange kein Gerät diese Kachel gewählt hat. */
+        $esp = @file_get_contents(__DIR__ . '/esp-mikro.js');
+        if (is_string($esp)) {
+            $kopf .= '<script>' . $esp . '</script>';
         }
         /* Der Weckwort-Lauscher, wenn das Haus ihn erlaubt hat. Ob das GERAET
            ihn kann, entscheidet er selbst und sagt es. */
@@ -324,6 +361,7 @@ class SymDoVoice extends IPSModuleStrict
                 ? $this->ReadPropertyString('Darstellung') : 'gespraech',
             'freisprechen' => $this->FreisprechenErlaubt(),
             'weckwort'     => $this->WeckwortImHaus(),
+            'espMikro'     => $this->EspGeraete() !== [],
         ];
     }
 

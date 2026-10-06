@@ -52,7 +52,8 @@
             "Please select a voice device.": "Bitte ein Sprachgerät wählen.",
             "The profile could not be stored in the SymDo Gateway.": "Das Profil ließ sich im SymDo-Gateway nicht speichern.",
             "Please use a separate MQTT server for voice devices only — the device would otherwise receive the access of a shared server.": "Bitte einen eigenen MQTT-Server nur für Sprachgeräte verwenden — sonst bekäme das Gerät den Zugang eines gemeinsam genutzten Servers.",
-            "Daily briefing": "Tagesbriefing"
+            "Daily briefing": "Tagesbriefing",
+            "Sound via tablet: SymDo Voice tile (empty = the device speaks itself)": "Ton über Tablet: SymDo-Voice-Kachel (leer = das Gerät spricht selbst)"
         }
     }
 }
