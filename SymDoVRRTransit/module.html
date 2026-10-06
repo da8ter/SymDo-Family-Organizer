@@ -1729,6 +1729,14 @@ let kachelStateHash = '';
 function handleMessage(daten) {
   if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
   if (!daten || typeof daten !== 'object') { return; }
+  /* Nur einen echten Fahrplanstand annehmen. Das Tile-SDK reicht JEDE Nachricht
+     im Fenster an handleMessage — auch seine eigenen Scroll-/Positionsmeldungen
+     ({type: 'position'|'scroll', ...}), die bei Touch-Gesten entstehen und je
+     nach Einbettung (Symcon-App, IPSView, Browser) bei der Kachel selbst
+     ankommen. Bisher wurde so ein Objekt zum Stand: ohne `stops` hiess es
+     „Keine Haltestelle eingerichtet", sobald man die Kachel beruehrte; mit der
+     Maus entstehen diese Meldungen nicht (Nutzermeldung 06.10.2026, Symcon 9.0). */
+  if (typeof daten.v !== 'number' || (!Array.isArray(daten.stops) && !Array.isArray(daten.routes))) { return; }
   if (typeof daten.stateHash === 'string') { kachelStateHash = daten.stateHash; }
   zustand = daten;
   zeichne();
