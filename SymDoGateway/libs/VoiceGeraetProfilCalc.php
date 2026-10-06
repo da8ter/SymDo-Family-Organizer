@@ -16,12 +16,19 @@ declare(strict_types=1);
  */
 final class VoiceGeraetProfilCalc
 {
+    /**
+     * Fertige Weckwoerter (ESP-SR WakeNet9, Modelle in der Firmware). Schluessel
+     * = Kennung, die das Geraet versteht; Wert = Anzeige.
+     */
+    public const WECKWOERTER = ['hiesp' => 'Hi ESP', 'alexa' => 'Alexa', 'jarvis' => 'Jarvis', 'computer' => 'Computer'];
+    public const WECKWORT_VORGABE = 'hiesp';
+
     /** Kachel-Kennungen der Sprachgeraete liegen oberhalb echter Objekt-IDs (max. 59999). */
     public const TILE_BASIS = 1000000;
 
     /**
      * Rohes Profil in die feste Form bringen.
-     * @return array{userId:string, raum:string, geraete:bool}
+     * @return array{userId:string, raum:string, geraete:bool, weckwort:string}
      */
     public static function Normalisieren(mixed $roh): array
     {
@@ -32,7 +39,34 @@ final class VoiceGeraetProfilCalc
             // Vorgabe: schalten erlaubt — es greifen ohnehin die Gateway-Riegel
             // (Geraetesteuerung an, Einwilligung, freigegebene Wurzeln).
             'geraete' => ($p['geraete'] ?? true) !== false,
+            'weckwort' => self::Weckwort((string)($p['weckwort'] ?? '')),
         ];
+    }
+
+    /**
+     * Weckwort in die Form bringen, die das Geraet versteht:
+     *   "hiesp" | "alexa" | "jarvis" | "computer" — fertiges WakeNet-Modell
+     *   "aus"                                    — nur Taste
+     *   "eigen:<ausdruck>"                       — freier englischer Ausdruck (MultiNet)
+     * Der eigene Ausdruck wird auf Kleinbuchstaben a-z und Leerzeichen
+     * gestutzt (die Lautumsetzung auf dem Geraet kennt nur Englisch), 2 bis 5
+     * Woerter, hoechstens 40 Zeichen. Alles Unbrauchbare faellt auf die Vorgabe.
+     */
+    public static function Weckwort(string $roh): string
+    {
+        $roh = strtolower(trim($roh));
+        if ($roh === 'aus' || isset(self::WECKWOERTER[$roh])) {
+            return $roh;
+        }
+        if (str_starts_with($roh, 'eigen:')) {
+            $text = (string)preg_replace('/[^a-z ]+/', ' ', substr($roh, 6));
+            $text = trim((string)preg_replace('/\s+/', ' ', $text));
+            $woerter = $text === '' ? 0 : count(explode(' ', $text));
+            if ($woerter >= 2 && $woerter <= 5 && strlen($text) <= 40) {
+                return 'eigen:' . $text;
+            }
+        }
+        return self::WECKWORT_VORGABE;
     }
 
     /** Hat dieses Geraet ein Sprachprofil? */
@@ -56,6 +90,10 @@ final class VoiceGeraetProfilCalc
      */
     public static function Anwenden(array $body, ?array $device): array
     {
+        /* Die internen Felder setzt NUR das Profil. Kaeme `_raum` aus dem Rumpf
+           einer App, stuende fremder Text ungeprueft in der Anweisung an das
+           Modell (Prompt-Injection). */
+        unset($body['_raum'], $body['_geraete'], $body['_weckwort']);
         if (!self::HatProfil($device)) {
             return $body;
         }
@@ -64,6 +102,7 @@ final class VoiceGeraetProfilCalc
         $body['tile']     = self::TileVon((string)($device['id'] ?? ''));
         $body['_raum']    = $p['raum'];
         $body['_geraete'] = $p['geraete'];
+        $body['_weckwort'] = $p['weckwort'];
         // Vorgaben fuer Listen bleiben Sache des Gateways, nicht des Geraets.
         unset($body['defaults']);
         return $body;

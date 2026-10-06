@@ -279,8 +279,13 @@ trait Voice
                    Prüfung gehört hierher, nicht in den Browser: dort ließe sich
                    die Einwilligung umgehen, und das Attribut ist von außen
                    ohnehin nicht lesbar. */
+                /* Sprachgeraet mit Profil (ESP32): sein eigenes Weckwort aus dem
+                   Geraeteeintrag statt des Haushalts-Weckworts der Web-App — die
+                   Erkennung auf dem Chip kennt nur ihre festen Woerter. Das Tor
+                   (Einwilligung) ist fuer beide dasselbe. */
                 return $this->VoiceHandsFreeOk()
-                    ? ['ok' => true, 'erlaubt' => true, 'weckwort' => $this->VoiceWeckwortRoh()]
+                    ? ['ok' => true, 'erlaubt' => true,
+                       'weckwort' => isset($body['_weckwort']) ? (string)$body['_weckwort'] : $this->VoiceWeckwortRoh()]
                     : ['ok' => true, 'erlaubt' => false,
                        'grund' => $this->Translate('Hands-free is not enabled for this household.')];
             case 'fehler':
