@@ -29,7 +29,7 @@ function pruefe(bool $ok, string $was): void
 
 // ── Teil 1: Rechenkern ──────────────────────────────────────────────────────
 $n = VoiceGeraetProfilCalc::Normalisieren(['userId' => ' u1 ', 'raum' => ' Küche ', 'geraete' => false]);
-pruefe($n === ['userId' => 'u1', 'raum' => 'Küche', 'geraete' => false, 'weckwort' => 'hiesp', 'mqtt' => null], 'Normalisieren trimmt und übernimmt geraete=false');
+pruefe($n === ['userId' => 'u1', 'raum' => 'Küche', 'geraete' => false, 'weckwort' => 'hiesp', 'mqtt' => null, 'cmdKey' => '', 'mitschrift' => false], 'Normalisieren trimmt und übernimmt geraete=false');
 pruefe(VoiceGeraetProfilCalc::Normalisieren(null)['geraete'] === true, 'ohne Angabe ist Schalten erlaubt');
 pruefe(VoiceGeraetProfilCalc::Normalisieren(['geraete' => 0])['geraete'] === true, 'nur echtes false sperrt');
 pruefe(mb_strlen(VoiceGeraetProfilCalc::Normalisieren(['raum' => str_repeat('x', 200)])['raum']) === 60, 'Raum wird gekappt');
@@ -84,6 +84,15 @@ $pa = VoiceGeraetProfilCalc::ProfilAntwort($b2, 'bbbb2222', true);
 pruefe($pa['deviceId'] === 'bbbb2222' && $pa['weckwort'] === 'hiesp' && $pa['mqtt']['user'] === 'esp', 'Profil-Antwort mit Geräte-ID, Weckwort, MQTT');
 pruefe(!isset($pa['raum']) && !isset($pa['userId']), 'Mitglied und Raum verlassen das Gateway nicht');
 pruefe(VoiceGeraetProfilCalc::ProfilAntwort($b2, 'x', false)['weckwort'] === 'aus', 'ohne Freihand-Einwilligung kein Weckwort');
+$key = str_repeat('ab', 32);
+pruefe(VoiceGeraetProfilCalc::Normalisieren(['cmdKey' => $key])['cmdKey'] === $key, 'Befehlsschlüssel (64 Hex) wird übernommen');
+pruefe(VoiceGeraetProfilCalc::Normalisieren(['cmdKey' => 'kurz'])['cmdKey'] === '', 'ungültiger Befehlsschlüssel fällt weg');
+pruefe(VoiceGeraetProfilCalc::Normalisieren(['mitschrift' => 1])['mitschrift'] === false, 'Mitschrift nur bei echtem true');
+$espK = $espM; $espK['voice']['cmdKey'] = $key; $espK['voice']['mitschrift'] = true;
+$pk = VoiceGeraetProfilCalc::ProfilAntwort(VoiceGeraetProfilCalc::Anwenden(['action' => 'profil', '_cmdKey' => 'x'], $espK), 'bbbb2222', true);
+pruefe($pk['cmdKey'] === $key && $pk['mitschrift'] === true, 'Profil-Antwort mit Befehlsschlüssel und Mitschrift-Schalter aus dem Profil');
+$appK = VoiceGeraetProfilCalc::Anwenden(['_cmdKey' => $key, '_mitschrift' => true], $app);
+pruefe(!isset($appK['_cmdKey']) && !isset($appK['_mitschrift']), 'App kann Schlüssel und Mitschrift nicht selbst setzen');
 
 pruefe(VoiceGeraetProfilCalc::RaumHinweis('') === '', 'ohne Raum kein Hinweis');
 pruefe(str_contains(VoiceGeraetProfilCalc::RaumHinweis('Küche'), '„Küche"'), 'Hinweis nennt den Raum');

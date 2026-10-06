@@ -36,6 +36,9 @@ class SymDoESPVoice extends IPSModuleStrict
         $this->RegisterPropertyString('WakeWord', 'hiesp');
         $this->RegisterPropertyString('WakeCustom', '');
         $this->RegisterPropertyBoolean('AllowDevices', true);
+        $this->RegisterPropertyBoolean('ShareTranscript', false);
+        // Gerätegenauer Schlüssel für signierte MQTT-Befehle (siehe EspStatusCalc::Befehl)
+        $this->RegisterAttributeString('CmdKey', '');
 
         $this->RegisterVariableBoolean('ONLINE', $this->Translate('Online'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
@@ -104,6 +107,9 @@ class SymDoESPVoice extends IPSModuleStrict
             $this->RegisterMessage(0, IPS_KERNELSTARTED);
             return;
         }
+        if (strlen($this->ReadAttributeString('CmdKey')) !== 64) {
+            $this->WriteAttributeString('CmdKey', EspStatusCalc::NeuerSchluessel());
+        }
         $geraet = trim($this->ReadPropertyString('DeviceId'));
         if (!EspStatusCalc::GeraetGueltig($geraet)) {
             // Nichts empfangen, solange kein Gerät gewählt ist.
@@ -160,11 +166,11 @@ class SymDoESPVoice extends IPSModuleStrict
     {
         switch ($Ident) {
             case 'VOLUME':
-                $this->Senden(EspStatusCalc::Befehl('volume', max(0, min(100, (int)$Value))));
+                $this->Senden('volume', max(0, min(100, (int)$Value)));
                 $this->SetValue('VOLUME', max(0, min(100, (int)$Value)));
                 return;
             case 'BRIGHTNESS':
-                $this->Senden(EspStatusCalc::Befehl('brightness', max(5, min(100, (int)$Value))));
+                $this->Senden('brightness', max(5, min(100, (int)$Value)));
                 $this->SetValue('BRIGHTNESS', max(5, min(100, (int)$Value)));
                 return;
         }
@@ -173,12 +179,12 @@ class SymDoESPVoice extends IPSModuleStrict
 
     public function StartConversation(): bool
     {
-        return $this->Senden(EspStatusCalc::Befehl('start'));
+        return $this->Senden('start');
     }
 
     public function Reboot(): bool
     {
-        return $this->Senden(EspStatusCalc::Befehl('reboot'));
+        return $this->Senden('reboot');
     }
 
     /** Für den Knopf im Formular: neuer Kopplungscode des Gateways. */
@@ -226,6 +232,7 @@ class SymDoESPVoice extends IPSModuleStrict
                 ['type' => 'Select', 'name' => 'UserId', 'caption' => $this->Translate('Speaks as member'), 'options' => $mitglieder],
                 ['type' => 'ValidationTextBox', 'name' => 'Room', 'caption' => $this->Translate('Room (default for "turn on the light")')],
                 ['type' => 'CheckBox', 'name' => 'AllowDevices', 'caption' => $this->Translate('May control devices')],
+                ['type' => 'CheckBox', 'name' => 'ShareTranscript', 'caption' => $this->Translate('Show last question and answer in Symcon (all voice devices on this MQTT server can read along)')],
                 ['type' => 'Select', 'name' => 'WakeWord', 'caption' => $this->Translate('Wake word'), 'options' => $woerter],
                 ['type' => 'ValidationTextBox', 'name' => 'WakeCustom', 'caption' => $this->Translate('Custom phrase (English, 2–5 words)')],
                 ['type' => 'Label', 'caption' => $this->Translate('The wake word only listens if hands-free is enabled in the SymDo Gateway.')],
@@ -255,7 +262,9 @@ class SymDoESPVoice extends IPSModuleStrict
             trim($this->ReadPropertyString('Room')),
             $this->ReadPropertyBoolean('AllowDevices'),
             EspStatusCalc::Weckwort($this->ReadPropertyString('WakeWord'), $this->ReadPropertyString('WakeCustom')),
-            $this->MqttZugang()
+            $this->MqttZugang(),
+            $this->ReadAttributeString('CmdKey'),
+            $this->ReadPropertyBoolean('ShareTranscript')
         );
         return (bool)@TGW_SetDeviceVoiceProfile($gw, $geraet, (string)json_encode($profil, JSON_UNESCAPED_UNICODE));
     }
@@ -300,12 +309,14 @@ class SymDoESPVoice extends IPSModuleStrict
         return true;
     }
 
-    private function Senden(string $nutzlast): bool
+    private function Senden(string $cmd, ?int $wert = null): bool
     {
         $geraet = trim($this->ReadPropertyString('DeviceId'));
-        if (!EspStatusCalc::GeraetGueltig($geraet) || !$this->HasActiveParent()) {
+        $schluessel = $this->ReadAttributeString('CmdKey');
+        if (!EspStatusCalc::GeraetGueltig($geraet) || strlen($schluessel) !== 64 || !$this->HasActiveParent()) {
             return false;
         }
+        $nutzlast = EspStatusCalc::Befehl($cmd, $wert, $schluessel, time());
         $this->SendDebug('Befehl', $nutzlast, 0);
         $this->SendDataToParent((string)json_encode([
             'DataID'           => self::MQTT_TX,

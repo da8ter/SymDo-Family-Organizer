@@ -41,6 +41,13 @@ final class VoiceGeraetProfilCalc
             'geraete' => ($p['geraete'] ?? true) !== false,
             'weckwort' => self::Weckwort((string)($p['weckwort'] ?? '')),
             'mqtt'    => self::Mqtt($p['mqtt'] ?? null),
+            // Schluessel, mit dem Symcon jeden MQTT-Befehl an GENAU dieses Geraet
+            // signiert (HMAC-SHA256). Alle Geraete teilen sich den MQTT-Zugang —
+            // ohne ihn koennte eines dem anderen "start" schicken (Mikrofon an).
+            'cmdKey'  => preg_match('/^[0-9a-f]{64}$/', (string)($p['cmdKey'] ?? '')) === 1 ? (string)$p['cmdKey'] : '',
+            // Frage/Antwort an Symcon melden? Aus, solange niemand es will:
+            // alle Geraete am MQTT-Server koennten mitlesen.
+            'mitschrift' => ($p['mitschrift'] ?? false) === true,
         ];
     }
 
@@ -81,6 +88,8 @@ final class VoiceGeraetProfilCalc
             'weckwort' => $freihandOk ? (string)($body['_weckwort'] ?? self::WECKWORT_VORGABE) : 'aus',
             'freihand' => $freihandOk,
             'mqtt'     => $body['_mqtt'] ?? null,
+            'cmdKey'   => (string)($body['_cmdKey'] ?? ''),
+            'mitschrift' => ($body['_mitschrift'] ?? false) === true,
         ];
     }
 
@@ -134,7 +143,8 @@ final class VoiceGeraetProfilCalc
         /* Die internen Felder setzt NUR das Profil. Kaeme `_raum` aus dem Rumpf
            einer App, stuende fremder Text ungeprueft in der Anweisung an das
            Modell (Prompt-Injection). */
-        unset($body['_raum'], $body['_geraete'], $body['_weckwort'], $body['_mqtt'], $body['_profil']);
+        unset($body['_raum'], $body['_geraete'], $body['_weckwort'], $body['_mqtt'], $body['_profil'],
+              $body['_cmdKey'], $body['_mitschrift']);
         if (!self::HatProfil($device)) {
             return $body;
         }
@@ -146,6 +156,8 @@ final class VoiceGeraetProfilCalc
         $body['_weckwort'] = $p['weckwort'];
         $body['_mqtt']     = $p['mqtt'];
         $body['_profil']   = true;
+        $body['_cmdKey']   = $p['cmdKey'];
+        $body['_mitschrift'] = $p['mitschrift'];
         // Vorgaben fuer Listen bleiben Sache des Gateways, nicht des Geraets.
         unset($body['defaults']);
         return $body;

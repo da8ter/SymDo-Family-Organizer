@@ -42,14 +42,21 @@ pruefe(mb_strlen(EspStatusCalc::Status('{"antwort":"' . str_repeat('x', 3000) . 
 pruefe(EspStatusCalc::Status('{"evil":"x","frage":["a"]}') === [], 'fremde Felder und falsche Typen fallen weg');
 
 // ── Befehle und Profil ──────────────────────────────────────────────────────
-pruefe(EspStatusCalc::Befehl('volume', 55) === '{"cmd":"volume","value":55}', 'Lautstärke-Befehl');
-pruefe(EspStatusCalc::Befehl('start') === '{"cmd":"start"}', 'Start ohne Wert');
+$k = str_repeat('0f', 32);
+$b = json_decode(EspStatusCalc::Befehl('volume', 55, $k, 1791300000), true);
+pruefe($b['cmd'] === 'volume' && $b['value'] === 55 && $b['ts'] === 1791300000, 'Lautstärke-Befehl mit Zeitstempel');
+pruefe($b['mac'] === hash_hmac('sha256', 'volume|55|1791300000', (string)hex2bin($k)), 'Signatur über cmd|value|ts mit dem Geräteschlüssel');
+$s0 = json_decode(EspStatusCalc::Befehl('start', null, $k, 5), true);
+pruefe(!isset($s0['value']) && $s0['mac'] === hash_hmac('sha256', 'start||5', (string)hex2bin($k)), 'Start ohne Wert, Signatur mit leerem Wert');
+pruefe(EspStatusCalc::Signatur('start', null, $k, 5) !== EspStatusCalc::Signatur('start', null, str_repeat('f0', 32), 5), 'anderer Schlüssel, andere Signatur');
+pruefe(strlen(EspStatusCalc::NeuerSchluessel()) === 64 && EspStatusCalc::NeuerSchluessel() !== EspStatusCalc::NeuerSchluessel(), 'Schlüssel: 64 Hex, zufällig');
 pruefe(EspStatusCalc::Weckwort('alexa', '') === 'alexa', 'fertiges Weckwort');
 pruefe(EspStatusCalc::Weckwort('eigen', ' hey sim doo ') === 'eigen:hey sim doo', 'eigener Ausdruck (Gateway prüft weiter)');
 pruefe(EspStatusCalc::Weckwort('quatsch', '') === 'hiesp', 'unbekannte Wahl → Vorgabe');
 $p = EspStatusCalc::Profil('4d78fead', 'Wohnzimmer', false, 'hiesp', ['port' => 1890, 'user' => 'u', 'pass' => 'p']);
 pruefe($p['userId'] === '4d78fead' && $p['geraete'] === false && $p['mqtt']['port'] === 1890, 'Profil mit MQTT');
 pruefe(!isset(EspStatusCalc::Profil('', '', true, 'aus', null)['mqtt']), 'ohne MQTT-Server kein MQTT im Profil');
+pruefe(EspStatusCalc::Profil('', '', true, 'aus', null)['mitschrift'] === false, 'Mitschrift standardmäßig aus');
 
 // ── Riegel auf module.php ───────────────────────────────────────────────────
 $m = (string)file_get_contents(__DIR__ . '/../module.php');
@@ -59,6 +66,8 @@ pruefe(str_contains($m, "!== EspStatusCalc::ThemaStatus(\$geraet)"), 'nur das ei
 pruefe(str_contains($m, 'hex2bin($roh)') && str_contains($m, "'Payload'          => bin2hex(\$nutzlast)"), 'Nutzlast hex-kodiert (Module Strict)');
 pruefe(str_contains($m, 'ServerNurFuerSprachgeraete($server)') && substr_count($m, 'ServerNurFuerSprachgeraete(') >= 3,
     'MQTT-Zugang nur von einem Server, an dem ausschließlich Sprachgeräte hängen');
+pruefe(str_contains($m, "RegisterPropertyBoolean('ShareTranscript', false)"), 'Mitschrift-Schalter standardmäßig aus');
+pruefe(str_contains($m, "EspStatusCalc::Befehl(\$cmd, \$wert, \$schluessel, time())") && str_contains($m, 'strlen($schluessel) !== 64'), 'jeder Befehl signiert, ohne Schlüssel kein Befehl');
 pruefe(!preg_match("/'~[A-Z]/", $m), 'keine Variablenprofile');
 pruefe(substr_count($m, 'EnableAction(') === 2, 'nur Lautstärke und Helligkeit schaltbar');
 

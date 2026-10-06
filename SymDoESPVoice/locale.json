@@ -32,6 +32,7 @@
             "Speaks as member": "Spricht als Mitglied",
             "Room (default for \"turn on the light\")": "Raum (Vorgabe für „mach das Licht an“)",
             "May control devices": "Darf Geräte schalten",
+            "Show last question and answer in Symcon (all voice devices on this MQTT server can read along)": "Letzte Frage und Antwort in Symcon anzeigen (alle Sprachgeräte an diesem MQTT-Server können mitlesen)",
             "Wake word": "Weckwort",
             "Custom phrase (English, 2–5 words)": "Eigener Ausdruck (englisch, 2–5 Wörter)",
             "The wake word only listens if hands-free is enabled in the SymDo Gateway.": "Das Weckwort lauscht nur, wenn im SymDo-Gateway das freihändige Sprechen freigegeben ist.",

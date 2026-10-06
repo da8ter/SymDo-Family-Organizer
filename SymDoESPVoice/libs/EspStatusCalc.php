@@ -68,14 +68,33 @@ final class EspStatusCalc
         return $raus;
     }
 
-    /** Befehl an das Gerät. */
-    public static function Befehl(string $cmd, int|string|null $wert = null): string
+    /**
+     * Signierter Befehl an das Gerät. Alle Geräte teilen sich den MQTT-Zugang;
+     * erst die Signatur mit dem gerätegenauen Schlüssel (aus dem Gateway-Profil)
+     * macht einen Befehl echt. ts schützt gegen Wiederholung (das Gerät nimmt
+     * nur steigende ts im Fenster ±60 s an).
+     * Signiert wird  "<cmd>|<value>|<ts>"  (value leer, wenn keiner).
+     */
+    public static function Befehl(string $cmd, int|null $wert, string $schluesselHex, int $ts): string
     {
         $b = ['cmd' => $cmd];
         if ($wert !== null) {
             $b['value'] = $wert;
         }
+        $b['ts'] = $ts;
+        $b['mac'] = self::Signatur($cmd, $wert, $schluesselHex, $ts);
         return (string)json_encode($b, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    public static function Signatur(string $cmd, int|null $wert, string $schluesselHex, int $ts): string
+    {
+        return hash_hmac('sha256', $cmd . '|' . ($wert === null ? '' : (string)$wert) . '|' . $ts, (string)hex2bin($schluesselHex));
+    }
+
+    /** Neuer Befehlsschlüssel: 32 zufällige Bytes als Hex. */
+    public static function NeuerSchluessel(): string
+    {
+        return bin2hex(random_bytes(32));
     }
 
     /**
@@ -95,9 +114,11 @@ final class EspStatusCalc
      * @param array{port:int, user:string, pass:string}|null $mqtt
      * @return array<string,mixed>
      */
-    public static function Profil(string $userId, string $raum, bool $geraete, string $weckwort, ?array $mqtt): array
+    public static function Profil(string $userId, string $raum, bool $geraete, string $weckwort, ?array $mqtt,
+                                  string $cmdKey = '', bool $mitschrift = false): array
     {
-        $p = ['userId' => $userId, 'raum' => $raum, 'geraete' => $geraete, 'weckwort' => $weckwort];
+        $p = ['userId' => $userId, 'raum' => $raum, 'geraete' => $geraete, 'weckwort' => $weckwort,
+              'cmdKey' => $cmdKey, 'mitschrift' => $mitschrift];
         if ($mqtt !== null) {
             $p['mqtt'] = $mqtt;
         }
