@@ -451,6 +451,39 @@ trait Tts
         ]);
     }
 
+    /**
+     * Einen Sprachclip fuer einen Text bereitstellen (Durchsagen der
+     * Sprachgeraete, SymDoESPVoice). Erzeugt ihn, wenn er fehlt — sonst aus dem
+     * Zwischenspeicher. Das Geraet holt ihn dann mit seinem Token ueber
+     * GET /v1/tts/{hash}.
+     *
+     * @return string JSON {ok, hash, format} oder {ok:false, error}
+     */
+    public function TtsClip(string $Text): string
+    {
+        $fehler = static fn(string $code): string => (string)json_encode(['ok' => false, 'error' => $code]);
+        if (!$this->TtsStorageReady()) {
+            return $fehler('tts_restart_required');
+        }
+        if (!$this->TtsEnabled()) {
+            return $fehler('tts_disabled');
+        }
+        $text = $this->TtsNormalize(mb_substr($Text, 0, 600));
+        if ($text === '') {
+            return $fehler('empty');
+        }
+        $format = $this->TtsFormat('mp3');
+        $hash = $this->TtsHash($text, '', '', $format);
+        $mid = $this->TtsLookup($hash);
+        if ($mid <= 0) {
+            $mid = $this->TtsProduce($hash, $text, '', '', $format);
+        }
+        if ($mid <= 0) {
+            return $fehler('tts_failed');
+        }
+        return (string)json_encode(['ok' => true, 'hash' => $hash, 'format' => $format]);
+    }
+
     /** GET /v1/tts/{hash} — die fertige Tondatei. */
     private function HandleTtsAudio(string $hash): void
     {

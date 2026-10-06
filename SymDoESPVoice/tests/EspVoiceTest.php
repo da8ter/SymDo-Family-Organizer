@@ -67,6 +67,11 @@ pruefe(str_contains($m, 'hex2bin($roh)') && str_contains($m, "'Payload'         
 pruefe(str_contains($m, 'ServerNurFuerSprachgeraete($server)') && substr_count($m, 'ServerNurFuerSprachgeraete(') >= 3,
     'MQTT-Zugang nur von einem Server, an dem ausschließlich Sprachgeräte hängen');
 pruefe(str_contains($m, "RegisterPropertyBoolean('ShareTranscript', false)"), 'Mitschrift-Schalter standardmäßig aus');
+// Durchsage
+pruefe(EspStatusCalc::SpeakWert(str_repeat('a', 32), 'mp3', "Essen  ist\nfertig") === str_repeat('a', 32) . '|mp3|Essen ist fertig', 'speak-Wert: Hash|Format|Text, Leerraum zusammengefasst');
+pruefe(EspStatusCalc::SpeakWert('../x', 'mp3', 'a') === null && EspStatusCalc::SpeakWert(str_repeat('a', 32), 'exe', 'a') === null, 'nur Hex-Hash und mp3/wav');
+pruefe(mb_strlen(explode('|', (string)EspStatusCalc::SpeakWert(str_repeat('a', 32), 'wav', str_repeat('x', 500)), 3)[2]) === 160, 'Untertitel gekappt');
+pruefe(str_contains(EspStatusCalc::SpeakWert(str_repeat('a', 32), 'mp3', 'a|b'), '|mp3|a|b'), 'ein | im Text steht hinten und verschiebt nichts');
 // Firmware-Update
 pruefe(EspStatusCalc::FirmwareGueltig("\xE9" . str_repeat("\0", 70000)), 'ESP-Abbild (0xE9) wird angenommen');
 pruefe(!EspStatusCalc::FirmwareGueltig('<html>' . str_repeat('x', 70000)), 'keine Webseite als Firmware');

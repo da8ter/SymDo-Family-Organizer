@@ -38,6 +38,8 @@
             "The wake word only listens if hands-free is enabled in the SymDo Gateway.": "Das Weckwort lauscht nur, wenn im SymDo-Gateway das freihändige Sprechen freigegeben ist.",
             "Start conversation": "Gespräch starten",
             "Restart device": "Gerät neu starten",
+            "Test announcement": "Testdurchsage",
+            "This is a test announcement from Symcon.": "Das ist eine Testdurchsage aus Symcon.",
             "Update firmware": "Firmware aktualisieren",
             "Firmware source (URL or file on the Symcon host)": "Firmware-Quelle (Adresse oder Datei auf dem Symcon-Rechner)",
             "Please enter a firmware source first.": "Bitte zuerst eine Firmware-Quelle eintragen.",

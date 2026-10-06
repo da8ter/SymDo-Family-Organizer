@@ -110,6 +110,20 @@ final class EspStatusCalc
         return $pfad . '|' . $sha256;
     }
 
+    /**
+     * Befehlswert für speak: "<hash>|<format>|<untertitel>". Hash und Format
+     * kommen aus dem Gateway (TGW_TtsClip); der Untertitel steht zuletzt, damit
+     * ein „|" im Text nichts verschiebt. Alles von der Signatur gedeckt.
+     */
+    public static function SpeakWert(string $hash, string $format, string $text): ?string
+    {
+        if (preg_match('/^[0-9a-f]{16,64}$/', $hash) !== 1 || !in_array($format, ['mp3', 'wav'], true)) {
+            return null;
+        }
+        $text = trim((string)preg_replace('/\s+/u', ' ', $text));
+        return $hash . '|' . $format . '|' . mb_substr($text, 0, 160);
+    }
+
     /** Neuer Befehlsschlüssel: 32 zufällige Bytes als Hex. */
     public static function NeuerSchluessel(): string
     {

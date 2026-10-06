@@ -188,6 +188,26 @@ class SymDoESPVoice extends IPSModuleStrict
         return $this->Senden('start');
     }
 
+    /**
+     * Durchsage: das Gateway erzeugt den Sprachclip (Stimme und Anbieter wie beim
+     * Briefing), das Gerät holt ihn mit seinem Token, spielt ihn ab und zeigt den
+     * Text. Läuft gerade ein Gespräch, kommt die Durchsage danach.
+     */
+    public function Speak(string $Text): bool
+    {
+        $gw = $this->GatewayID();
+        if ($gw === 0 || trim($Text) === '') {
+            return false;
+        }
+        $r = json_decode((string)@TGW_TtsClip($gw, $Text), true);
+        if (!is_array($r) || ($r['ok'] ?? false) !== true) {
+            $this->SendDebug('Speak', 'Gateway: ' . (string)($r['error'] ?? 'keine Antwort'), 0);
+            return false;
+        }
+        $wert = EspStatusCalc::SpeakWert((string)$r['hash'], (string)$r['format'], $Text);
+        return $wert !== null && $this->Senden('speak', $wert);
+    }
+
     public function Reboot(): bool
     {
         return $this->Senden('reboot');
@@ -287,6 +307,7 @@ class SymDoESPVoice extends IPSModuleStrict
             ],
             'actions' => [
                 ['type' => 'Button', 'caption' => $this->Translate('Start conversation'), 'onClick' => 'SDEV_StartConversation($id);'],
+                ['type' => 'Button', 'caption' => $this->Translate('Test announcement'), 'onClick' => 'SDEV_Speak($id, \'' . $this->Translate('This is a test announcement from Symcon.') . '\');'],
                 ['type' => 'Button', 'caption' => $this->Translate('Restart device'), 'onClick' => 'SDEV_Reboot($id);'],
                 ['type' => 'Button', 'caption' => $this->Translate('Update firmware'), 'onClick' => 'echo SDEV_UpdateFirmware($id);'],
             ],
