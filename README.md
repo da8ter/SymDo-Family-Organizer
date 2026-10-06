@@ -201,6 +201,17 @@ Eingeschaltet, eingewilligt und begrenzt wird im Gateway.
 
 → [Ausführliche Anleitung](SymDoVoice/README.md)
 
+## SymDo - Sprachgerät (experimentell)
+
+Ein kleiner Sprachassistent für den Raum: ein ESP32-S3-Gerät mit Mikrofon,
+Lautsprecher und Display spricht mit der SymDo-KI wie die Sprachkachel — per
+Taste oder Weckwort. In Symcon zeigt die Instanz Zustand, Akku und Lautstärke
+und legt fest, für wen und in welchem Raum das Gerät spricht und ob es schalten
+darf. Angebunden über einen eigenen MQTT-Server, Befehle signiert. Die
+Geräte-Firmware ist in Entwicklung.
+
+→ [Ausführliche Anleitung](SymDoESPVoice/README.md)
+
 ## SymDo - Notizen
 
 ![SymDo — Notizen](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Notizen.png)
