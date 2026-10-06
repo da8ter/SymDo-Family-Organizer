@@ -3,6 +3,8 @@
 // WebRTC-Attrappen.
 //   node SymDoVoice/tests/EspMikroTest.mjs
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { webcrypto } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -49,6 +51,7 @@ globalThis.AudioContext = class {
   createGain() { return Object.assign(new Knoten(), { art: 'stumm', gain: { value: 1 } }); }
 };
 globalThis.atob = (b) => Buffer.from(b, 'base64').toString('binary');
+if (!globalThis.crypto) { globalThis.crypto = webcrypto; }
 
 new Function(readFileSync(join(hier, '../../SymDoGateway/libs/voice-core.js'), 'utf8'))();
 new Function(readFileSync(join(hier, '../esp-mikro.js'), 'utf8'))();
@@ -74,15 +77,23 @@ for (const s of [0, 1, -1, 100, -100, 1000, -1000, 8000, -8000, 20000, -20000, 3
 pruefe(schlimmst <= 1, 'µ-law: Firmware-Kodierer und Kachel-Dekodierer passen zusammen');
 pruefe(E._ULAW[ulaw(5000)] > 0 && E._ULAW[ulaw(-5000)] < 0, 'µ-law: Vorzeichen bleibt');
 
-function paket(nr, werte) {
+function roh(nr, werte) {
   const b = Buffer.alloc(2 + werte.length);
   b[0] = nr >> 8; b[1] = nr & 0xff;
   werte.forEach((s, i) => { b[2 + i] = ulaw(s); });
-  return b.toString('base64');
+  return b;
 }
-const p = E._dekodieren(paket(258, new Array(1600).fill(4000)));
+const p = E._dekodieren(roh(258, new Array(1600).fill(4000)).toString('base64'));
 pruefe(p && p.nr === 258 && p.werte.length === 1600, 'Paket: Nummer und 1600 Werte');
 pruefe(E._dekodieren('') === null && E._dekodieren('%%%') === null, 'Paket: Unsinn wird verworfen');
+
+// ── XChaCha20: dasselbe Ergebnis wie libsodium in PHP (TabletCalc::Verschluesseln) ──
+const kHex = '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
+const nHex = '404142434445464748494a4b4c4d4e4f5051525354555657';
+const klar = Buffer.from(Array.from({ length: 300 }, (_, i) => (i * 7) & 0xff));
+const vonPhp = execFileSync('php', ['-r', `echo bin2hex(sodium_crypto_stream_xchacha20_xor(hex2bin('${klar.toString('hex')}'), hex2bin('${nHex}'), hex2bin('${kHex}')));`]).toString();
+const vonJs = Buffer.from(E._xchacha20(Buffer.from(kHex, 'hex'), Buffer.from(nHex, 'hex'), klar)).toString('hex');
+pruefe(vonPhp.length === 600 && vonJs === vonPhp, 'XChaCha20 der Kachel = libsodium (300 Byte, über Blockgrenzen)');
 
 // ── Zitterpuffer ──
 const P = new E._Puffer(2400, 9600);
@@ -130,6 +141,16 @@ esp.nachricht({ type: 'espWake', nonce: 'abcd1234' });
 const zusage = gesendet.filter(([i]) => i === 'EspMic').map(([, w]) => JSON.parse(w));
 pruefe(zusage.length === 1 && zusage[0].aktion === 'start' && zusage[0].nonce === 'abcd1234' && /^[a-z0-9]{6,32}$/.test(zusage[0].client), 'Weckwort: Zusage mit Nonce und Fensterkennung');
 const ich = zusage[0].client;
+pruefe(/^[0-9a-f]{64}$/.test(zusage[0].schluessel || ''), 'Zusage trägt einen frischen 32-Byte-Schlüssel');
+const schluesselVon = (nonce) => {
+  const z = gesendet.filter(([i, w]) => i === 'EspMic' && JSON.parse(w).aktion === 'start' && JSON.parse(w).nonce === nonce).map(([, w]) => JSON.parse(w));
+  return z.length ? Buffer.from(z[z.length - 1].schluessel, 'hex') : null;
+};
+let aktSchluessel = null;
+function paket(nr, werte) {
+  const n = Buffer.from(Array.from({ length: 24 }, () => Math.floor(Math.random() * 256)));
+  return { n: n.toString('base64'), d: Buffer.from(E._xchacha20(aktSchluessel, n, roh(nr, werte))).toString('base64') };
+}
 
 esp.nachricht({ type: 'espGewaehlt', nonce: 'abcd1234', client: 'anderesfenster' });
 await warte(20);
@@ -141,6 +162,7 @@ esp.nachricht({ type: 'espWake', nonce: 'beef0001' });
 pruefe(gesendet.length === vorWeck + 1, 'doppelt zugestellter Weckruf: nur eine Zusage');
 esp.nachricht({ type: 'espGewaehlt', nonce: 'beef0001', client: ich });
 esp.nachricht({ type: 'espGewaehlt', nonce: 'beef0001', client: ich });
+aktSchluessel = schluesselVon('beef0001');
 await warte(50);
 pruefe(esp.laeuft() && kern.istOffen(), 'gewählt: Gespräch läuft');
 pruefe(gumGerufen === 0, 'kein Browser-Mikrofon gefragt (auch auf http)');
@@ -152,21 +174,28 @@ pruefe(verbunden.some(([a, b]) => a === 'proc' && b === 'ziel') && verbunden.som
 const proc = globalThis.__proc;
 const ausgabe = { outputBuffer: { getChannelData: () => buf } };
 let buf = new Float32Array(2048);
-for (let i = 0; i < 3; i++) { esp.nachricht({ type: 'espAudio', d: paket(i, new Array(1600).fill(8000)) }); }
+for (let i = 0; i < 3; i++) { esp.nachricht({ type: 'espAudio', ...paket(i, new Array(1600).fill(8000)) }); }
 proc.onaudioprocess(ausgabe);
 pruefe(buf.some((x) => x > 0.2), 'Pakete kommen als Ton am Strom an');
+// Ein Paket mit fremdem Schlüssel ist Rauschen, kein Ton aus dem Raum
+{
+  const echt = aktSchluessel; aktSchluessel = Buffer.alloc(32, 7);
+  const fremd = E._xchacha20(echt, Buffer.alloc(24, 1), E._xchacha20(aktSchluessel, Buffer.alloc(24, 1), roh(1, new Array(1600).fill(8000))));
+  aktSchluessel = echt;
+  pruefe(Buffer.from(fremd).subarray(2).some((b) => b !== ulaw(8000)), 'falscher Schlüssel ergibt keinen lesbaren Ton');
+}
 // Doppelzustellung der Visu: dasselbe Paket zweimal darf nicht zweimal in den Puffer
 const zaehle = () => { let n = 0; const b = new Float32Array(48000); const alt = buf; buf = b; proc.onaudioprocess(ausgabe); buf = alt; for (const x of b) { if (x !== 0) { n++; } } return n; };
 zaehle();   // Puffer leeren
-for (let i = 0; i < 3; i++) { const d = paket(100 + i, new Array(1600).fill(8000)); esp.nachricht({ type: 'espAudio', d }); esp.nachricht({ type: 'espAudio', d }); }
+for (let i = 0; i < 3; i++) { const pk = paket(100 + i, new Array(1600).fill(8000)); esp.nachricht({ type: 'espAudio', ...pk }); esp.nachricht({ type: 'espAudio', ...pk }); }
 const tonWerte = zaehle();
 pruefe(Math.abs(tonWerte - 3 * 1600 * 3) <= 3, 'doppelt zugestellte Pakete zählen einmal (' + tonWerte + ' Werte bei 48 kHz, erwartet 14400)');
 kern.handleServerEvent({ type: 'output_audio_buffer.started' });
-for (let i = 0; i < 10; i++) { esp.nachricht({ type: 'espAudio', d: paket(10 + i, new Array(1600).fill(8000)) }); }
+for (let i = 0; i < 10; i++) { esp.nachricht({ type: 'espAudio', ...paket(10 + i, new Array(1600).fill(8000)) }); }
 for (let i = 0; i < 12; i++) { buf = new Float32Array(2048); proc.onaudioprocess(ausgabe); }
 pruefe(buf.every((x) => x === 0), 'während SymDo spricht: Stille statt Echo');
 kern.handleServerEvent({ type: 'output_audio_buffer.stopped' });
-esp.nachricht({ type: 'espAudio', d: paket(30, new Array(1600).fill(8000)) });
+esp.nachricht({ type: 'espAudio', ...paket(30, new Array(1600).fill(8000)) });
 buf = new Float32Array(2048); proc.onaudioprocess(ausgabe);
 pruefe(buf.every((x) => x === 0), 'kurz nach dem Sprechen: noch gesperrt (Pakete sind unterwegs)');
 

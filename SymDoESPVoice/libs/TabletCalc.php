@@ -7,14 +7,23 @@ declare(strict_types=1);
  * SymDo-Voice-Kachel. Reine Funktionen für SymDoESPVoice (Gerät ↔ Symcon) und
  * SymDoVoice (Symcon ↔ Browser), damit Prüfstände ohne Symcon laufen.
  *
- *   Gerät  → symdo/esp/<id>/event  {"wake":"<nonce>","hf":bool} | {"ende":"<nonce>"}
- *   Gerät  → symdo/esp/<id>/mic    2 Byte Paketnummer + 1600 Byte G.711 µ-law (100 ms, 16 kHz)
+ *   Gerät  → symdo/esp/<id>/event  {"wake":"<nonce>","hf":bool,"ts":ms,"mac":hex} | {"ende":"<nonce>","ts":ms,"mac":hex}
+ *   Gerät  → symdo/esp/<id>/mic    2 Byte Nummer + 8 Byte HMAC + 1600 Byte G.711 µ-law (100 ms, 16 kHz)
  *   Symcon → Gerät, signiert: mic = start|<nonce> | nein|<nonce> | stop | keep
+ *
+ * Alles vom Gerät trägt eine HMAC mit dem Befehlsschlüssel: alle Sprachgeräte
+ * teilen den MQTT-Zugang, ohne Signatur könnte ein anderes Gerät Ton in ein
+ * Gespräch einspeisen. Zur Kachel geht der Ton verschlüsselt (XChaCha20) mit
+ * dem Schlüssel des Browsers, der das Gespräch führt — Kachel-Pushes erreichen
+ * JEDEN offenen Visu-Client.
  */
 class TabletCalc
 {
-    /** Größtes Mikrofon-Paket: 2 Byte Nummer + 200 ms Ton. Alles darüber ist kein Paket des Geräts. */
-    public const PAKET_MAX = 2 + 3200;
+    /** Größtes Mikrofon-Paket: 2 Byte Nummer + 8 Byte HMAC + 200 ms Ton. */
+    public const PAKET_MAX = 2 + 8 + 3200;
+
+    /** Zeitfenster für Ereignisse des Geräts (ms), wie bei den Befehlen. */
+    public const FENSTER_MS = 60000;
 
     /** So lange gilt eine Kachel nach ihrem letzten Lebenszeichen als bereit. */
     public const BEREIT_SEKUNDEN = 75;
@@ -46,23 +55,35 @@ class TabletCalc
         return preg_match('/^[a-z0-9]{6,32}$/', $client) === 1;
     }
 
+    /** Signaturtext eines Ereignisses — genau wie tablet.c ihn bildet. */
+    public static function EreignisText(string $art, string $nonce, ?bool $hf, int $ts): string
+    {
+        return $hf === null ? "$art|$nonce|$ts" : "$art|$nonce|" . ($hf ? '1' : '0') . "|$ts";
+    }
+
     /**
-     * Ereignis des Geräts lesen.
-     * @return array{art:string, nonce:string, hf?:bool}|null
+     * Ereignis des Geräts lesen und prüfen: Signatur mit dem Befehlsschlüssel,
+     * Zeitstempel im Fenster. Ohne gültige Signatur null.
+     * @return array{art:string, nonce:string, hf?:bool, ts:int}|null
      */
-    public static function Ereignis(string $json): ?array
+    public static function Ereignis(string $json, string $schluesselHex, int $jetztMs): ?array
     {
         $e = json_decode($json, true);
-        if (!is_array($e)) {
+        $schluessel = strlen($schluesselHex) === 64 ? hex2bin($schluesselHex) : false;
+        if (!is_array($e) || $schluessel === false || !is_int($e['ts'] ?? null) || !is_string($e['mac'] ?? null)
+            || abs($e['ts'] - $jetztMs) > self::FENSTER_MS) {
             return null;
         }
         if (is_string($e['wake'] ?? null) && self::NonceGueltig($e['wake'])) {
-            return ['art' => 'wake', 'nonce' => $e['wake'], 'hf' => ($e['hf'] ?? false) === true];
+            $r = ['art' => 'wake', 'nonce' => $e['wake'], 'hf' => ($e['hf'] ?? false) === true, 'ts' => $e['ts']];
+            $text = self::EreignisText('wake', $r['nonce'], $r['hf'], $r['ts']);
+        } elseif (is_string($e['ende'] ?? null) && self::NonceGueltig($e['ende'])) {
+            $r = ['art' => 'ende', 'nonce' => $e['ende'], 'ts' => $e['ts']];
+            $text = self::EreignisText('ende', $r['nonce'], null, $r['ts']);
+        } else {
+            return null;
         }
-        if (is_string($e['ende'] ?? null) && self::NonceGueltig($e['ende'])) {
-            return ['art' => 'ende', 'nonce' => $e['ende']];
-        }
-        return null;
+        return hash_equals(hash_hmac('sha256', $text, $schluessel), strtolower($e['mac'])) ? $r : null;
     }
 
     /** Wert für den signierten Befehl "mic", null bei ungültiger Eingabe. */
@@ -74,11 +95,41 @@ class TabletCalc
         return in_array($aktion, ['stop', 'keep'], true) ? $aktion : null;
     }
 
-    /** Mikrofon-Paket prüfen und für die Kachel verpacken (Base64), sonst null. */
-    public static function Paket(string $roh): ?string
+    /**
+     * Mikrofon-Paket prüfen: HMAC über Nonce des laufenden Gesprächs, Nummer und
+     * Ton. Gibt Nummer + Ton (ohne HMAC) als Base64 zurück, sonst null.
+     */
+    public static function Paket(string $roh, string $nonce, string $schluesselHex): ?string
     {
         $n = strlen($roh);
-        return $n > 2 && $n <= self::PAKET_MAX ? base64_encode($roh) : null;
+        $schluessel = strlen($schluesselHex) === 64 ? hex2bin($schluesselHex) : false;
+        if ($n <= 10 || $n > self::PAKET_MAX || !self::NonceGueltig($nonce) || $schluessel === false) {
+            return null;
+        }
+        $nr = substr($roh, 0, 2);
+        $ton = substr($roh, 10);
+        $soll = substr(hash_hmac('sha256', $nonce . $nr . $ton, $schluessel, true), 0, 8);
+        return hash_equals($soll, substr($roh, 2, 8)) ? base64_encode($nr . $ton) : null;
+    }
+
+    /** Schlüssel, den der führende Browser für den Ton mitschickt (32 Byte Hex). */
+    public static function SchluesselGueltig(string $hex): bool
+    {
+        return preg_match('/^[0-9a-f]{64}$/', $hex) === 1;
+    }
+
+    /**
+     * Paket (Base64 aus Paket()) für die Kachel verschlüsseln.
+     * @return array{n:string, d:string}|null  n = 24-Byte-Nonce, d = Ton, beides Base64
+     */
+    public static function Verschluesseln(string $paketB64, string $schluesselHex): ?array
+    {
+        $roh = base64_decode($paketB64, true);
+        if ($roh === false || !self::SchluesselGueltig($schluesselHex) || !function_exists('sodium_crypto_stream_xchacha20_xor')) {
+            return null;
+        }
+        $n = random_bytes(24);
+        return ['n' => base64_encode($n), 'd' => base64_encode(sodium_crypto_stream_xchacha20_xor($roh, $n, (string)hex2bin($schluesselHex)))];
     }
 
     /**

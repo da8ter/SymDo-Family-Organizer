@@ -51,6 +51,9 @@ class SymDoESPVoice extends IPSModuleStrict
         $this->RegisterPropertyInteger('SpeakerTile', 0);
         // Gerätegenauer Schlüssel für signierte MQTT-Befehle (siehe EspStatusCalc::Befehl)
         $this->RegisterAttributeString('CmdKey', '');
+        // Ton über das Tablet: Nonce des laufenden Gesprächs und die zuletzt benutzten (Wiederholschutz)
+        $this->RegisterAttributeString('MicNonce', '');
+        $this->RegisterAttributeString('MicNoncen', '[]');
 
         $this->RegisterVariableBoolean('ONLINE', $this->Translate('Online'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
@@ -160,11 +163,7 @@ class SymDoESPVoice extends IPSModuleStrict
         $roh = (string)($d['Payload'] ?? '');
         $nutzlast = ctype_xdigit($roh) && strlen($roh) % 2 === 0 ? (string)hex2bin($roh) : $roh;
         if ($thema === TabletCalc::ThemaMikro($geraet)) {
-            $paket = TabletCalc::Paket($nutzlast);
-            $kachel = $this->KachelID();
-            if ($paket !== null && $kachel !== 0) {
-                @IPS_RequestAction($kachel, 'EspAudio', $paket);
-            }
+            $this->MikroPaket($nutzlast);
             return '';
         }
         if ($thema === TabletCalc::ThemaEreignis($geraet)) {
@@ -194,14 +193,6 @@ class SymDoESPVoice extends IPSModuleStrict
     public function RequestAction(string $Ident, mixed $Value): void
     {
         switch ($Ident) {
-            case 'Mic':
-                // Von der Voice-Kachel: {aktion: start|nein|stop|keep, nonce}
-                $m = json_decode((string)$Value, true);
-                $wert = is_array($m) ? TabletCalc::MicWert((string)($m['aktion'] ?? ''), (string)($m['nonce'] ?? '')) : null;
-                if ($wert !== null) {
-                    $this->Senden('mic', $wert);
-                }
-                return;
             case 'VOLUME':
                 $this->Senden('volume', max(0, min(100, (int)$Value)));
                 $this->SetValue('VOLUME', max(0, min(100, (int)$Value)));

@@ -121,25 +121,13 @@ class SymDoVoice extends IPSModuleStrict
                 $this->Push($this->PayloadBauen());
                 return;
 
-            // Ton über das Tablet (Sprachgerät SymDoESPVoice als Mikrofon)
+            // Ton über das Tablet — nur die beiden Wege des BROWSERS. Was vom
+            // Sprachgerät kommt, läuft über SDVC_Geraet* (siehe libs/EspTablet.php).
             case 'EspHier':
                 $this->WriteAttributeInteger('EspBereit', time());
                 return;
-            case 'EspWake':
-                $this->EspWake((string)$Value);
-                return;
             case 'EspMic':
                 $this->EspMic((string)$Value);
-                return;
-            case 'EspAudio':
-                $this->Push(['type' => 'espAudio', 'd' => (string)$Value]);
-                return;
-            case 'EspEnde':
-                $e = json_decode((string)$Value, true);
-                $stand = $this->EspStand();
-                if (is_array($e) && ($e['nonce'] ?? '') !== '' && ($e['nonce'] ?? '') === $stand['nonce']) {
-                    $this->Push(['type' => 'espEnde', 'nonce' => $stand['nonce']]);
-                }
                 return;
         }
         parent::RequestAction($Ident, $Value);

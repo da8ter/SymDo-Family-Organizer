@@ -112,7 +112,7 @@ Mitglied, Standardlisten und Rechte sind die **dieser Kachel**, nicht die des Ge
 ## 7. Datenschutz und Grenzen
 
 - Während eines Gesprächs geht der **Raumton direkt vom Gerät zum KI-Anbieter** (WebRTC), samt den Stimmen aller Anwesenden. Deshalb die eigene Einwilligung im Gateway, jederzeit widerrufbar; ein Widerruf beendet laufende Gespräche sofort
-- Mit einem Sprachgerät als Mikrofon läuft der Raumton erst vom Gerät über Symcon zur Kachel und von dort zum Anbieter: im Heimnetz unverschlüsselt per MQTT und über die Visu-Verbindung. Symcon speichert ihn nicht. Das Gerät öffnet das Mikrofon nur nach Weckwort oder Taste am Gerät selbst
+- Mit einem Sprachgerät als Mikrofon läuft der Raumton erst vom Gerät über Symcon zur Kachel und von dort zum Anbieter: im Heimnetz per MQTT unverschlüsselt, aber vom Gerät signiert. Zur Kachel geht er verschlüsselt mit einem Schlüssel, den nur der Browser kennt, der das Gespräch führt; andere offene Visu-Fenster können ihn nicht abhören. Symcon speichert ihn nicht. Das Gerät öffnet das Mikrofon nur nach Weckwort oder Taste am Gerät selbst
 - Werkzeugantworten können Auszüge aus Listen, Terminen, Notizen und Plänen enthalten; auf dem Symcon-Server wird **kein Ton gespeichert**
 - Der Assistent kann **nur**, was die Werkzeuge hergeben: keine allgemeinen Wissens- oder Rechenfragen, keine Anrufe, keine E-Mails. Im Haus schaltet er ausschließlich, was das Gateway freigegeben hat
 - Jede Schaltung, jeder angelegte und gelöschte Zeitplan steht im **Meldungsfenster** von Symcon; die letzten Werkzeugaufrufe stehen im Protokoll des Gateways

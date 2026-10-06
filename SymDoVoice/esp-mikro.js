@@ -6,9 +6,9 @@
  * ein MediaStream, den der Gesprächskern statt des eigenen Mikrofons nimmt.
  *
  *   Modul → {type:'espWake', nonce}       Gerät fragt, ob jemand übernimmt
- *   Kachel → EspMic {aktion:'start', nonce, client}
+ *   Kachel → EspMic {aktion:'start', nonce, client, schluessel}
  *   Modul → {type:'espGewaehlt', nonce, client}   nur EIN Fenster führt
- *   Modul → {type:'espAudio', d}          Pakete, Base64
+ *   Modul → {type:'espAudio', n, d}       Pakete, XChaCha20 mit unserem Schlüssel
  *   Kachel → EspMic stop | keep (alle 15 s)
  *   Modul → {type:'espEnde', nonce}       Taste am Gerät
  *
@@ -34,15 +34,68 @@ var ULAW = (function () {
   return t;
 })();
 
-/** Paket aus Base64: 2 Byte Nummer, dann µ-law. */
-function dekodieren(b64) {
+function bytesAus(b64) {
   var roh;
   try { roh = atob(String(b64 || '')); } catch (e) { return null; }
-  if (roh.length < 3) { return null; }
+  var b = new Uint8Array(roh.length);
+  for (var i = 0; i < roh.length; i++) { b[i] = roh.charCodeAt(i) & 0xff; }
+  return b;
+}
+
+/* XChaCha20 wie libsodium crypto_stream_xchacha20_xor: HChaCha20 leitet aus
+   Schlüssel und den ersten 16 Byte der Nonce einen Teilschlüssel ab, dann
+   ChaCha20 (64-Bit-Zähler ab 0, die letzten 8 Byte als Nonce). Hier, weil
+   WebCrypto in einer http-Visu fehlt und kein ChaCha kann. */
+var SIGMA = [0x61707865, 0x3320646e, 0x79622d32, 0x6b206574];
+function rotl(v, c) { return (v << c) | (v >>> (32 - c)); }
+function qr(x, a, b, c, d) {
+  x[a] = (x[a] + x[b]) | 0; x[d] = rotl(x[d] ^ x[a], 16);
+  x[c] = (x[c] + x[d]) | 0; x[b] = rotl(x[b] ^ x[c], 12);
+  x[a] = (x[a] + x[b]) | 0; x[d] = rotl(x[d] ^ x[a], 8);
+  x[c] = (x[c] + x[d]) | 0; x[b] = rotl(x[b] ^ x[c], 7);
+}
+function runden(x) {
+  for (var i = 0; i < 10; i++) {
+    qr(x, 0, 4, 8, 12); qr(x, 1, 5, 9, 13); qr(x, 2, 6, 10, 14); qr(x, 3, 7, 11, 15);
+    qr(x, 0, 5, 10, 15); qr(x, 1, 6, 11, 12); qr(x, 2, 7, 8, 13); qr(x, 3, 4, 9, 14);
+  }
+}
+function le32(b, o) { return b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24); }
+function xchacha20(k, n, m) {
+  var i, x = new Int32Array(16);
+  for (i = 0; i < 4; i++) { x[i] = SIGMA[i]; x[12 + i] = le32(n, 4 * i); }
+  for (i = 0; i < 8; i++) { x[4 + i] = le32(k, 4 * i); }
+  runden(x);
+  var st = new Int32Array(16);
+  for (i = 0; i < 4; i++) { st[i] = SIGMA[i]; st[4 + i] = x[i]; st[8 + i] = x[12 + i]; }
+  st[14] = le32(n, 16); st[15] = le32(n, 20);
+  var aus = new Uint8Array(m.length), blk = new Int32Array(16);
+  for (var pos = 0; pos < m.length; pos += 64) {
+    blk.set(st);
+    runden(blk);
+    for (i = 0; i < 16; i++) { blk[i] = (blk[i] + st[i]) | 0; }
+    for (var j = 0; j < 64 && pos + j < m.length; j++) { aus[pos + j] = m[pos + j] ^ ((blk[j >> 2] >>> (8 * (j & 3))) & 0xff); }
+    st[12] = (st[12] + 1) | 0;
+    if (st[12] === 0) { st[13] = (st[13] + 1) | 0; }
+  }
+  return aus;
+}
+
+/** Paket: 2 Byte Nummer, dann µ-law. */
+function dekodierenRoh(roh) {
+  if (!roh || roh.length < 3) { return null; }
   var n = roh.length - 2;
   var werte = new Float32Array(n);
-  for (var i = 0; i < n; i++) { werte[i] = ULAW[roh.charCodeAt(i + 2) & 0xff]; }
-  return { nr: (roh.charCodeAt(0) << 8) | roh.charCodeAt(1), werte: werte };
+  for (var i = 0; i < n; i++) { werte[i] = ULAW[roh[i + 2]]; }
+  return { nr: (roh[0] << 8) | roh[1], werte: werte };
+}
+function dekodieren(b64) { return dekodierenRoh(bytesAus(b64)); }
+
+/** Verschlüsseltes Paket der Kachel: Nonce und Daten Base64. */
+function entschluesseln(schluessel, nB64, dB64) {
+  var n = bytesAus(nB64), d = bytesAus(dB64);
+  if (!schluessel || !n || n.length !== 24 || !d) { return null; }
+  return dekodierenRoh(xchacha20(schluessel, n, d));
 }
 
 /* Zitterpuffer: Pakete kommen über Symcon ungleichmäßig (Werkzeugaufrufe
@@ -99,6 +152,7 @@ function erzeuge(opt) {
   var bereitUhr = 0, keepUhr = 0;
   var gesehen = [];           // zuletzt angenommene Paketnummern
   var letzterWeckruf = '';
+  var schluessel = null;      // je Gespräch neu, verlässt das Fenster nur zum Modul
 
   function jetzt() { return Date.now(); }
 
@@ -166,6 +220,7 @@ function erzeuge(opt) {
     if (!laufend) { return; }
     if (sagGeraet) { senden('EspMic', JSON.stringify({ aktion: 'stop', nonce: laufend, client: client })); }
     laufend = '';
+    schluessel = null;
     if (keepUhr) { clearInterval(keepUhr); keepUhr = 0; }
     stromAbbauen();
   }
@@ -203,16 +258,19 @@ function erzeuge(opt) {
         if (d.nonce === letzterWeckruf) { return true; }
         if (!aktiv || !tonBereit() || document.hidden || kern.istOffen() || laufend) { return true; }
         letzterWeckruf = angebot = String(d.nonce || '');
-        senden('EspMic', JSON.stringify({ aktion: 'start', nonce: angebot, client: client }));
+        schluessel = new Uint8Array(32);
+        crypto.getRandomValues(schluessel);
+        senden('EspMic', JSON.stringify({ aktion: 'start', nonce: angebot, client: client,
+          schluessel: Array.prototype.map.call(schluessel, function (b) { return (b < 16 ? '0' : '') + b.toString(16); }).join('') }));
         return true;
       case 'espGewaehlt':
         if (!angebot || d.nonce !== angebot) { return true; }
         angebot = '';
-        if (d.client === client) { uebernehmen(String(d.nonce)); }
+        if (d.client === client) { uebernehmen(String(d.nonce)); } else { schluessel = null; }
         return true;
       case 'espAudio': {
         if (!laufend || !puffer) { return true; }
-        var p = dekodieren(d.d);
+        var p = entschluesseln(schluessel, d.n, d.d);
         if (!p || gesehen.indexOf(p.nr) >= 0) { return true; }
         gesehen.push(p.nr);
         if (gesehen.length > 32) { gesehen.shift(); }
@@ -243,5 +301,5 @@ function erzeuge(opt) {
   };
 }
 
-wurzel.SymDoEspMikro = { erzeuge: erzeuge, _dekodieren: dekodieren, _Puffer: Puffer, _ULAW: ULAW };
+wurzel.SymDoEspMikro = { erzeuge: erzeuge, _dekodieren: dekodieren, _Puffer: Puffer, _ULAW: ULAW, _xchacha20: xchacha20 };
 })(typeof window !== 'undefined' ? window : globalThis);

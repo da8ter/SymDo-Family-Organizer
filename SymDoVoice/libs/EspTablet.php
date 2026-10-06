@@ -7,6 +7,11 @@ declare(strict_types=1);
  * (SymDoESPVoice) liefert das Mikrofon, diese Kachel führt das Gespräch.
  * Der Browser meldet sich alle 30 s als bereit (EspHier); ohne frisches
  * Lebenszeichen lehnt die Kachel ab, und das Gerät spricht selbst.
+ *
+ * Vom Sprachgerät kommt alles über öffentliche Funktionen (SDVC_Geraet*),
+ * nicht über RequestAction — dessen Idents kann jeder Browser der Visu rufen.
+ * Der Ton geht verschlüsselt mit dem Schlüssel des führenden Browsers hinaus:
+ * Kachel-Pushes erreichen jeden offenen Visu-Client.
  */
 trait EspTablet
 {
@@ -33,13 +38,45 @@ trait EspTablet
             'nonce'    => is_array($s) ? (string)($s['nonce'] ?? '') : '',
             'gewinner' => is_array($s) ? (string)($s['gewinner'] ?? '') : '',
             'quelle'   => is_array($s) ? (int)($s['quelle'] ?? 0) : 0,
+            'schluessel' => is_array($s) ? (string)($s['schluessel'] ?? '') : '',
         ];
     }
 
-    /** Weckwort am Sprachgerät: offenen Browsern anbieten — oder sofort ablehnen. */
-    private function EspWake(string $json): void
+    private function MicAnGeraet(int $sdev, string $aktion, string $nonce): void
     {
-        $w = json_decode($json, true);
+        if ($sdev > 0 && function_exists('SDEV_MicSteuern')) {
+            @SDEV_MicSteuern($sdev, (string)json_encode(['aktion' => $aktion, 'nonce' => $nonce]));
+        }
+    }
+
+    /** Vom Sprachgerät (SDEV): ein Mikrofon-Paket, Nummer + µ-law als Base64. */
+    public function GeraetTon(string $Paket): void
+    {
+        $stand = $this->EspStand();
+        if ($stand['gewinner'] === '') {
+            return;   // noch niemand führt — dann hört auch niemand mit
+        }
+        $v = TabletCalc::Verschluesseln($Paket, $stand['schluessel']);
+        if ($v !== null) {
+            $this->Push(['type' => 'espAudio', 'n' => $v['n'], 'd' => $v['d']]);
+        }
+    }
+
+    /** Vom Sprachgerät (SDEV): Taste am Gerät hat das Gespräch beendet. */
+    public function GeraetEnde(string $Json): void
+    {
+        $e = json_decode($Json, true);
+        $stand = $this->EspStand();
+        if (is_array($e) && ($e['nonce'] ?? '') !== '' && ($e['nonce'] ?? '') === $stand['nonce']) {
+            $this->WriteAttributeString('EspStand', '');
+            $this->Push(['type' => 'espEnde', 'nonce' => $stand['nonce']]);
+        }
+    }
+
+    /** Vom Sprachgerät (SDEV): Weckwort — offenen Browsern anbieten oder sofort ablehnen. */
+    public function GeraetWeckruf(string $Json): void
+    {
+        $w = json_decode($Json, true);
         $sdev = is_array($w) ? (int)($w['sdev'] ?? 0) : 0;
         $nonce = is_array($w) ? (string)($w['nonce'] ?? '') : '';
         if (!TabletCalc::NonceGueltig($nonce) || !in_array($sdev, $this->EspGeraete(), true)) {
@@ -47,7 +84,7 @@ trait EspTablet
         }
         if (!TabletCalc::Bereit((int)$this->ReadAttributeInteger('EspBereit'), time())) {
             // Kein Browser mit freigegebenem Ton: das Gerät spricht selbst, ohne zu warten.
-            @IPS_RequestAction($sdev, 'Mic', (string)json_encode(['aktion' => 'nein', 'nonce' => $nonce]));
+            $this->MicAnGeraet($sdev, 'nein', $nonce);
             return;
         }
         $this->WriteAttributeString('EspStand', (string)json_encode(['nonce' => $nonce, 'gewinner' => '', 'quelle' => $sdev]));
@@ -67,11 +104,16 @@ trait EspTablet
         $client = (string)($m['client'] ?? '');
         $stand = $this->EspStand();
         if ($aktion === 'start') {
-            $z = TabletCalc::Zusage(['nonce' => $stand['nonce'], 'gewinner' => $stand['gewinner']], $nonce, $client);
+            // Ohne Schlüssel keine Zusage: der Ton ginge sonst lesbar an alle Fenster.
+            $schluessel = (string)($m['schluessel'] ?? '');
+            $z = TabletCalc::SchluesselGueltig($schluessel)
+                ? TabletCalc::Zusage(['nonce' => $stand['nonce'], 'gewinner' => $stand['gewinner']], $nonce, $client)
+                : ['weiter' => false];
             if ($z['weiter']) {
                 $stand['gewinner'] = $client;
+                $stand['schluessel'] = $schluessel;
                 $this->WriteAttributeString('EspStand', (string)json_encode($stand));
-                @IPS_RequestAction($stand['quelle'], 'Mic', (string)json_encode(['aktion' => 'start', 'nonce' => $nonce]));
+                $this->MicAnGeraet($stand['quelle'], 'start', $nonce);
             }
             // Alle Fenster erfahren, wer das Gespräch führt — die anderen lassen los.
             if ($nonce === $stand['nonce']) {
@@ -80,7 +122,7 @@ trait EspTablet
             return;
         }
         if (in_array($aktion, ['stop', 'keep'], true) && TabletCalc::DarSteuern($stand, $nonce, $client)) {
-            @IPS_RequestAction($stand['quelle'], 'Mic', (string)json_encode(['aktion' => $aktion, 'nonce' => $nonce]));
+            $this->MicAnGeraet($stand['quelle'], $aktion, $nonce);
             if ($aktion === 'stop') {
                 $this->WriteAttributeString('EspStand', '');
             }
