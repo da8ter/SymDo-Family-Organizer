@@ -117,11 +117,112 @@ final class EspStatusCalc
      */
     public static function SpeakWert(string $hash, string $format, string $text): ?string
     {
-        if (preg_match('/^[0-9a-f]{16,64}$/', $hash) !== 1 || !in_array($format, ['mp3', 'wav'], true)) {
+        return self::SpeakListe([$hash], $format, $text);
+    }
+
+    /** Höchstens so viele Schnipsel spielt das Gerät in einer Durchsage. */
+    public const MAX_SCHNIPSEL = 8;
+
+    /**
+     * Wie SpeakWert, aber mehrere Schnipsel hintereinander:
+     * "<hash>,<hash>,…|<format>|<untertitel>". Alle im selben Format — das
+     * Gerät öffnet je Schnipsel einen Decoder dieses Typs.
+     *
+     * @param list<string> $hashes
+     */
+    public static function SpeakListe(array $hashes, string $format, string $text): ?string
+    {
+        $format = self::TonFormat($format);
+        if ($format === null || $hashes === [] || count($hashes) > self::MAX_SCHNIPSEL) {
             return null;
         }
+        foreach ($hashes as $h) {
+            if (!is_string($h) || preg_match('/^[0-9a-f]{32}$/', $h) !== 1) {
+                return null;
+            }
+        }
         $text = trim((string)preg_replace('/\s+/u', ' ', $text));
-        return $hash . '|' . $format . '|' . mb_substr($text, 0, 160);
+        return implode(',', $hashes) . '|' . $format . '|' . mb_substr($text, 0, 160);
+    }
+
+    /**
+     * Gateway-Format → Decoder des Geräts. ElevenLabs liefert z. B.
+     * "mp3_44100_128", OpenAI fürs Briefing "aac" (ADTS). null = spielt das
+     * Gerät nicht.
+     */
+    public static function TonFormat(string $format): ?string
+    {
+        $format = strtolower(trim($format));
+        if (str_starts_with($format, 'mp3')) {
+            return 'mp3';
+        }
+        return in_array($format, ['wav', 'aac', 'flac'], true) ? $format : null;
+    }
+
+    /**
+     * Die fertigen Briefing-Schnipsel aus TGW_GetBriefingText als speak-Wert —
+     * nur, wenn alle dasselbe spielbare Format haben. Sonst null, und der
+     * Aufrufer erzeugt den Ton selbst.
+     *
+     * @param array<int, mixed> $clips [{hash, format}, …]
+     */
+    public static function BriefingWert(array $clips, string $untertitel): ?string
+    {
+        $hashes = [];
+        $formate = [];
+        foreach ($clips as $c) {
+            if (!is_array($c)) {
+                return null;
+            }
+            $hashes[] = (string)($c['hash'] ?? '');
+            $formate[self::TonFormat((string)($c['format'] ?? '')) ?? '?'] = true;
+        }
+        if (count($formate) !== 1) {
+            return null;
+        }
+        return self::SpeakListe($hashes, (string)array_key_first($formate), $untertitel);
+    }
+
+    /**
+     * Text in Stücke für TGW_TtsClip (dort höchstens 600 Zeichen): an
+     * Satzenden, sonst an Wortgrenzen. Mehr als MAX_SCHNIPSEL Stücke werden
+     * abgeschnitten.
+     *
+     * @return list<string>
+     */
+    public static function Abschnitte(string $text, int $max = 600): array
+    {
+        $text = trim((string)preg_replace('/\s+/u', ' ', $text));
+        if ($text === '') {
+            return [];
+        }
+        $saetze = preg_split('/(?<=[.!?…])\s+/u', $text) ?: [$text];
+        $stuecke = [];
+        $akt = '';
+        foreach ($saetze as $satz) {
+            // Ein Satz über der Grenze wird an Wortgrenzen zerlegt.
+            while (mb_strlen($satz) > $max) {
+                if ($akt !== '') {
+                    $stuecke[] = $akt;
+                    $akt = '';
+                }
+                $schnitt = mb_strrpos(mb_substr($satz, 0, $max), ' ');
+                $schnitt = $schnitt === false || $schnitt === 0 ? $max : $schnitt;
+                $stuecke[] = mb_substr($satz, 0, $schnitt);
+                $satz = ltrim(mb_substr($satz, $schnitt));
+            }
+            $kandidat = $akt === '' ? $satz : $akt . ' ' . $satz;
+            if (mb_strlen($kandidat) > $max) {
+                $stuecke[] = $akt;
+                $akt = $satz;
+            } else {
+                $akt = $kandidat;
+            }
+        }
+        if ($akt !== '') {
+            $stuecke[] = $akt;
+        }
+        return array_slice(array_values(array_filter($stuecke, static fn(string $s): bool => $s !== '')), 0, self::MAX_SCHNIPSEL);
     }
 
     /** Neuer Befehlsschlüssel: 32 zufällige Bytes als Hex. */

@@ -87,5 +87,24 @@ pruefe(str_contains($m, "EspStatusCalc::Befehl(\$cmd, \$wert, \$schluessel, (int
 pruefe(!preg_match("/'~[A-Z]/", $m), 'keine Variablenprofile');
 pruefe(substr_count($m, 'EnableAction(') === 2, 'nur Lautstärke und Helligkeit schaltbar');
 
+// Briefing: mehrere Schnipsel in einer Durchsage
+$h1 = str_repeat('a', 32); $h2 = str_repeat('b', 32);
+pruefe(EspStatusCalc::SpeakListe([$h1, $h2], 'mp3', 'Briefing') === "$h1,$h2|mp3|Briefing", 'speak-Liste: Hashes mit Komma');
+pruefe(EspStatusCalc::SpeakListe([], 'mp3', 'x') === null && EspStatusCalc::SpeakListe(array_fill(0, 9, $h1), 'mp3', 'x') === null, 'leer oder mehr als 8 Schnipsel → abgelehnt');
+pruefe(EspStatusCalc::SpeakListe([$h1, 'a,b'], 'mp3', 'x') === null, 'kein Komma im Hash, nur 32 Hex');
+pruefe(EspStatusCalc::TonFormat('mp3_44100_128') === 'mp3' && EspStatusCalc::TonFormat('aac') === 'aac' && EspStatusCalc::TonFormat('opus') === null, 'Gateway-Formate auf Decoder abgebildet');
+pruefe(EspStatusCalc::BriefingWert([['hash' => $h1, 'format' => 'aac'], ['hash' => $h2, 'format' => 'aac']], 'Tagesbriefing') === "$h1,$h2|aac|Tagesbriefing", 'fertige Briefing-Schnipsel werden übernommen');
+pruefe(EspStatusCalc::BriefingWert([['hash' => $h1, 'format' => 'aac'], ['hash' => $h2, 'format' => 'mp3']], 'x') === null, 'gemischte Formate → selbst erzeugen');
+pruefe(EspStatusCalc::BriefingWert([], 'x') === null && EspStatusCalc::BriefingWert([['hash' => $h1, 'format' => 'opus']], 'x') === null, 'ohne Ton oder unspielbar → selbst erzeugen');
+$lang = str_repeat('Heute ist ein schöner Tag mit vielen Terminen. ', 40);
+$st = EspStatusCalc::Abschnitte($lang);
+pruefe(count($st) >= 3 && max(array_map('mb_strlen', $st)) <= 600, 'langer Text in Stücke bis 600 Zeichen');
+pruefe(implode(' ', $st) === trim($lang), 'Stücke ergeben zusammen den ganzen Text');
+pruefe(str_ends_with($st[0], '.'), 'geteilt wird am Satzende');
+$wort = EspStatusCalc::Abschnitte(str_repeat('wort ', 300));
+pruefe(count($wort) === 3 && max(array_map('mb_strlen', $wort)) <= 600, 'Satz ohne Punkt an Wortgrenzen geteilt');
+pruefe(count(EspStatusCalc::Abschnitte(str_repeat('x. ', 3000))) === EspStatusCalc::MAX_SCHNIPSEL && EspStatusCalc::Abschnitte('  ') === [], 'höchstens 8 Stücke, leer bleibt leer');
+pruefe(str_contains($m, 'TGW_GetBriefingText($gw)') && str_contains($m, 'EspStatusCalc::Abschnitte('), 'PlayBriefing: fertige Schnipsel, sonst selbst erzeugt');
+
 echo ($fehler === 0 ? 'OK' : 'FEHLER') . ": $zahl Prüfungen, $fehler fehlgeschlagen\n";
 exit($fehler === 0 ? 0 : 1);

@@ -2508,6 +2508,28 @@ trait Briefing
         return $this->BriefingAntwort($fach, 'today', false);
     }
 
+    /**
+     * Das gerade gezeigte Briefing fuer Skripte und Geraete, etwa das
+     * SymDo-Sprachgeraet: `TGW_GetBriefingText(<Gateway>)`.
+     *
+     * Dieselbe Wahl wie in den Oberflaechen (BriefingPublic). Die Tonschnipsel
+     * kommen in Spielreihenfolge mit ihrem Format, denn das Geraet waehlt danach
+     * den Decoder; ohne Ton bleibt die Liste leer.
+     *
+     * @return string JSON {ok, briefing: null | {text, date, day, preview, clips: [{hash, format}], ...}}
+     */
+    public function GetBriefingText(): string
+    {
+        $antwort = $this->BriefingPublic();
+        if (is_array($antwort['briefing'] ?? null)) {
+            $antwort['briefing']['clips'] = array_map(
+                fn(string $h): array => ['hash' => $h, 'format' => $this->TtsFormatOf($h)],
+                array_values((array)$antwort['briefing']['clips'])
+            );
+        }
+        return (string)json_encode($antwort, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
     /** @return array<string, mixed> */
     private function BriefingAntwort(array $fach, string $tag, bool $vorschau): array
     {

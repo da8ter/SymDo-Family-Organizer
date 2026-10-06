@@ -30,6 +30,7 @@ Ein ESP32-S3-Gerät mit Mikrofon, Lautsprecher und rundem Display, etwa die *Spo
   - **Weckwort:** „Hi ESP“, „Alexa“, „Jarvis“, „Computer“, ein eigener englischer Ausdruck oder aus (nur Taste).
 - **Letzte Frage und Antwort** in Symcon, nur wenn eingeschaltet
 - **Gespräch starten und Neustart** aus Symcon, z. B. von der Klingel
+- **Durchsagen und Tagesbriefing** am Gerät, aus Skripten oder Ereignissen; läuft ein Gespräch, kommen sie danach
 - **Firmware-Update über Symcon:** per WLAN, mit Prüfsumme und automatischem Rückfall
 
 ## 2. Voraussetzungen
@@ -79,9 +80,13 @@ Beim Übernehmen schreibt die Instanz das Profil ins Gateway. Das Gerät holt es
 
 ```php
 SDEV_StartConversation(12345); // Gespräch auslösen, als hätte jemand die Taste gedrückt
+SDEV_Speak(12345, 'Das Essen ist fertig.'); // Durchsage, höchstens 600 Zeichen
+SDEV_PlayBriefing(12345);      // das aktuelle Tagesbriefing vorlesen
 SDEV_Reboot(12345);            // Gerät neu starten
 echo SDEV_UpdateFirmware(12345); // Firmware aus der eingetragenen Quelle einspielen
 ```
+
+**Durchsagen:** Das Gateway erzeugt den Ton mit der eingestellten Sprachausgabe. Das Gerät holt ihn mit seinem Token und spielt ihn ab. Fürs Briefing nimmt die Instanz die fertigen Aufnahmen des Briefings in dessen Stimme. Fehlen sie, lässt sie den Text in Stücken neu vertonen.
 
 **Firmware-Update:** Die Instanz prüft die Datei (ESP32-Abbild, passt in die Partition) und legt sie unter ihrer SHA-256 in Symcons Ordner `user/symdo-esp/` ab. Dann schickt sie dem Gerät einen signierten Befehl mit Pfad und Prüfsumme. Das Gerät lädt die Datei von Symcon und schaltet nur um, wenn die Prüfsumme stimmt **und** die Firmware mit dem Schlüssel des Herstellers signiert ist (RSA-3072); eine fremde Firmware lehnt es ab. Meldet sich die neue Version nicht innerhalb von 90 Sekunden beim Gateway oder startet sie unbestätigt neu, kehrt das Gerät zur alten zurück.
 

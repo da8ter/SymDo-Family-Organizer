@@ -208,6 +208,44 @@ class SymDoESPVoice extends IPSModuleStrict
         return $wert !== null && $this->Senden('speak', $wert);
     }
 
+    /**
+     * Spielt das Tagesbriefing am Gerät ab — wie SDBR_PlayBriefing, nur hier
+     * ohne Browser: `SDEV_PlayBriefing(<InstanzID>)`. Nimmt die fertigen
+     * Tonschnipsel des Briefings; fehlen sie oder passt ihr Format nicht,
+     * erzeugt das Gateway den Ton in Stücken. Läuft ein Gespräch, kommt das
+     * Briefing danach.
+     */
+    public function PlayBriefing(): bool
+    {
+        $gw = $this->GatewayID();
+        if ($gw === 0) {
+            return false;
+        }
+        $r = json_decode((string)@TGW_GetBriefingText($gw), true);
+        $b = is_array($r) ? ($r['briefing'] ?? null) : null;
+        if (!is_array($b) || trim((string)($b['text'] ?? '')) === '') {
+            $this->SendDebug('PlayBriefing', 'kein Briefing vorhanden', 0);
+            return false;
+        }
+        $untertitel = $this->Translate('Daily briefing');
+        $wert = EspStatusCalc::BriefingWert((array)($b['clips'] ?? []), $untertitel);
+        if ($wert === null) {
+            $hashes = [];
+            $format = '';
+            foreach (EspStatusCalc::Abschnitte((string)$b['text']) as $teil) {
+                $c = json_decode((string)@TGW_TtsClip($gw, $teil), true);
+                if (!is_array($c) || ($c['ok'] ?? false) !== true) {
+                    $this->SendDebug('PlayBriefing', 'Gateway: ' . (string)($c['error'] ?? 'keine Antwort'), 0);
+                    return false;
+                }
+                $hashes[] = (string)$c['hash'];
+                $format = (string)$c['format'];
+            }
+            $wert = EspStatusCalc::SpeakListe($hashes, $format, $untertitel);
+        }
+        return $wert !== null && $this->Senden('speak', $wert);
+    }
+
     public function Reboot(): bool
     {
         return $this->Senden('reboot');

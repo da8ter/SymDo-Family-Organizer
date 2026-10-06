@@ -825,6 +825,10 @@ string TGW_GetHiddenLists(int $InstanzID);
 void   TGW_SetListHidden(int $InstanzID, int $ListenID, bool $Versteckt);
 TGW_GetHomework(int $InstanzID, string $KindID): string  // Hausaufgaben als JSON (leer = alle Kinder)
 TGW_HomeworkRefreshTiles(int $InstanzID): void           // Stundenplan-Kacheln neu zeichnen lassen
+
+// Briefing und Sprachausgabe
+string TGW_GetBriefingText(int $InstanzID);  // gezeigtes Briefing (JSON: briefing = null | {text, date, day, clips: [{hash, format}]})
+string TGW_TtsClip(int $InstanzID, string $Text); // Sprachclip erzeugen, höchstens 600 Zeichen (JSON: ok, hash, format)
 ```
 
 Beispiel — eigene Push-Nachricht aus einem Skript:
