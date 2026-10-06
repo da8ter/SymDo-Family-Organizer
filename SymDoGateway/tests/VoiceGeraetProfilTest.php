@@ -29,7 +29,7 @@ function pruefe(bool $ok, string $was): void
 
 // ── Teil 1: Rechenkern ──────────────────────────────────────────────────────
 $n = VoiceGeraetProfilCalc::Normalisieren(['userId' => ' u1 ', 'raum' => ' Küche ', 'geraete' => false]);
-pruefe($n === ['userId' => 'u1', 'raum' => 'Küche', 'geraete' => false, 'weckwort' => 'hiesp'], 'Normalisieren trimmt und übernimmt geraete=false');
+pruefe($n === ['userId' => 'u1', 'raum' => 'Küche', 'geraete' => false, 'weckwort' => 'hiesp', 'mqtt' => null], 'Normalisieren trimmt und übernimmt geraete=false');
 pruefe(VoiceGeraetProfilCalc::Normalisieren(null)['geraete'] === true, 'ohne Angabe ist Schalten erlaubt');
 pruefe(VoiceGeraetProfilCalc::Normalisieren(['geraete' => 0])['geraete'] === true, 'nur echtes false sperrt');
 pruefe(mb_strlen(VoiceGeraetProfilCalc::Normalisieren(['raum' => str_repeat('x', 200)])['raum']) === 60, 'Raum wird gekappt');
@@ -72,6 +72,19 @@ pruefe(VoiceGeraetProfilCalc::Weckwort('eigen:' . str_repeat('ab ', 30)) === 'hi
 pruefe(VoiceGeraetProfilCalc::Normalisieren(['weckwort' => 'computer'])['weckwort'] === 'computer', 'Profil trägt das Weckwort');
 pruefe(VoiceGeraetProfilCalc::Anwenden($rumpf, $esp)['_weckwort'] === 'hiesp', 'Gerät ohne Weckwort im Profil bekommt die Vorgabe');
 
+// MQTT-Zugang und Aktion profil
+pruefe(VoiceGeraetProfilCalc::Mqtt(['port' => 1890, 'user' => 'u', 'pass' => 'p']) === ['port' => 1890, 'user' => 'u', 'pass' => 'p'], 'MQTT-Zugang wird übernommen');
+pruefe(VoiceGeraetProfilCalc::Mqtt(['port' => 0]) === null && VoiceGeraetProfilCalc::Mqtt('x') === null, 'ungültiger MQTT-Zugang = keiner');
+$espM = $esp; $espM['voice']['mqtt'] = ['port' => 1890, 'user' => 'esp', 'pass' => 'geheim'];
+$b2 = VoiceGeraetProfilCalc::Anwenden(['action' => 'profil', '_mqtt' => ['port' => 1], '_profil' => true], $espM);
+pruefe($b2['_profil'] === true && $b2['_mqtt']['port'] === 1890, 'MQTT kommt aus dem Profil, nicht aus dem Rumpf');
+$appP = VoiceGeraetProfilCalc::Anwenden(['action' => 'profil', '_profil' => true, '_mqtt' => ['port' => 1]], $app);
+pruefe(!isset($appP['_profil']) && !isset($appP['_mqtt']), 'App kann sich kein Profil erschleichen');
+$pa = VoiceGeraetProfilCalc::ProfilAntwort($b2, 'bbbb2222', true);
+pruefe($pa['deviceId'] === 'bbbb2222' && $pa['weckwort'] === 'hiesp' && $pa['mqtt']['user'] === 'esp', 'Profil-Antwort mit Geräte-ID, Weckwort, MQTT');
+pruefe(!isset($pa['raum']) && !isset($pa['userId']), 'Mitglied und Raum verlassen das Gateway nicht');
+pruefe(VoiceGeraetProfilCalc::ProfilAntwort($b2, 'x', false)['weckwort'] === 'aus', 'ohne Freihand-Einwilligung kein Weckwort');
+
 pruefe(VoiceGeraetProfilCalc::RaumHinweis('') === '', 'ohne Raum kein Hinweis');
 pruefe(str_contains(VoiceGeraetProfilCalc::RaumHinweis('Küche'), '„Küche"'), 'Hinweis nennt den Raum');
 
@@ -94,6 +107,8 @@ pruefe(str_contains($run, "(\$ctx['geraete'] ?? true) === false") && strpos($run
 pruefe(str_contains($tools, '$geraete = $geraeteErlaubt && $this->VoiceGeraeteOk();'), 'ohne Erlaubnis kennt die Anweisung keine Geräte');
 pruefe(str_contains($tools, 'VoiceGeraetProfilCalc::RaumHinweis($raum)'), 'Anweisung nennt den Raum des Geräts');
 
+$pr = substr($voice, (int)strpos($voice, "case 'profil':"), 700);
+pruefe(str_contains($pr, "(\$body['_profil'] ?? false) !== true") && str_contains($pr, 'VoiceHandsFreeOk()'), 'profil nur mit Geräteprofil, Weckwort hinter der Freihand-Einwilligung');
 $hf = substr($voice, (int)strpos($voice, "case 'handsfree':"), 900);
 pruefe(str_contains($hf, "\$body['_weckwort']") && str_contains($hf, 'VoiceHandsFreeOk()'), 'handsfree liefert dem Sprachgerät sein eigenes Weckwort, hinter demselben Tor');
 pruefe(str_contains($reg, 'public function SetDeviceVoiceProfile(string $DeviceId, string $Profile): bool'), 'TGW_SetDeviceVoiceProfile existiert');

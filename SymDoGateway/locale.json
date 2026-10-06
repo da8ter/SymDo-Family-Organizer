@@ -417,6 +417,7 @@
             "%1$s I can only read, not switch — it is %2$s.": "%1$s kann ich nur lesen, nicht schalten — es steht auf %2$s.",
             "That device is not released for voice control.": "Dieses Gerät ist nicht für die Sprachsteuerung freigegeben.",
             "This voice device may not control devices.": "Dieses Sprachgerät darf keine Geräte schalten.",
+            "This device has no voice profile.": "Dieses Gerät hat kein Sprachprofil.",
             "up/down or 0–100 %": "hoch/runter oder 0–100 %",
             "free text": "freier Text",
             "step %s": "Schritt %s",

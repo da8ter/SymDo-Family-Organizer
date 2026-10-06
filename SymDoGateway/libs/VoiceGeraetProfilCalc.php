@@ -28,7 +28,7 @@ final class VoiceGeraetProfilCalc
 
     /**
      * Rohes Profil in die feste Form bringen.
-     * @return array{userId:string, raum:string, geraete:bool, weckwort:string}
+     * @return array{userId:string, raum:string, geraete:bool, weckwort:string, mqtt:array{port:int, user:string, pass:string}|null}
      */
     public static function Normalisieren(mixed $roh): array
     {
@@ -40,6 +40,47 @@ final class VoiceGeraetProfilCalc
             // (Geraetesteuerung an, Einwilligung, freigegebene Wurzeln).
             'geraete' => ($p['geraete'] ?? true) !== false,
             'weckwort' => self::Weckwort((string)($p['weckwort'] ?? '')),
+            'mqtt'    => self::Mqtt($p['mqtt'] ?? null),
+        ];
+    }
+
+    /**
+     * MQTT-Zugang des Geraets zum Symcon-MQTT-Server (setzt das Modul
+     * SymDoESPVoice aus seinem uebergeordneten MQTT-Server). null = keiner.
+     * @return array{port:int, user:string, pass:string}|null
+     */
+    public static function Mqtt(mixed $roh): ?array
+    {
+        if (!is_array($roh)) {
+            return null;
+        }
+        $port = (int)($roh['port'] ?? 0);
+        if ($port < 1 || $port > 65535) {
+            return null;
+        }
+        return [
+            'port' => $port,
+            'user' => mb_substr((string)($roh['user'] ?? ''), 0, 64),
+            'pass' => mb_substr((string)($roh['pass'] ?? ''), 0, 64),
+        ];
+    }
+
+    /**
+     * Antwort der Aktion `profil` an das Sprachgeraet selbst.
+     * Das Weckwort nur, wenn freihaendiges Sprechen eingewilligt ist — sonst
+     * "aus" (nur Taste). Mitglied und Raum verlaesst das Gateway nicht.
+     *
+     * @param array<string,mixed> $body nach Anwenden()
+     * @return array<string,mixed>
+     */
+    public static function ProfilAntwort(array $body, string $deviceId, bool $freihandOk): array
+    {
+        return [
+            'ok'       => true,
+            'deviceId' => $deviceId,
+            'weckwort' => $freihandOk ? (string)($body['_weckwort'] ?? self::WECKWORT_VORGABE) : 'aus',
+            'freihand' => $freihandOk,
+            'mqtt'     => $body['_mqtt'] ?? null,
         ];
     }
 
@@ -93,7 +134,7 @@ final class VoiceGeraetProfilCalc
         /* Die internen Felder setzt NUR das Profil. Kaeme `_raum` aus dem Rumpf
            einer App, stuende fremder Text ungeprueft in der Anweisung an das
            Modell (Prompt-Injection). */
-        unset($body['_raum'], $body['_geraete'], $body['_weckwort']);
+        unset($body['_raum'], $body['_geraete'], $body['_weckwort'], $body['_mqtt'], $body['_profil']);
         if (!self::HatProfil($device)) {
             return $body;
         }
@@ -103,6 +144,8 @@ final class VoiceGeraetProfilCalc
         $body['_raum']    = $p['raum'];
         $body['_geraete'] = $p['geraete'];
         $body['_weckwort'] = $p['weckwort'];
+        $body['_mqtt']     = $p['mqtt'];
+        $body['_profil']   = true;
         // Vorgaben fuer Listen bleiben Sache des Gateways, nicht des Geraets.
         unset($body['defaults']);
         return $body;

@@ -274,6 +274,13 @@ trait Voice
                 return $this->VoicePing($body);
             case 'tool':
                 return $this->VoiceTool($body);
+            case 'profil':
+                /* Nur fuer Sprachgeraete mit Profil (ESP32): Geraete-ID, MQTT-
+                   Zugang und Weckwort. Eine App ohne Profil bekommt nichts. */
+                if (($body['_profil'] ?? false) !== true || $device === null) {
+                    return $this->VoiceErr('kein_profil', $this->Translate('This device has no voice profile.'));
+                }
+                return VoiceGeraetProfilCalc::ProfilAntwort($body, (string)($device['id'] ?? ''), $this->VoiceHandsFreeOk());
             case 'handsfree':
                 /* Der Lauscher fragt VOR dem Anschalten, ob er darf. Die
                    Prüfung gehört hierher, nicht in den Browser: dort ließe sich
