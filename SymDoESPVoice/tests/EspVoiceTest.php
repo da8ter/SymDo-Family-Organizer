@@ -57,6 +57,8 @@ pruefe(str_contains($m, 'class SymDoESPVoice extends IPSModuleStrict'), 'Module 
 pruefe(str_contains($m, "SetReceiveDataFilter('^$')"), 'ohne Gerät wird nichts empfangen');
 pruefe(str_contains($m, "!== EspStatusCalc::ThemaStatus(\$geraet)"), 'nur das eigene Statusthema wird gelesen');
 pruefe(str_contains($m, 'hex2bin($roh)') && str_contains($m, "'Payload'          => bin2hex(\$nutzlast)"), 'Nutzlast hex-kodiert (Module Strict)');
+pruefe(str_contains($m, 'ServerNurFuerSprachgeraete($server)') && substr_count($m, 'ServerNurFuerSprachgeraete(') >= 3,
+    'MQTT-Zugang nur von einem Server, an dem ausschließlich Sprachgeräte hängen');
 pruefe(!preg_match("/'~[A-Z]/", $m), 'keine Variablenprofile');
 pruefe(substr_count($m, 'EnableAction(') === 2, 'nur Lautstärke und Helligkeit schaltbar');
 

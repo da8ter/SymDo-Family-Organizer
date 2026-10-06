@@ -113,6 +113,13 @@ class SymDoESPVoice extends IPSModuleStrict
         }
         $this->SetReceiveDataFilter('.*' . preg_quote(EspStatusCalc::ThemaStatus($geraet), '/') . '.*');
         $this->SetSummary($geraet);
+        $server = (int)(IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
+        if ($server !== 0 && !$this->ServerNurFuerSprachgeraete($server)) {
+            // Profil trotzdem schreiben (ohne MQTT-Zugang), aber laut sagen, warum.
+            $this->ProfilSchreiben($geraet);
+            $this->SetStatus(202);
+            return;
+        }
         $this->SetStatus($this->ProfilSchreiben($geraet) ? 102 : 201);
     }
 
@@ -230,6 +237,7 @@ class SymDoESPVoice extends IPSModuleStrict
             'status' => [
                 ['code' => 104, 'icon' => 'inactive', 'caption' => $this->Translate('Please select a voice device.')],
                 ['code' => 201, 'icon' => 'error', 'caption' => $this->Translate('The profile could not be stored in the SymDo Gateway.')],
+                ['code' => 202, 'icon' => 'error', 'caption' => $this->Translate('Please use a separate MQTT server for voice devices only — the device would otherwise receive the access of a shared server.')],
             ],
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
@@ -260,7 +268,7 @@ class SymDoESPVoice extends IPSModuleStrict
     private function MqttZugang(): ?array
     {
         $server = (int)(IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
-        if ($server === 0) {
+        if ($server === 0 || !$this->ServerNurFuerSprachgeraete($server)) {
             return null;
         }
         $io = (int)(IPS_GetInstance($server)['ConnectionID'] ?? 0);
@@ -271,6 +279,25 @@ class SymDoESPVoice extends IPSModuleStrict
             return null;
         }
         return ['port' => $port, 'user' => (string)($sc['UserName'] ?? ''), 'pass' => (string)($sc['Password'] ?? '')];
+    }
+
+    /**
+     * Den Zugang eines MQTT-Servers bekommt das Geraet nur, wenn an diesem Server
+     * ausschliesslich Sprachgeraete haengen. Symcons MQTT-Server kennt keine
+     * Themenrechte: mit dem Zugang eines gemeinsam genutzten Servers (etwa fuer
+     * Home Assistant) koennte das Geraet ueberall mitlesen und schreiben.
+     */
+    private function ServerNurFuerSprachgeraete(int $server): bool
+    {
+        foreach (IPS_GetInstanceList() as $id) {
+            if ((int)(IPS_GetInstance($id)['ConnectionID'] ?? 0) !== $server) {
+                continue;
+            }
+            if ((string)(IPS_GetInstance($id)['ModuleInfo']['ModuleID'] ?? '') !== '{DDF91F65-36AE-4539-BBFC-6F1F1D943A9E}') {
+                return false;
+            }
+        }
+        return true;
     }
 
     private function Senden(string $nutzlast): bool
