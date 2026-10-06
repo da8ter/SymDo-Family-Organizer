@@ -67,6 +67,16 @@ pruefe(str_contains($m, 'hex2bin($roh)') && str_contains($m, "'Payload'         
 pruefe(str_contains($m, 'ServerNurFuerSprachgeraete($server)') && substr_count($m, 'ServerNurFuerSprachgeraete(') >= 3,
     'MQTT-Zugang nur von einem Server, an dem ausschließlich Sprachgeräte hängen');
 pruefe(str_contains($m, "RegisterPropertyBoolean('ShareTranscript', false)"), 'Mitschrift-Schalter standardmäßig aus');
+// Firmware-Update
+pruefe(EspStatusCalc::FirmwareGueltig("\xE9" . str_repeat("\0", 70000)), 'ESP-Abbild (0xE9) wird angenommen');
+pruefe(!EspStatusCalc::FirmwareGueltig('<html>' . str_repeat('x', 70000)), 'keine Webseite als Firmware');
+pruefe(!EspStatusCalc::FirmwareGueltig("\xE9" . str_repeat("\0", 100)), 'zu klein → abgelehnt');
+pruefe(!EspStatusCalc::FirmwareGueltig("\xE9" . str_repeat("\0", EspStatusCalc::FIRMWARE_MAX)), 'größer als die Partition → abgelehnt');
+$ota = json_decode(EspStatusCalc::Befehl('ota', EspStatusCalc::OtaWert('/user/symdo-esp/ab.bin', 'ab'), $k, 9), true);
+pruefe($ota['value'] === '/user/symdo-esp/ab.bin|ab' && $ota['mac'] === hash_hmac('sha256', 'ota|/user/symdo-esp/ab.bin|ab|9', (string)hex2bin($k)),
+    'ota-Befehl: Pfad und SHA-256 von der Signatur gedeckt');
+pruefe(EspStatusCalc::Status('{"update":"Update 40 %"}') === ['update' => 'Update 40 %'], 'Update-Fortschritt wird gelesen');
+pruefe(str_contains($m, "hash('sha256', \$bin)") && str_contains($m, "'/user/symdo-esp/' . \$sha . '.bin'"), 'Datei unter ihrer Prüfsumme in user/symdo-esp');
 pruefe(str_contains($m, "EspStatusCalc::Befehl(\$cmd, \$wert, \$schluessel, (int)floor(microtime(true) * 1000))") && str_contains($m, 'strlen($schluessel) !== 64'), 'jeder Befehl signiert, ohne Schlüssel kein Befehl');
 pruefe(!preg_match("/'~[A-Z]/", $m), 'keine Variablenprofile');
 pruefe(substr_count($m, 'EnableAction(') === 2, 'nur Lautstärke und Helligkeit schaltbar');

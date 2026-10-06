@@ -60,7 +60,7 @@ final class EspStatusCalc
         if (array_key_exists('laedt', $d)) {
             $raus['laedt'] = $d['laedt'] === true;
         }
-        foreach (['frage' => 500, 'antwort' => 1000, 'version' => 40, 'weckwort' => 60] as $k => $len) {
+        foreach (['frage' => 500, 'antwort' => 1000, 'version' => 40, 'weckwort' => 60, 'update' => 80] as $k => $len) {
             if (isset($d[$k]) && is_string($d[$k])) {
                 $raus[$k] = mb_substr($d[$k], 0, $len);
             }
@@ -75,7 +75,7 @@ final class EspStatusCalc
      * Wiederholung: das Gerät nimmt nur strikt steigende ts im Fenster ±60 s an.
      * Signiert wird  "<cmd>|<value>|<ts>"  (value leer, wenn keiner).
      */
-    public static function Befehl(string $cmd, int|null $wert, string $schluesselHex, int $ts): string
+    public static function Befehl(string $cmd, int|string|null $wert, string $schluesselHex, int $ts): string
     {
         $b = ['cmd' => $cmd];
         if ($wert !== null) {
@@ -86,9 +86,28 @@ final class EspStatusCalc
         return (string)json_encode($b, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
-    public static function Signatur(string $cmd, int|null $wert, string $schluesselHex, int $ts): string
+    public static function Signatur(string $cmd, int|string|null $wert, string $schluesselHex, int $ts): string
     {
         return hash_hmac('sha256', $cmd . '|' . ($wert === null ? '' : (string)$wert) . '|' . $ts, (string)hex2bin($schluesselHex));
+    }
+
+    /** Höchstgröße einer Firmware (App-Partition 0x580000). */
+    public const FIRMWARE_MAX = 0x580000;
+
+    /**
+     * Ist das ein ESP-App-Abbild, das in die Partition passt? Erstes Byte 0xE9
+     * (ESP-Image-Kennung), mindestens 64 KB.
+     */
+    public static function FirmwareGueltig(string $bin): bool
+    {
+        $n = strlen($bin);
+        return $n >= 65536 && $n <= self::FIRMWARE_MAX && ord($bin[0]) === 0xE9;
+    }
+
+    /** Befehlswert für ota: "<pfad>|<sha256>" — beides von der Signatur gedeckt. */
+    public static function OtaWert(string $pfad, string $sha256): string
+    {
+        return $pfad . '|' . $sha256;
     }
 
     /** Neuer Befehlsschlüssel: 32 zufällige Bytes als Hex. */

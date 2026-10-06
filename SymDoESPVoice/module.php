@@ -37,6 +37,8 @@ class SymDoESPVoice extends IPSModuleStrict
         $this->RegisterPropertyString('WakeCustom', '');
         $this->RegisterPropertyBoolean('AllowDevices', true);
         $this->RegisterPropertyBoolean('ShareTranscript', false);
+        // Firmware-Quelle für Updates: http(s)-Adresse oder Datei auf dem Symcon-Rechner
+        $this->RegisterPropertyString('FirmwareSource', '');
         // Gerätegenauer Schlüssel für signierte MQTT-Befehle (siehe EspStatusCalc::Befehl)
         $this->RegisterAttributeString('CmdKey', '');
 
@@ -154,6 +156,10 @@ class SymDoESPVoice extends IPSModuleStrict
         $ziel = ['online' => 'ONLINE', 'zustand' => 'STATE', 'akku' => 'BATTERY', 'laedt' => 'CHARGING',
                  'lautstaerke' => 'VOLUME', 'helligkeit' => 'BRIGHTNESS', 'frage' => 'QUESTION',
                  'antwort' => 'ANSWER', 'version' => 'FIRMWARE'];
+        if (isset($s['update'])) {
+            // Fortschritt eines Firmware-Updates; nach dem Neustart überschreibt die Version ihn.
+            $this->SetValue('FIRMWARE', $s['update']);
+        }
         foreach ($ziel as $feld => $ident) {
             if (array_key_exists($feld, $s) && $this->GetValue($ident) !== $s[$feld]) {
                 $this->SetValue($ident, $s[$feld]);
@@ -185,6 +191,43 @@ class SymDoESPVoice extends IPSModuleStrict
     public function Reboot(): bool
     {
         return $this->Senden('reboot');
+    }
+
+    /**
+     * Firmware-Update: Datei holen, prüfen, in Symcons user-Ordner legen und
+     * dem Gerät einen signierten Befehl mit Pfad und SHA-256 schicken. Das
+     * Gerät lädt sie von dort, prüft die Summe und fällt zurück, wenn die neue
+     * Version sich nicht beim Gateway meldet.
+     */
+    public function UpdateFirmware(): string
+    {
+        $quelle = trim($this->ReadPropertyString('FirmwareSource'));
+        if ($quelle === '') {
+            return $this->Translate('Please enter a firmware source first.');
+        }
+        if (preg_match('#^https?://#i', $quelle) === 1) {
+            $bin = @file_get_contents($quelle, false, stream_context_create(['http' => ['timeout' => 60, 'follow_location' => 1]]));
+        } else {
+            $bin = is_file($quelle) ? @file_get_contents($quelle) : false;
+        }
+        if (!is_string($bin) || !EspStatusCalc::FirmwareGueltig($bin)) {
+            return $this->Translate('The firmware could not be loaded or is not a valid ESP32 image.');
+        }
+        $sha = hash('sha256', $bin);
+        $ordner = IPS_GetKernelDir() . 'user' . DIRECTORY_SEPARATOR . 'symdo-esp';
+        if (!is_dir($ordner) && !@mkdir($ordner, 0755, true)) {
+            return $this->Translate('The firmware folder could not be created.');
+        }
+        foreach (glob($ordner . DIRECTORY_SEPARATOR . '*.bin') ?: [] as $alt) {
+            @unlink($alt);   // nur die aktuelle Datei bereithalten
+        }
+        if (@file_put_contents($ordner . DIRECTORY_SEPARATOR . $sha . '.bin', $bin) !== strlen($bin)) {
+            return $this->Translate('The firmware could not be stored.');
+        }
+        if (!$this->Senden('ota', EspStatusCalc::OtaWert('/user/symdo-esp/' . $sha . '.bin', $sha))) {
+            return $this->Translate('The device is not reachable.');
+        }
+        return sprintf($this->Translate('Update sent (%s KB). The device loads it now and restarts.'), (string)round(strlen($bin) / 1024));
     }
 
     /** Für den Knopf im Formular: neuer Kopplungscode des Gateways. */
@@ -236,10 +279,12 @@ class SymDoESPVoice extends IPSModuleStrict
                 ['type' => 'Select', 'name' => 'WakeWord', 'caption' => $this->Translate('Wake word'), 'options' => $woerter],
                 ['type' => 'ValidationTextBox', 'name' => 'WakeCustom', 'caption' => $this->Translate('Custom phrase (English, 2–5 words)')],
                 ['type' => 'Label', 'caption' => $this->Translate('The wake word only listens if hands-free is enabled in the SymDo Gateway.')],
+                ['type' => 'ValidationTextBox', 'name' => 'FirmwareSource', 'caption' => $this->Translate('Firmware source (URL or file on the Symcon host)')],
             ],
             'actions' => [
                 ['type' => 'Button', 'caption' => $this->Translate('Start conversation'), 'onClick' => 'SDEV_StartConversation($id);'],
                 ['type' => 'Button', 'caption' => $this->Translate('Restart device'), 'onClick' => 'SDEV_Reboot($id);'],
+                ['type' => 'Button', 'caption' => $this->Translate('Update firmware'), 'onClick' => 'echo SDEV_UpdateFirmware($id);'],
             ],
             'status' => [
                 ['code' => 104, 'icon' => 'inactive', 'caption' => $this->Translate('Please select a voice device.')],
@@ -309,7 +354,7 @@ class SymDoESPVoice extends IPSModuleStrict
         return true;
     }
 
-    private function Senden(string $cmd, ?int $wert = null): bool
+    private function Senden(string $cmd, int|string|null $wert = null): bool
     {
         $geraet = trim($this->ReadPropertyString('DeviceId'));
         $schluessel = $this->ReadAttributeString('CmdKey');
