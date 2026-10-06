@@ -59,7 +59,7 @@ Ein ESP32-S3-Gerät mit Mikrofon, Lautsprecher und rundem Display, etwa die *Spo
 | Darf Geräte schalten | Aus = Licht, Rollläden usw. sind für dieses Gerät gesperrt |
 | Weckwort | Fertiges Wort, eigener englischer Ausdruck (2–5 Wörter) oder aus |
 | Letzte Frage und Antwort anzeigen | Aus = nichts davon verlässt das Gerät in Richtung MQTT |
-| Firmware-Quelle | Adresse (http/https) oder Datei auf dem Symcon-Rechner für **Firmware aktualisieren** |
+| Firmware-Quelle | https-Adresse oder Datei auf dem Symcon-Rechner für **Firmware aktualisieren** |
 
 Beim Übernehmen schreibt die Instanz das Profil ins Gateway. Das Gerät holt es beim Start und danach alle 10 Minuten ab.
 
@@ -83,7 +83,7 @@ SDEV_Reboot(12345);            // Gerät neu starten
 echo SDEV_UpdateFirmware(12345); // Firmware aus der eingetragenen Quelle einspielen
 ```
 
-**Firmware-Update:** Die Instanz prüft die Datei (ESP32-Abbild, passt in die Partition) und legt sie unter ihrer SHA-256 in Symcons Ordner `user/symdo-esp/` ab. Dann schickt sie dem Gerät einen signierten Befehl mit Pfad und Prüfsumme. Das Gerät lädt die Datei von Symcon und schaltet nur bei stimmender Prüfsumme um. Meldet sich die neue Version nicht innerhalb von 90 Sekunden beim Gateway oder startet sie unbestätigt neu, kehrt das Gerät zur alten zurück.
+**Firmware-Update:** Die Instanz prüft die Datei (ESP32-Abbild, passt in die Partition) und legt sie unter ihrer SHA-256 in Symcons Ordner `user/symdo-esp/` ab. Dann schickt sie dem Gerät einen signierten Befehl mit Pfad und Prüfsumme. Das Gerät lädt die Datei von Symcon und schaltet nur um, wenn die Prüfsumme stimmt **und** die Firmware mit dem Schlüssel des Herstellers signiert ist (RSA-3072); eine fremde Firmware lehnt es ab. Meldet sich die neue Version nicht innerhalb von 90 Sekunden beim Gateway oder startet sie unbestätigt neu, kehrt das Gerät zur alten zurück.
 
 ## 7. Funktionsweise und Sicherheit
 

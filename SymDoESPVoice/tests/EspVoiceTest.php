@@ -76,6 +76,7 @@ $ota = json_decode(EspStatusCalc::Befehl('ota', EspStatusCalc::OtaWert('/user/sy
 pruefe($ota['value'] === '/user/symdo-esp/ab.bin|ab' && $ota['mac'] === hash_hmac('sha256', 'ota|/user/symdo-esp/ab.bin|ab|9', (string)hex2bin($k)),
     'ota-Befehl: Pfad und SHA-256 von der Signatur gedeckt');
 pruefe(EspStatusCalc::Status('{"update":"Update 40 %"}') === ['update' => 'Update 40 %'], 'Update-Fortschritt wird gelesen');
+pruefe(str_contains($m, "preg_match('#^http://#i', \$quelle) === 1"), 'http-Quelle wird abgelehnt (nur https oder lokale Datei)');
 pruefe(str_contains($m, "hash('sha256', \$bin)") && str_contains($m, "'/user/symdo-esp/' . \$sha . '.bin'"), 'Datei unter ihrer Prüfsumme in user/symdo-esp');
 pruefe(str_contains($m, "EspStatusCalc::Befehl(\$cmd, \$wert, \$schluessel, (int)floor(microtime(true) * 1000))") && str_contains($m, 'strlen($schluessel) !== 64'), 'jeder Befehl signiert, ohne Schlüssel kein Befehl');
 pruefe(!preg_match("/'~[A-Z]/", $m), 'keine Variablenprofile');

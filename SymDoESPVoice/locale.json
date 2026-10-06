@@ -41,6 +41,7 @@
             "Update firmware": "Firmware aktualisieren",
             "Firmware source (URL or file on the Symcon host)": "Firmware-Quelle (Adresse oder Datei auf dem Symcon-Rechner)",
             "Please enter a firmware source first.": "Bitte zuerst eine Firmware-Quelle eintragen.",
+            "Please use an https address or a local file as firmware source.": "Bitte als Firmware-Quelle eine https-Adresse oder eine lokale Datei verwenden.",
             "The firmware could not be loaded or is not a valid ESP32 image.": "Die Firmware ließ sich nicht laden oder ist kein gültiges ESP32-Abbild.",
             "The firmware folder could not be created.": "Der Firmware-Ordner ließ sich nicht anlegen.",
             "The firmware could not be stored.": "Die Firmware ließ sich nicht ablegen.",

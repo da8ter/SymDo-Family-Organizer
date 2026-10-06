@@ -205,7 +205,11 @@ class SymDoESPVoice extends IPSModuleStrict
         if ($quelle === '') {
             return $this->Translate('Please enter a firmware source first.');
         }
-        if (preg_match('#^https?://#i', $quelle) === 1) {
+        if (preg_match('#^http://#i', $quelle) === 1) {
+            // Unterwegs austauschbar — Symcon würde die falsche Datei sauber weiterreichen.
+            return $this->Translate('Please use an https address or a local file as firmware source.');
+        }
+        if (preg_match('#^https://#i', $quelle) === 1) {
             $bin = @file_get_contents($quelle, false, stream_context_create(['http' => ['timeout' => 60, 'follow_location' => 1]]));
         } else {
             $bin = is_file($quelle) ? @file_get_contents($quelle) : false;
