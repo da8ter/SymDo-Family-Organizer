@@ -62,7 +62,9 @@ class SymDoTimetable extends IPSModuleStrict
         $this->RegisterAttributeBoolean('ParentMigrated', false);
 
         // Pflicht, damit Symcon die HTML-Kachel aus GetVisualizationTile rendert.
-        $this->SetVisualizationType(1);
+        // Ab Symcon 9.1 auch in der geöffneten (maximierten) Kachel; ältere
+        // Versionen kennen die Konstante nicht und bleiben bei der normalen Kachel.
+        $this->SetVisualizationType(defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN') ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN : 1);
 
         // Die vier Listen SIND die Daten — es gibt keinen zweiten Stand.
         $this->RegisterPropertyString('Children', '[]');

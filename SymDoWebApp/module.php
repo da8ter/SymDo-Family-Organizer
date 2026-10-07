@@ -66,8 +66,10 @@ class SymDoWebApp extends IPSModuleStrict
         parent::Create();
         $this->RegisterAttributeBoolean('ParentMigrated', false);
 
-        // Pflicht, damit Symcon die HTML-Kachel aus GetVisualizationTile() rendert
-        $this->SetVisualizationType(1);
+        // Pflicht, damit Symcon die HTML-Kachel aus GetVisualizationTile() rendert.
+        // Ab Symcon 9.1 auch in der geöffneten (maximierten) Kachel; ältere
+        // Versionen kennen die Konstante nicht und bleiben bei der normalen Kachel.
+        $this->SetVisualizationType(defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN') ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN : 1);
 
         // Standard-Benutzer dieser Kachel: wird als actorUserId/Auto-Zuweisung
         // in Todo-Aktionen injiziert (Pendant zu "Wer bist du?" in der App)

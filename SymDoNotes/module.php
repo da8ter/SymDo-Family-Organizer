@@ -42,7 +42,9 @@ class SymDoNotes extends IPSModuleStrict
     {
         parent::Create();
         // Pflicht, damit Symcon die HTML-Kachel aus GetVisualizationTile() rendert.
-        $this->SetVisualizationType(1);
+        // Ab Symcon 9.1 auch in der geöffneten (maximierten) Kachel; ältere
+        // Versionen kennen die Konstante nicht und bleiben bei der normalen Kachel.
+        $this->SetVisualizationType(defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN') ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN : 1);
         /* Wer in dieser Kachel schreibt. Steht in den Notizen als Urheber und
            waehlt beim Anlegen den Mitglieder-Ordner vor — das Pendant zu
            „Wer bist du?" in der App, die es in der Visu nicht fragen kann. */

@@ -50,7 +50,9 @@ class SymDoHomework extends IPSModuleStrict
     {
         parent::Create();
         // Pflicht, damit Symcon die HTML-Kachel aus GetVisualizationTile() rendert.
-        $this->SetVisualizationType(1);
+        // Ab Symcon 9.1 auch in der geöffneten (maximierten) Kachel; ältere
+        // Versionen kennen die Konstante nicht und bleiben bei der normalen Kachel.
+        $this->SetVisualizationType(defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN') ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN : 1);
         /* Briefkasten fuer den synchronen Rueckruf des Gateways: es pusht sein
            AiResult im selben Aufruf, aber auf einem anderen Objekt — siehe
            AufgabenRelay(). */
