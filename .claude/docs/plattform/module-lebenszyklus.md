@@ -53,6 +53,8 @@ Plattformwissen für die Module dieser Bibliothek. Doku-Aussagen sind mit „Dok
   - Gegen Endlosschleifen ein Wächter-Attribut **vor** dem Schreiben auf `true` setzen (Attribute sind sofort persistent, der verschachtelte Durchlauf sieht es).
   - Bereits gepflegte Zielstruktur hat Vorrang; Neuinstallation setzt das Attribut trotzdem; eine absichtlich geleerte Liste darf nicht zurückkommen.
   - Alte Properties bleiben registriert (`ReadProperty` auf eine nicht registrierte Property wirft), werden nach der Übernahme geleert und aus dem Formular genommen.
+  - **Einschränkung, gemessen 08.10.2026 (Docker, Symcon 9.1):** Läuft `ApplyChanges` selbst schon aus einem `IPS_ApplyChanges`-Aufruf eines Skripts (z. B. Anlegen per Skript, MCP), lehnt Symcon das verschachtelte `IPS_ApplyChanges($this->InstanceID)` ab: Warnung „Instanz #… ist durch eine selbst gestartete Operation belegt (re-entranter Aufruf abgelehnt)“, kein zweiter Durchlauf; das per `IPS_SetProperty` gesetzte Property bleibt nur hinterlegt. Im Kernelstart-Pfad (`ApplyChanges` aus `MessageSink`) lief dieselbe Umstellung durch. Der Prüfstand-Kernel lässt den verschachtelten Aufruf immer zu, ein grüner Test beweist hier also nichts.
+  - **Muster, das in jedem Pfad trägt** (Sprachausgabe, 08.10.2026): einen Timer `Reapply` mit `IPS_ApplyChanges($_IPS['TARGET'])` in `Create` registrieren, am Anfang von `ApplyChanges` auf 0 setzen, nach dem Schreiben auf 100 ms stellen und `return`.
 
 ## Instanzstatus
 
@@ -68,4 +70,4 @@ Plattformwissen für die Module dieser Bibliothek. Doku-Aussagen sind mit „Dok
 
 ---
 
-Stand: geprüft am 08.10.2026 (Doku und Repo-Code); Messwerte mit Datum
+Stand: geprüft am 08.10.2026 (Doku und Repo-Code); Messwerte mit Datum; Einschränkung re-entrantes ApplyChanges ergänzt am 08.10.2026
