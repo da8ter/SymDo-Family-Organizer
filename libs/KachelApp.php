@@ -9,7 +9,8 @@ declare(strict_types=1);
  * SymDo-Kacheln gleich. Statt ihn inline in jedes Kacheldokument zu schreiben (rund 790 kB je Öffnen),
  * verweisen die Kacheln auf PFAD, den das Gateway versioniert und lange cachebar ausliefert. Chrome
  * kompiliert das Skript dann einmal und teilt es zwischen den Kacheln (gemessen: je Kachel rund
- * 15-20 MB weniger Speicher und zwei Drittel weniger Skriptzeit, sobald es im Cache liegt).
+ * rund 7 MB weniger Speicher-Fußabdruck — ps-RSS zeigte 15-20 MB, überzeichnet aber — und zwei
+ * Drittel weniger Skriptzeit, sobald es im Cache liegt).
  *
  * Ausgelagert wird nur, wenn das Skript der Kachel Zeichen für Zeichen dem des Gateways gleicht; sonst
  * (kein Gateway, Übernahme noch nicht gelaufen) bleibt es inline wie bisher.

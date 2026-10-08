@@ -52,9 +52,11 @@ require_once __DIR__ . '/../libs/AiJobRunner.php';
  *   „edu"     — die Klassenseiten holen und zerlegen.
  *   „moodle"  — LOGINEO: Kurse, Karten, Aufgaben, Abstimmungen, Termine.
  *
- * Draussen bleibt WebUntis (die Anmeldung ist die einzige unumkehrbare
- * Handlung des ganzen Umbaus — drei Fehlversuche sperren das Schulkonto) und
- * der Mail-Webhook (sein Zustand IST die Spool-Datei).
+ *   WebUntis  — der Stundenplan-Abruf läuft seit Build 146 ebenfalls hier.
+ *               Die Anmeldung bleibt die heikelste Stelle (drei Fehlversuche
+ *               sperren das Schulkonto), deshalb der Sperr-Riegel im Gateway.
+ *
+ * Draussen bleibt der Mail-Webhook (sein Zustand IST die Spool-Datei).
  */
 class SymDoScanner extends IPSModuleStrict
 {

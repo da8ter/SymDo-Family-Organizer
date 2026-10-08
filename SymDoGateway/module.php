@@ -218,8 +218,9 @@ class SymDoGateway extends IPSModuleStrict
         }
 
         if ($this->OwnsAppApi()) {
-            // Flüchtig, deshalb hier und nicht in Create(): ein Modul-Reload ohne
-            // Kernel-Neustart führt Create() nicht erneut aus.
+            // Flüchtig (nicht in der Hook-Liste gespeichert), deshalb bei jedem
+            // ApplyChanges erneut: erst hier steht fest, ob diese Instanz die
+            // App-API besitzt (OwnsAppApi).
             $this->RegisterHook(self::HOOK_PATH);
             $this->RegisterHook(self::WEBAPP_HOOK_PATH);
             $this->RegisterHook(self::WS_HOOK_PATH);

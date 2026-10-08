@@ -96,9 +96,10 @@ trait EduMaps
            Eintraege gedeckelt und werden vom Mailweg beschrieben. Eine
            Klassenseite mit zwoelf Karten braucht ihren eigenen Platz. */
         /* Verlinkte Karten mitnehmen: eine Klassenseite verweist auf weitere
-           Karten (etwa „Englisch Grammatik"). Sie werden nur GESPIEGELT, nie
-           ausgewertet — es sind Nachschlagewerke, keine Elternbriefe, und
-           jede Auswertung kostet einen KI-Aufruf. */
+           Karten (etwa „Englisch Grammatik"). Sie werden gespiegelt UND
+           ausgewertet wie die eingetragenen, aber nur eine Ebene tief (siehe
+           EduSeiteLesen: von verlinkten Seiten aus wird nichts weiter
+           verfolgt). Bis zum 10.09.2026 wurden sie nur gespiegelt. */
         $this->RegisterPropertyBoolean('EduFollowLinks', false);
         $this->RegisterAttributeString('EduFound', '[]');
         $this->RegisterAttributeString('EduSeen', '{}');

@@ -2018,7 +2018,7 @@ trait AiExtract
             . 'bleiben bei Einkaeufen null. Eine REINE ARTIKELLISTE ohne Handlung und ohne Datum '
             . '(„Milch, Butter, Klopapier") ist deshalb KEINE leere Liste, sondern lauter '
             . '"shopping"-Eintraege.'
-            /* Gemessen am 03.09.2026 an der Materialliste der Klasse 5a: aus einem
+            /* Gemessen am 03.09.2026 an einer Materialliste fuer die Schule: aus einem
                PDF wurden 35 Einzelaufgaben („Geodreieck", „Radiergummi",
                „Schnellhefter DIN A4" achtmal). Das Modell hat die Mitbringsel-Regel
                und die Einkaufs-Regel vermischt. Ohne diese Abgrenzung muesste der

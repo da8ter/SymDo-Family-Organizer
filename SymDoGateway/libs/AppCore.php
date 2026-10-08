@@ -1233,7 +1233,7 @@ trait AppCore
             'scope'            => '/hook/lists/',
             // standalone ist auf iOS 26 das ERREICHBARE Maximum — zweimal am
             // Geraet gemessen (22.08.2026, Sonde in webapp-adapter.js):
-            // 1. standalone: iOS reserviert oben und unten Systemstreifen
+            // 1. standalone: iOS reserviert oben einen Systemstreifen
             //    (Fenster 812pt, Seite 761pt) und ignoriert dabei
             //    viewport-fit=cover, black-translucent UND das theme-color-Meta.
             // 2. fullscreen: iOS behandelt die Seite gar nicht mehr als Web-App —

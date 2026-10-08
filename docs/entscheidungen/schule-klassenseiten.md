@@ -36,6 +36,5 @@ Das Gateway liest Klassenseiten von Edumaps (und als zweite Quelle LOGINEO-Kurse
 
 ## Offen
 
-- Der Kommentar an `EduFollowLinks` in `EduCreate()` sagt noch „nur gespiegelt, nie ausgewertet"; maßgeblich ist der Lauf (siehe oben).
 
 Stand: geprüft gegen den Code am 08.10.2026

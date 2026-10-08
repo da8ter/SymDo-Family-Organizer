@@ -16,7 +16,7 @@
 set -euo pipefail
 
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../assets" && pwd)"
-APP_DIR="${SYMDO_APP_IMAGES:-/Users/ssp/Developer/SymDo-iOS/Packages/ListsDesign/Sources/ListsDesign/Resources/ProductImages}"
+APP_DIR="${SYMDO_APP_IMAGES:-$HOME/Developer/SymDo-iOS/Packages/ListsDesign/Sources/ListsDesign/Resources/ProductImages}"
 DRY_RUN=0
 
 while [[ $# -gt 0 ]]; do

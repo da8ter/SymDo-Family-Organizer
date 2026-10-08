@@ -14,15 +14,8 @@ Offenes über alle Bereiche. Einzelheiten stehen jeweils unter „Offen“ in de
 - **VRR:** Produktivzugang beantragt; mit Zusage nur `Efa::BASIS` umstellen ([vrr-quelle-und-richtungen](entscheidungen/vrr-quelle-und-richtungen.md)).
 - **Nicht gebaut, bewusst:** eingeschränkte Geräte ([geraete-umfang](entscheidungen/geraete-umfang.md)).
 
-## Code-Kommentare, die dem Verhalten widersprechen
+## Zu klären
 
-Bei der Doku-Prüfung am 08.10.2026 gefunden, noch nicht korrigiert:
-
-- `SymDoGateway/libs/EduMaps.php`, `EduCreate()`: Kommentar an `EduFollowLinks` sagt „nur gespiegelt, nie ausgewertet“ — verlinkte Seiten werden seit dem 10.09.2026 auch ausgewertet.
-- `SymDoScanner/module.php`, Kopfkommentar: „Draussen bleibt WebUntis“ — WebUntis läuft inzwischen in der zweiten Spur.
-- `SymDoGateway/module.php` (um Zeile 220): Ein Modul-Reload führe `Create()` nicht erneut aus — gemessen läuft es erneut ([module-lebenszyklus](plattform/module-lebenszyklus.md)).
-- `SymDoGateway/libs/AppCore.php`, Manifest `display`: „oben und unten Systemstreifen“ — gemessen nur oben ([webapp-ios-homescreen](entscheidungen/webapp-ios-homescreen.md)).
-- `libs/KachelApp.php`: „15–20 MB je Kachel“ ist ein ps-RSS-Wert; im Speicher-Fußabdruck sind es rund 7 MB.
-- `RegisterReference` auf Instanzen derselben Bibliothek (WebApp, Routines, MealPlan) widerspricht der Regel in [instanzen-und-nebenlaeufigkeit](plattform/instanzen-und-nebenlaeufigkeit.md) — die Regel beruht auf einem einzelnen Befund; klären, bevor geändert wird.
+- `RegisterReference` auf Instanzen derselben Bibliothek (WebApp, Routines, MealPlan) widerspricht der Regel in [instanzen-und-nebenlaeufigkeit](plattform/instanzen-und-nebenlaeufigkeit.md). Die Regel beruht auf einem einzelnen Befund; erst klären, dann ändern.
 
 Stand: 08.10.2026
