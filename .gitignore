@@ -14,6 +14,8 @@ keys.txt
 __pycache__/
 
 # Claude-Code: lokale Einstellungen und lokale Review-Regeln bleiben auf dem Rechner.
+# CLAUDE.local.md: Betriebsdaten dieses Rechners (Adressen, Instanzen, Rezepte).
+CLAUDE.local.md
 .claude/settings.local.json
 .claude/*.local.*
 
