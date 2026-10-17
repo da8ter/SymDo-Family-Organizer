@@ -9,6 +9,11 @@
   - Ganz aussetzen, solange etwas Zeitkritisches läuft.
   - Schwere oder lange Aufträge in eigene Instanzen auslagern (in dieser Bibliothek: `SymDoScanner`), die über einen Kanal und ein Signal angestoßen werden.
 
+## IPS_ApplyChanges am eigenen Eltern-I/O nie aus ReceiveData
+
+- **Was:** Ein Kind eines Client Socket rief in seinem `ReceiveData` (also im Empfangspfad dieses Sockets) `IPS_SetConfiguration` + `IPS_ApplyChanges` auf denselben Socket auf (Neu verbinden). Der Socket blockierte sich selbst: jeder weitere Zugriff meldete nach 30 s „Instanz ist belegt (Zeitüberschreitung beim Warten auf eine parallele Operation)“, er stand danach mit `Open=true` im Zustand 104. Nur ein Kernel-Neustart löste ihn (gemessen 17.10.2026, Symcon 9.1 Docker, Bibliothek HomeKitController).
+- **Muster:** Neu verbinden über einen kurzen Einmal-Timer (z. B. 300 ms) anstoßen, der außerhalb des Empfangspfads läuft. Aus Timer, `RequestAction` oder `ApplyChanges` des Kindes heraus ist `IPS_ApplyChanges` am Socket unkritisch (dort geprüft).
+
 ## Rückruf in dieselbe Instanz läuft auf einem anderen PHP-Objekt
 
 - **Was:** Kette `A::RequestAction → IPS_RequestAction(B) → B ruft IPS_RequestAction(A)`: Der Rückruf kommt synchron an, läuft aber auf einem **anderen PHP-Objekt** der Instanz A. Ein dort gesetztes Objektfeld (`$this->foo`) ist im äußeren Aufruf danach nicht sichtbar (gemessen 30.08.2026, Symcon 9.0).
