@@ -617,7 +617,14 @@
             "e.g. leftovers, order pizza": "z. B. Reste, Pizza bestellen",
             "Remove meal": "Gericht entfernen",
             "No ingredients found in that.": "Darin waren keine Zutaten zu finden.",
-            "Ingredients added": "Zutaten übernommen"
+            "Ingredients added": "Zutaten übernommen",
+            "New recipe": "Neues Rezept",
+            "Analyze photo or file": "Foto oder Datei analysieren",
+            "Analyzing…": "Wird analysiert …",
+            "Paste recipe URL": "Rezept-URL einfügen",
+            "Dish name": "Name des Gerichts",
+            "%1 ingredients": "%1 Zutaten",
+            "Save recipe and plan": "Rezept speichern und planen"
         }
     }
 }

@@ -43,10 +43,11 @@ trait MealPlanBridge
 
     /** Die Aktionen, die die Web-App stellen darf — alles andere kommt nicht durch. */
     private const MEALPLAN_AKTIONEN = ['state', 'setMeal', 'detail', 'weekDetail',
-                                      'addToCart', 'addItemsToCart', 'setServings'];
+                                      'addToCart', 'addItemsToCart', 'setServings', 'saveScan'];
 
     /** Die Felder, die eine Aktion mitbringen darf. */
-    private const MEALPLAN_FELDER = ['date', 'listId', 'text', 'monday', 'targetId', 'items', 'servings', 'amounts'];
+    private const MEALPLAN_FELDER = ['date', 'listId', 'text', 'monday', 'targetId', 'items', 'servings', 'amounts',
+                                    'name', 'url', 'mediaId'];
 
     /**
      * Der Essensplan für die Web-App: REST `POST /v1/mealplan` und der

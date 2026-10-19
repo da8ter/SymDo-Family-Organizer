@@ -25,8 +25,8 @@ legt die Zutaten in den Einkaufswagen.
   🛒-Knopf; der Stift oben rechts führt in die Bearbeitung.
 - **In der Web-App:** derselbe Plan als eigener Bereich „Essensplan“
   (Schalter in der Bereichsliste der Web-App-Instanz) — planen, Rezept
-  ansehen, Zutaten in den Einkaufswagen; für Kinder nur zum Ansehen. Den
-  Rezept-Scan gibt es dort nicht.
+  ansehen, Zutaten in den Einkaufswagen, neues Rezept per Link, Foto oder PDF;
+  für Kinder nur zum Ansehen. Ebenso in der iOS-App.
 - **Briefing:** das tägliche Briefing erwähnt das Gericht („Heute Abend:
   Lasagne"; die Abend-Vorschau nennt das von morgen).
 - **KI-Rezeptbilder (optional):** Auf Wunsch bekommt jedes eingeplante
@@ -49,4 +49,4 @@ legt die Zutaten in den Einkaufswagen.
 | Funktion | Beschreibung |
 |---|---|
 | `MPL_GetMealForDate(int $InstanzID, string $Datum): string` | Das Gericht eines Tages („YYYY-MM-DD") als JSON `{title, listId, hasIngredients}` — leerer Titel heißt: nichts geplant. Nutzt auch das Briefing. |
-| `MPL_AppAction(int $InstanzID, string $Json): string` | Schnittstelle für die Web-App (über das Gateway): `{action, …}` mit `state`, `setMeal` `{date, listId \| text}`, `detail` `{date}`, `weekDetail` `{monday}`, `addToCart` `{listId}`, `addItemsToCart` `{targetId?, listId?, items[]}`, `setServings` `{listId, servings, amounts}` → `{ok, …}`. |
+| `MPL_AppAction(int $InstanzID, string $Json): string` | Schnittstelle für die Web-App (über das Gateway): `{action, …}` mit `state`, `setMeal` `{date, listId \| text}`, `detail` `{date}`, `weekDetail` `{monday}`, `addToCart` `{listId}`, `addItemsToCart` `{targetId?, listId?, items[]}`, `setServings` `{listId, servings, amounts}`, `saveScan` `{date, name, items[], url?, mediaId?, servings?}` (neues Rezept, dem Tag zugewiesen) → `{ok, …}`. |

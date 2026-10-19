@@ -447,18 +447,21 @@ class SymDoMealPlan extends IPSModuleStrict
         ]]);
     }
 
-    /** @param mixed $daten {date, name, items[], url?, mediaId?} */
-    private function ScanSichern(mixed $daten): void
+    /**
+     * @param mixed $daten {date, name, items[], url?, mediaId?, servings?}
+     * @return string die listId des neuen Rezepts — leer, wenn nichts entstand
+     */
+    private function ScanSichern(mixed $daten): string
     {
         $sl = $this->QuellListe();
         if (!is_array($daten) || $sl <= 0 || !function_exists('SL_AppCall')) {
-            return;
+            return '';
         }
         $name  = mb_substr(trim((string)($daten['name'] ?? '')), 0, 80);
         $datum = trim((string)($daten['date'] ?? ''));
         $items = is_array($daten['items'] ?? null) ? $daten['items'] : [];
         if ($name === '' || $items === []) {
-            return;
+            return '';
         }
         try {
             $antwort = json_decode((string)@SL_AppCall($sl, 'AddItemsToFavoriteList', json_encode([
@@ -476,7 +479,7 @@ class SymDoMealPlan extends IPSModuleStrict
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)), true);
         } catch (\Throwable $e) {
             $this->SendDebug('MealPlan', 'Rezept speichern fehlgeschlagen: ' . $e->getMessage(), 0);
-            return;
+            return '';
         }
         // Die neue listId steht im frischen Zustand — die jüngste Liste dieses Namens.
         $listId = '';
@@ -489,6 +492,7 @@ class SymDoMealPlan extends IPSModuleStrict
             $this->GerichtSetzen($datum, $listId, '', time());
         }
         $this->PushState();
+        return $listId;
     }
 
     /**

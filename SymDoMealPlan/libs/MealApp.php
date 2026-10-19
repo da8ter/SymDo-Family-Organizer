@@ -11,8 +11,9 @@ declare(strict_types=1);
  * läuft der Weg über die öffentliche Funktion MPL_AppAction. Die Aktionen sind
  * dieselben wie die Kachel-Idents und rechnen mit denselben Helfern.
  *
- * Bewusst NICHT dabei: der Rezept-Scan (SaveScan). Neue Rezepte entstehen in
- * der Kachel oder in der Einkaufsliste.
+ * Der Rezept-Scan selbst (Foto, PDF, Link → Zutaten) laeuft ueber die
+ * KI-Wege des Gateways; hierher kommt nur das Ergebnis (`saveScan`), das als
+ * neue Favoritenliste gespeichert und dem Tag zugewiesen wird.
  */
 trait MealApp
 {
@@ -71,6 +72,26 @@ trait MealApp
             case 'addItemsToCart':
                 $anzahl = $this->KorbUebernehmen($anfrage);
                 return $anzahl > 0 ? ['ok' => true, 'count' => $anzahl] : $this->AppFehler('failed', 'Nothing added');
+
+            case 'saveScan':
+                $datum = trim((string)($anfrage['date'] ?? ''));
+                if (!$this->AppIstDatum($datum)) {
+                    return $this->AppFehler('invalid_payload', 'Invalid date');
+                }
+                if ($this->QuellListe() <= 0) {
+                    return $this->AppFehler('no_source', 'No shopping list selected');
+                }
+                $scan = $this->AppScanBereinigen($anfrage);
+                if ($scan === null) {
+                    return $this->AppFehler('invalid_payload', 'Name and ingredients required');
+                }
+                $listId = $this->ScanSichern($scan + ['date' => $datum]);
+                if ($listId === '') {
+                    return $this->AppFehler('failed', 'Recipe not saved');
+                }
+                $stand = $this->AppStand($jetzt);
+                $stand['listId'] = $listId;
+                return $stand;
 
             case 'setServings':
                 return $this->PortionenSetzen($anfrage)
@@ -150,6 +171,47 @@ trait MealApp
             $this->SendDebug('MealPlan', 'Portionen speichern fehlgeschlagen: ' . $e->getMessage(), 0);
             return false;
         }
+    }
+
+    /**
+     * Das Scan-Ergebnis an der Grenze in Form bringen: Name bis 80 Zeichen,
+     * hoechstens 100 Zutaten mit Text-Feldern, Quelle nur als http(s)-Link,
+     * Medien-ID nur als Zahl. Welche Medien sich spaeter oeffnen lassen,
+     * entscheidet das Gateway (nur „Rezeptfotos").
+     *
+     * @param array<string,mixed> $anfrage
+     * @return array{name:string,items:list<array{name:string,amount:string,category:string}>,url:string,mediaId:string,servings:int}|null
+     */
+    private function AppScanBereinigen(array $anfrage): ?array
+    {
+        $name = mb_substr(trim((string)($anfrage['name'] ?? '')), 0, 80);
+        $items = [];
+        foreach (is_array($anfrage['items'] ?? null) ? $anfrage['items'] : [] as $item) {
+            if (!is_array($item) || count($items) >= 100) {
+                continue;
+            }
+            $zutat = mb_substr(trim((string)(is_scalar($item['name'] ?? null) ? $item['name'] : '')), 0, 80);
+            if ($zutat === '') {
+                continue;
+            }
+            $items[] = [
+                'name'     => $zutat,
+                'amount'   => mb_substr(trim((string)(is_scalar($item['amount'] ?? null) ? $item['amount'] : '')), 0, 40),
+                'category' => mb_substr(trim((string)(is_scalar($item['category'] ?? null) ? $item['category'] : '')), 0, 60),
+            ];
+        }
+        if ($name === '' || $items === []) {
+            return null;
+        }
+        $url = trim((string)(is_scalar($anfrage['url'] ?? null) ? $anfrage['url'] : ''));
+        $mediaId = (int)(is_scalar($anfrage['mediaId'] ?? null) ? $anfrage['mediaId'] : 0);
+        return [
+            'name'     => $name,
+            'items'    => $items,
+            'url'      => preg_match('#^https?://#i', $url) === 1 ? mb_substr($url, 0, 500) : '',
+            'mediaId'  => $mediaId > 0 ? (string)$mediaId : '',
+            'servings' => max(0, min(99, (int)($anfrage['servings'] ?? 0))),
+        ];
     }
 
     private function AppIstDatum(string $datum): bool

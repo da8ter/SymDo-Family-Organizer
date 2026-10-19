@@ -125,6 +125,10 @@ pruefe('Essensplan: Bereich, Knopf, TABS-Eintrag, Zeichnen und Sichtbarkeit nur 
 pruefe('Essensplan: das Kind liest nur (Korb, Planen, Wochen-Einkauf haengen an mpNurLesen)',
     [substr_count($html, 'mpNurLesen()') >= 6, str_contains($html, "function mpNurLesen() { return kindGewaehlt() !== ''; }")],
     [true, true]);
+pruefe('Essensplan: Rezept-Scan nur mit KI und nie fuer das Kind, Ergebnis ueber saveScan',
+    [str_contains($html, "const an = computeAiEnabled() && !mpNurLesen();"), str_contains($html, "action: 'saveScan'"),
+     str_contains($html, "aiPost('/ai/ingredients', mitKategorien)")],
+    [true, true, true]);
 $loc = json_decode($lesen('SymDoWebApp/locale.json'), true)['translations']['de'] ?? [];
 pruefe('Essensplan: der Name der Formularzeile ist uebersetzt', $loc['Meal plan'] ?? null, 'Essensplan');
 $gwBruecke = $lesen('SymDoGateway/libs/MealPlanBridge.php') . $lesen('SymDoGateway/libs/AiExtract.php') . $lesen('SymDoGateway/libs/AppCore.php');

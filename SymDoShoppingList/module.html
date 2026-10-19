@@ -1326,6 +1326,13 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mp-feld select, .mp-feld input { width: 100%; }
 .mp-korbkopf { display: flex; justify-content: center; }
+.mp-scanknoepfe { display: flex; gap: 10px; margin-top: 8px; }
+.mp-scanknoepfe button {
+  flex: 1; padding: 11px; border-radius: 12px; font-weight: 700; background: var(--surface);
+}
+.mp-scanknoepfe button.primary { background: var(--accent); color: #fff; }
+.mp-scanknoepfe button:disabled { opacity: .4; }
+#mpScanErgebnis { margin-top: 10px; }
 /* Der Termin als Balken: so lang wie er dauert. Ohne Endzeit laeuft er nach
    rechts aus (data-open). Zwilling der Stundenplan-Kachel. */
 .plan-termin-bar {
@@ -5389,6 +5396,18 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     <div class="overlay-body">
       <div class="form-row mp-feld" id="mpFavZeile"><label id="lblMpFav"></label><select id="mpFavWahl"></select></div>
       <div class="form-row mp-feld"><label id="lblMpText"></label><input id="mpText" type="text" maxlength="120" /></div>
+      <!-- Neues Rezept per KI: Link, Foto oder PDF → neue Favoritenliste, gleich diesem Tag zugewiesen -->
+      <div class="form-row mp-feld" id="mpScanZeile">
+        <label id="lblMpScan"></label>
+        <input id="mpScanUrl" type="url" inputmode="url" autocomplete="off" />
+        <div class="mp-scanknoepfe"><button id="btnMpScanUrl"></button><button id="btnMpScanDatei"></button></div>
+        <input id="mpScanDatei" type="file" accept="image/*,application/pdf" style="display:none" />
+        <div id="mpScanErgebnis" style="display:none">
+          <input id="mpScanName" type="text" maxlength="80" />
+          <div class="mp-hinweis" id="mpScanAnzahl"></div>
+          <div class="mp-scanknoepfe"><button class="primary" id="btnMpScanSpeichern"></button></div>
+        </div>
+      </div>
     </div>
     <div class="overlay-footer">
       <button class="destructive" id="btnMpEntfernen"></button>
@@ -9319,8 +9338,116 @@ function mpPlanOeffnen(tag) {
   entfernen.textContent = translate('Remove meal');
   entfernen.style.display = tag.title ? '' : 'none';
   document.getElementById('btnMpSpeichern').textContent = translate('Save');
+  mpScanZuruecksetzen();
   closeOverlay('mpDetailOverlay');
   openOverlay('mpPlanOverlay');
+}
+
+/* ── Neues Rezept per KI (seit 19.10.2026) ────────────────────────────────
+   Derselbe Ablauf wie in der Essensplan-Kachel: Link, Foto oder PDF ueber die
+   KI-Wege des Gateways auswerten (/ai/ingredients, Fotos und PDFs als Quelle
+   ueber /ai/savephoto sichern), dann `saveScan` — das Modul legt eine neue
+   Favoritenliste mit Rezept-Haken an und plant sie fuer diesen Tag. Nur mit
+   eingeschalteter KI und nie fuer ein Kind. */
+let mpScanFund = null;   // { items, url, mediaId, servings }
+
+function mpScanZuruecksetzen() {
+  mpScanFund = null;
+  const an = computeAiEnabled() && !mpNurLesen();
+  document.getElementById('mpScanZeile').style.display = an ? '' : 'none';
+  document.getElementById('lblMpScan').textContent = translate('New recipe');
+  const url = document.getElementById('mpScanUrl');
+  url.value = '';
+  url.placeholder = translate('Paste recipe URL');
+  const knopfUrl = document.getElementById('btnMpScanUrl');
+  knopfUrl.textContent = translate('Analyze URL');
+  knopfUrl.disabled = false;
+  const knopfDatei = document.getElementById('btnMpScanDatei');
+  knopfDatei.textContent = translate('Analyze photo or file');
+  knopfDatei.disabled = false;
+  document.getElementById('mpScanErgebnis').style.display = 'none';
+  document.getElementById('mpScanName').placeholder = translate('Dish name');
+  document.getElementById('btnMpScanSpeichern').textContent = translate('Save recipe and plan');
+}
+
+/** Ein Knopf zeigt „wird analysiert", solange die KI arbeitet; zurueck kommt das Aufraeumen. */
+function mpScanLaeuft(knopf) {
+  const alt = knopf.textContent;
+  document.getElementById('btnMpScanUrl').disabled = true;
+  document.getElementById('btnMpScanDatei').disabled = true;
+  knopf.textContent = translate('Analyzing…');
+  return () => {
+    knopf.textContent = alt;
+    document.getElementById('btnMpScanUrl').disabled = false;
+    document.getElementById('btnMpScanDatei').disabled = false;
+  };
+}
+
+/** Zutaten auswerten; bei Foto/PDF die Quelle als Rezeptfoto sichern. */
+function mpScanStarten(anfrage, quelle, knopf) {
+  const fertig = mpScanLaeuft(knopf);
+  /* Die Kategorien der Ziel-Einkaufsliste mitschicken, wie beim Scan in der
+     Einkaufsliste — sonst erfindet das Modell Kategorien, die es dort nicht gibt. */
+  const kategorien = essensplan ? (instState(essensplan.sourceList) || {}).categoryOrder : null;
+  const mitKategorien = Array.isArray(kategorien) && kategorien.length
+    ? Object.assign({}, anfrage, { categories: kategorien }) : anfrage;
+  aiPost('/ai/ingredients', mitKategorien).then(res => {
+    const j = res && res.json;
+    if (!j || j.ok !== true) {
+      fertig();
+      showToast((j && j.error && j.error.message) || translate('AI request failed.'));
+      return;
+    }
+    const items = Array.isArray(j.items) ? j.items : [];
+    if (!items.length) { fertig(); showToast(translate('No ingredients found in that.')); return; }
+    const zeigen = (mediaId) => {
+      fertig();
+      mpScanFund = { items: items, url: quelle.url || '', mediaId: mediaId || 0,
+                     servings: parseInt(j.servings, 10) || 0 };
+      document.getElementById('mpScanName').value = String(j.title || '').slice(0, 80);
+      document.getElementById('mpScanAnzahl').textContent =
+        translate('%1 ingredients').replace('%1', String(items.length));
+      document.getElementById('mpScanErgebnis').style.display = 'block';
+    };
+    if (!quelle.sichern) { zeigen(0); return; }
+    aiPost('/ai/savephoto', quelle.sichern).then(rf => {
+      const jf = rf && rf.json;
+      zeigen(jf && jf.ok === true ? (parseInt(jf.mediaId, 10) || 0) : 0);
+    }).catch(() => zeigen(0));
+  }).catch(() => { fertig(); showToast(translate('Could not reach the AI service.')); });
+}
+
+function mpBildVerkleinern(file, kante, qualitaet) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const f = Math.min(1, kante / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+      const leinwand = document.createElement('canvas');
+      leinwand.width = Math.max(1, Math.round((img.naturalWidth || 1) * f));
+      leinwand.height = Math.max(1, Math.round((img.naturalHeight || 1) * f));
+      leinwand.getContext('2d').drawImage(img, 0, 0, leinwand.width, leinwand.height);
+      resolve(leinwand.toDataURL('image/jpeg', qualitaet));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bild')); };
+    img.src = url;
+  });
+}
+
+function mpScanSpeichern() {
+  const tag = mpTag;
+  const name = document.getElementById('mpScanName').value.trim();
+  if (!tag || !mpScanFund || !name || mpNurLesen()) { return; }
+  const knopf = document.getElementById('btnMpScanSpeichern');
+  knopf.disabled = true;
+  mpPost({ action: 'saveScan', date: tag.date, name: name, items: mpScanFund.items,
+           url: mpScanFund.url, mediaId: mpScanFund.mediaId, servings: mpScanFund.servings }).then(j => {
+    knopf.disabled = false;
+    if (!j || j.ok !== true) { showToast(translate('Action failed')); return; }
+    closeOverlay('mpPlanOverlay');
+    essensplanUebernehmen(j.mealplan || null);
+  });
 }
 
 function mpGerichtSetzen(listId, text) {
@@ -9534,6 +9661,36 @@ document.addEventListener('DOMContentLoaded', () => {
     closeOverlay('mpKorbOverlay');
   });
   document.getElementById('btnMpKorbOk').addEventListener('click', mpKorbBestaetigen);
+  document.getElementById('btnMpScanUrl').addEventListener('click', (ev) => {
+    const url = document.getElementById('mpScanUrl').value.trim();
+    if (!/^https?:\/\//i.test(url)) { showToast(translate('Please enter a URL.')); return; }
+    mpScanStarten({ url: url }, { url: url }, ev.currentTarget);
+  });
+  document.getElementById('btnMpScanDatei').addEventListener('click', () => {
+    const feld = document.getElementById('mpScanDatei');
+    feld.value = '';
+    feld.click();
+  });
+  document.getElementById('mpScanDatei').addEventListener('change', () => {
+    const feld = document.getElementById('mpScanDatei');
+    const datei = feld.files && feld.files[0];
+    if (!datei) { return; }
+    const knopf = document.getElementById('btnMpScanDatei');
+    const istPdf = /pdf/i.test(datei.type || '') || /\.pdf$/i.test(datei.name || '');
+    if (istPdf) {
+      const leser = new FileReader();
+      leser.onload = () => {
+        const pdf = String(leser.result || '');
+        mpScanStarten({ pdf: pdf }, { sichern: { pdf: pdf, name: datei.name || '' } }, knopf);
+      };
+      leser.readAsDataURL(datei);
+      return;
+    }
+    mpBildVerkleinern(datei, 1280, 0.7).then(bild => {
+      mpScanStarten({ image: bild }, { sichern: { image: bild } }, knopf);
+    }).catch(() => showToast(translate('Could not load the image.')));
+  });
+  document.getElementById('btnMpScanSpeichern').addEventListener('click', mpScanSpeichern);
 });
 
 /* Stundenplan der Kinder. Wie beim Briefing: still nichts, wenn es kein

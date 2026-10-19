@@ -97,9 +97,9 @@ Bereich verschwindet die Tab-Leiste.
 Der **Essensplan** erscheint nur, wenn es eine Instanz *SymDo - Essensplan*
 gibt (und die Übersicht an ist): diese und nächste Woche, Gericht planen
 (Rezept aus den Favoritenlisten oder freier Text), Rezept ansehen und die
-Zutaten — vorher abwählbar, mit Portionen — in den Einkaufswagen. Ist ein Kind
-gewählt, sieht es den Plan nur an. Neue Rezepte per Foto oder Link scannt die
-Essensplan-Kachel.
+Zutaten — vorher abwählbar, mit Portionen — in den Einkaufswagen. Mit
+eingeschalteter KI entsteht beim Planen auch ein neues Rezept aus Link, Foto
+oder PDF. Ist ein Kind gewählt, sieht es den Plan nur an.
 
 Die Reihenfolge der Knöpfe ist die Reihenfolge der Zeilen in der Liste
 *Bereiche* — per Ziehen im Formular. Die Tab-Leiste ist so breit, wie ihre

@@ -77,6 +77,15 @@ function SL_GetAppState(int $id): string
 {
     return (string)json_encode(['revision' => 1, 'state' => ['favoriteLists' => $GLOBALS['favoriten']]]);
 }
+/** Neue Favoritenliste wie die Einkaufsliste: listId vergibt sie selbst. */
+function SL_AppCall(int $id, string $aktion, string $json): string
+{
+    $d = json_decode($json, true);
+    $GLOBALS['angelegt'][] = [$aktion, $d];
+    $GLOBALS['favoriten'][] = ['id' => 'neu' . count($GLOBALS['favoriten']), 'name' => $d['name'],
+        'items' => $d['items'], 'mediaId' => (int)$d['mediaId'], 'isRecipe' => $d['isRecipe']];
+    return SL_GetAppState($id);
+}
 
 function instanz(string $klasse, string $guid): int
 {
@@ -182,9 +191,28 @@ pruefe('Portionen 6 → an die Einkaufsliste, nur Text-/Zahlmengen mit Namen',
     [$r['ok'], $GLOBALS['bestellt']],
     [true, [['SetFavoriteServings', ['listId' => 'f1', 'servings' => 6, 'amounts' => ['Nudeln' => '750 g', 'Tomaten' => '3']]]]]);
 
+// ── Rezept-Scan ────────────────────────────────────────────────────────────
+$GLOBALS['angelegt'] = [];
+$r = $rufe(['action' => 'saveScan', 'date' => $morgen, 'name' => '  Ofengemüse  ', 'servings' => 120,
+    'url' => 'javascript:alert(1)', 'mediaId' => '17abc',
+    'items' => [['name' => 'Paprika', 'amount' => '2', 'category' => 'Obst', 'boese' => 'x'], ['name' => ''], 'kaputt', ['name' => ['x']]]]);
+$neu = $GLOBALS['angelegt'][0][1] ?? [];
+pruefe('Scan: Rezept angelegt, dem Tag zugewiesen, listId zurück',
+    [$r['ok'], $r['listId'] ?? '', $tagIn($r['mealplan'] ?? [], $morgen)['title'] ?? null],
+    [true, 'neu2', 'Ofengemüse']);
+pruefe('Scan: bereinigt an der Grenze (Zutaten, Link nur http, Medien-ID als Zahl, Portionen gedeckelt, Rezept-Haken)',
+    [$neu['items'] ?? null, $neu['url'] ?? null, $neu['mediaId'] ?? null, $neu['servings'] ?? null, $neu['isRecipe'] ?? null],
+    [[['name' => 'Paprika', 'amount' => '2', 'category' => 'Obst']], '', '17', 99, true]);
+$GLOBALS['angelegt'] = [];
+pruefe('Scan ohne Zutaten oder mit falschem Datum → abgelehnt, nichts angelegt',
+    [$rufe(['action' => 'saveScan', 'date' => $morgen, 'name' => 'Leer', 'items' => []])['error']['code'] ?? '',
+     $rufe(['action' => 'saveScan', 'date' => 'morgen', 'name' => 'X', 'items' => [['name' => 'Y']]])['error']['code'] ?? '',
+     $GLOBALS['angelegt']],
+    ['invalid_payload', 'invalid_payload', []]);
+
 // ── Grenze ─────────────────────────────────────────────────────────────────
 pruefe('Unbekannte Aktion und kaputtes JSON',
-    [$rufe(['action' => 'SaveScan'])['error']['code'] ?? '', json_decode($m->AppAction('{kaputt'), true)['error']['code'] ?? ''],
+    [$rufe(['action' => 'SaveScanX'])['error']['code'] ?? '', json_decode($m->AppAction('{kaputt'), true)['error']['code'] ?? ''],
     ['unknown_action', 'invalid_payload']);
 
 // ── Gateway-Durchgang (MealPlanBridge) ─────────────────────────────────────
@@ -207,7 +235,7 @@ pruefe('Gateway: reicht an die Instanz, nur Felder der Weißliste',
     [$b->instanzId(), $GLOBALS['durchgereicht'][0][1] ?? null, $tagIn($r['mealplan'] ?? [], $heute)['title'] ?? null],
     [$mid, ['action' => 'setMeal', 'date' => $heute, 'listId' => 'f2'], 'Brot']);
 $GLOBALS['durchgereicht'] = [];
-$r = $b->handeln(['action' => 'SaveScan', 'name' => 'x']);
+$r = $b->handeln(['action' => 'deleteAll', 'name' => 'x']);
 pruefe('Gateway: Aktion außerhalb der Weißliste kommt nicht bis zum Modul',
     [$r['error']['code'] ?? '', $GLOBALS['durchgereicht']], ['unknown_action', []]);
 IPS\Kernel::reset();
