@@ -15,7 +15,7 @@ Der Essensplan (`SymDoMealPlan`) plant je Tag ein Gericht für diese und die nä
   - Weg: Web-App → Gateway `POST /v1/mealplan` bzw. Kachel-Relay (`…mealplan` vor dem KI-Riegel) → `MPL_AppAction` (`libs/MealApp.php`). Öffentliche Funktion statt RequestAction, weil die Web-App eine Antwort braucht. Das Gateway lässt nur die sieben Aktionen und die bekannten Felder durch; das Modul prüft Datum, Rezept und Zutaten selbst.
   - Umfang wie die Kachel, aber ohne Rezept-Scan. Ein gewähltes Kind sieht den Plan nur an (`mpNurLesen()`); das ist eine Regel der Oberfläche, der Server unterscheidet keine Mitglieder.
   - Gerichtsbilder reisen im App-Stand nur als Kennung (`dishId`) und kommen über `dishImageUrl` (Bridge mit Token bzw. Asset-Hook). Nur ein Rezeptfoto ohne Gerichtsbild kommt als Miniatur mit. Gemessen im Docker: 2,5 kB Stand ohne geplante Fotos.
-  - iOS hat den Bereich nicht; `tabs` liest die App als offenes Wörterbuch, der neue Schlüssel stört sie nicht.
+  - iOS hat denselben Bereich (Paket `MealPlanFeature`, gleicher Weg und dieselben Regeln in `MealPlanRules`). Ältere App-Fassungen lesen `tabs` als offenes Wörterbuch; der neue Schlüssel stört sie nicht.
 
 ## Fallen
 

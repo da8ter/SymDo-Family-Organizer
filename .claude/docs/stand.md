@@ -9,7 +9,6 @@ Offenes über alle Bereiche. Einzelheiten stehen jeweils unter „Offen“ in de
 - **Kachel-Last:** ToDo-Kachel pusht nach jedem Sync den vollen Stand; Bildkarte im Stand der Web-App-Kachel; `app.css` auslagern ([kacheln-ressourcen](entscheidungen/kacheln-ressourcen.md)).
 - **Zweite Spur:** doppelter Anhangabruf bei geänderten Klassenseiten-Karten ([gateway-entlasten](entscheidungen/gateway-entlasten.md)).
 - **Schule:** Prüfstand für Kurswahl und Abbildung (`UntisKurseWaehlen`, `UntisAbbilden`) fehlt ([schule-webuntis](entscheidungen/schule-webuntis.md)).
-- **Essensplan:** Bereich in der iOS-App fehlt (Web-App seit 19.10.2026) — nur nach Rücksprache ([essensplan-gerichtsbilder](entscheidungen/essensplan-gerichtsbilder.md)).
 - **Listen:** Titel-Rückfall gegen Verdopplung auch für Google Tasks und CalDAV ([listen-sync-dedup](entscheidungen/listen-sync-dedup.md)).
 - **iOS-App:** Originale der KI-Vorschläge anzeigen ([ki-originale](entscheidungen/ki-originale.md)).
 - **VRR:** Produktivzugang beantragt; mit Zusage nur `Efa::BASIS` umstellen ([vrr-quelle-und-richtungen](entscheidungen/vrr-quelle-und-richtungen.md)).
