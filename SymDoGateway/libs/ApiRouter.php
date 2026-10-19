@@ -342,6 +342,18 @@ trait ApiRouter
                     return;
                 }
                 break;
+            case 'mealplan':
+                /* Der Essensplan: GET liefert den Wochenstand, POST traegt eine
+                   Aktion ({action, …}) — siehe MealPlanBridge. */
+                if ($method === 'GET') {
+                    $this->SendJson($this->MealPlanHandleAction(['action' => 'state']));
+                    return;
+                }
+                if ($method === 'POST') {
+                    $this->SendJson($this->MealPlanHandleAction($this->ReadJsonBody()));
+                    return;
+                }
+                break;
             case 'tts':
                 // POST /v1/tts        → Schnipsel vorbereiten (erzeugt fehlende)
                 // GET  /v1/tts/{hash} → die fertige Tondatei

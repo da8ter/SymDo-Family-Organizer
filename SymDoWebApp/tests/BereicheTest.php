@@ -32,15 +32,15 @@ function pruefe(string $name, mixed $ist, mixed $soll): void
 $keys = static fn(array $zeilen): array => array_column($zeilen, 'key');
 $show = static fn(array $zeilen): array => array_combine(array_column($zeilen, 'key'), array_column($zeilen, 'show'));
 
-$vorgabe = ['dashboard', 'school', 'plan', 'transit', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps', 'homework'];
+$vorgabe = ['dashboard', 'school', 'plan', 'transit', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps', 'homework', 'mealplan'];
 
 // ── Vorgabe ────────────────────────────────────────────────────────────────
 pruefe('Ohne Konfiguration: Vorgabereihenfolge, alles an',
     [$keys(Bereiche::Zeilen(null)), array_unique(array_values($show(Bereiche::Zeilen(null))))], [$vorgabe, [true]]);
 pruefe('Leere Liste ebenso', $keys(Bereiche::Zeilen(['Sections' => '[]'])), $vorgabe);
 pruefe('Ungueltiges JSON ebenso', $keys(Bereiche::Zeilen(['Sections' => '{nicht'])), $vorgabe);
-pruefe('Elf Namen, elf alte Schalter fuer acht davon',
-    [count(Bereiche::NAMEN), count(Bereiche::ALT), array_keys(Bereiche::NAMEN)], [11, 8, $vorgabe]);
+pruefe('Zwoelf Namen, alte Schalter fuer acht davon',
+    [count(Bereiche::NAMEN), count(Bereiche::ALT), array_keys(Bereiche::NAMEN)], [12, 8, $vorgabe]);
 
 // ── Altbestand ─────────────────────────────────────────────────────────────
 $alt = ['ShowDashboard' => true, 'ShowKi' => false, 'ShowNotes' => false, 'ShowShopping' => true];
@@ -55,7 +55,9 @@ pruefe('Alter Schalter als Text/Zahl wird verstanden',
 $liste = json_encode([['key' => 'todos', 'show' => true], ['key' => 'dashboard', 'show' => false], ['key' => 'school', 'show' => true]]);
 $z = Bereiche::Zeilen(['Sections' => $liste, 'ShowDashboard' => true, 'ShowKi' => false]);
 pruefe('Gespeicherte Reihenfolge zuerst, Fehlendes hinten in Vorgabereihenfolge',
-    $keys($z), ['todos', 'dashboard', 'school', 'plan', 'transit', 'ki', 'shopping', 'calendar', 'notes', 'edumaps', 'homework']);
+    $keys($z), ['todos', 'dashboard', 'school', 'plan', 'transit', 'ki', 'shopping', 'calendar', 'notes', 'edumaps', 'homework', 'mealplan']);
+pruefe('Eine aeltere gespeicherte Liste ohne Essensplan bekommt ihn hinten angehaengt und an',
+    [array_slice($keys($z), -1), $show($z)['mealplan']], [['mealplan'], true]);
 pruefe('Der Haken der Liste schlaegt den alten Schalter; Fehlendes nimmt den alten',
     [$show($z)['dashboard'], $show($z)['ki']], [false, false]);
 $z = Bereiche::Zeilen(['Sections' => json_encode([
@@ -66,14 +68,14 @@ pruefe('Doppel: erstes gewinnt; Unbekanntes und Zeilen ohne key fallen weg',
     array_slice($keys($z), 0, 3), ['notes', 'ki', 'shopping']);
 pruefe('Fehlender Haken ist an; Text-Haken werden verstanden',
     [$show($z)['notes'], $show($z)['ki'], $show($z)['shopping']], [true, true, false]);
-pruefe('Immer elf Zeilen, jede genau einmal',
-    [count($z), count(array_unique($keys($z)))], [11, 11]);
+pruefe('Immer zwoelf Zeilen, jede genau einmal',
+    [count($z), count(array_unique($keys($z)))], [12, 12]);
 
 // ── Nutzlast ───────────────────────────────────────────────────────────────
 $p = Bereiche::AusKonfiguration(['Sections' => $liste, 'ShowKi' => false]);
 pruefe('Nutzlast: tabs als Karte, tabOrder als Liste, beide vollstaendig',
     [count($p['tabs']), $p['tabOrder'][0], $p['tabOrder'][1], $p['tabs']['dashboard'], $p['tabs']['ki'], $p['tabs']['homework']],
-    [11, 'todos', 'dashboard', false, false, true]);
+    [12, 'todos', 'dashboard', false, false, true]);
 
 // ── Riegel am Quelltext ────────────────────────────────────────────────────
 $wurzel = __DIR__ . '/../..';
@@ -111,7 +113,27 @@ pruefe('Gateway: tabOrder in window.__SYMDO__ und in der Discovery-Auskunft',
 $html = $lesen('SymDoWebApp/module.html');
 preg_match("/const TAB_REIHENFOLGE = \[([^\]]*)\];/", $html, $m);
 $jsReihe = array_map(static fn($s) => trim($s, " '\""), explode(',', $m[1] ?? ''));
-pruefe('Kachel-JS: dieselben elf Schluessel in derselben Vorgabereihenfolge', $jsReihe, Bereiche::SCHLUESSEL);
+pruefe('Kachel-JS: dieselben zwoelf Schluessel in derselben Vorgabereihenfolge', $jsReihe, Bereiche::SCHLUESSEL);
+preg_match("/const TABS = \[([^\]]*)\];/", $html, $m);
+$jsTabs = array_map(static fn($s) => trim($s, " '\""), explode(',', $m[1] ?? ''));
+pruefe('Essensplan: Bereich, Knopf, TABS-Eintrag, Zeichnen und Sichtbarkeit nur mit Daten und voller Oberflaeche',
+    [in_array('mealplan', $jsTabs, true), str_contains($html, 'id="screen-mealplan"'), str_contains($html, 'id="tab-mealplan"'),
+     str_contains($html, "if (activeTab === 'mealplan') renderEssensplan();"),
+     str_contains($html, "if (t.dashboard && t.mealplan && essensplan !== null) out.push('mealplan');"),
+     str_contains($html, 'mealplan:  t.mealplan   !== false')],
+    [true, true, true, true, true, true]);
+pruefe('Essensplan: das Kind liest nur (Korb, Planen, Wochen-Einkauf haengen an mpNurLesen)',
+    [substr_count($html, 'mpNurLesen()') >= 6, str_contains($html, "function mpNurLesen() { return kindGewaehlt() !== ''; }")],
+    [true, true]);
+$loc = json_decode($lesen('SymDoWebApp/locale.json'), true)['translations']['de'] ?? [];
+pruefe('Essensplan: der Name der Formularzeile ist uebersetzt', $loc['Meal plan'] ?? null, 'Essensplan');
+$gwBruecke = $lesen('SymDoGateway/libs/MealPlanBridge.php') . $lesen('SymDoGateway/libs/AiExtract.php') . $lesen('SymDoGateway/libs/AppCore.php');
+pruefe('Gateway: Route, Relay-Zweig vor dem KI-Riegel und Bereich nur mit Instanz',
+    [str_contains($lesen('SymDoGateway/libs/ApiRouter.php'), "case 'mealplan':"),
+     strpos($gwBruecke, "str_ends_with(\$path, 'mealplan')") !== false
+       && strpos($gwBruecke, "str_ends_with(\$path, 'mealplan')") < strpos($gwBruecke, "if (!(bool) \$this->AiProp('AiEnabled'))"),
+     str_contains($gwBruecke, "\$this->MealPlanInstanz() === 0")],
+    [true, true, true]);
 pruefe('Kachel-JS: normalizeTabs kennt school/plan/transit, Reihenfolge wird gelesen und der DOM sortiert',
     [str_contains($html, 'school:    t.school'), str_contains($html, 'plan:      t.plan'), str_contains($html, 'transit:   t.transit'),
      str_contains($html, 'function tabReihenfolge'), str_contains($html, 'store.tabOrder'),
@@ -120,6 +142,7 @@ pruefe('Kachel-JS: normalizeTabs kennt school/plan/transit, Reihenfolge wird gel
 pruefe('Die Kachel-Kopien tragen die Reihenfolge mit',
     [str_contains($lesen('SymDoToDoList/module.html'), 'function tabReihenfolge'), str_contains($lesen('SymDoShoppingList/module.html'), 'function tabReihenfolge')],
     [true, true]);
+pruefe('Formular: Platz fuer alle Zeilen', $liste['rowCount'] ?? null, count(Bereiche::SCHLUESSEL));
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

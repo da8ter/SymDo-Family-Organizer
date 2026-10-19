@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/libs/MealStore.php';
+require_once __DIR__ . '/libs/MealApp.php';
 require_once __DIR__ . '/../libs/KachelPush.php';
 
 /**
@@ -13,11 +14,13 @@ require_once __DIR__ . '/../libs/KachelPush.php';
  * Klick legt die Zutaten in den Einkaufswagen. Freitext geht auch („Reste").
  * Neue Rezepte entstehen direkt aus der Kachel per URL- oder Foto-Analyse —
  * über das Gateway-Relay, wie es die SymDo-Web-App-Kachel vormacht. Das
- * Briefing holt sich das Tagesgericht über MPL_GetMealForDate.
+ * Briefing holt sich das Tagesgericht über MPL_GetMealForDate, die Web-App
+ * den ganzen Plan über MPL_AppAction (libs/MealApp.php).
  */
 class SymDoMealPlan extends IPSModuleStrict
 {
     use MealStore;
+    use MealApp;
     use KachelPushWeg;
 
     private const SHOPPING_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';
@@ -186,24 +189,7 @@ class SymDoMealPlan extends IPSModuleStrict
                 if (!is_array($daten)) {
                     return;
                 }
-                $ziel = (int)($daten['targetId'] ?? 0);
-                $nachRezept = [];
-                foreach (is_array($daten['items'] ?? null) ? $daten['items'] : [] as $item) {
-                    if (!is_array($item)) {
-                        continue;
-                    }
-                    // Ohne eigene Herkunft gilt die des Aufrufs (Einzel-Gericht).
-                    $lid = trim((string)($item['listId'] ?? ($daten['listId'] ?? '')));
-                    if ($lid !== '') {
-                        $nachRezept[$lid][] = $item;
-                    }
-                }
-                $erfolg = 0;
-                foreach ($nachRezept as $lid => $zeilen) {
-                    if ($this->KorbAuswahl((string)$lid, $ziel, $zeilen)) {
-                        $erfolg++;
-                    }
-                }
+                $erfolg = $this->KorbUebernehmen($daten);
                 if ($erfolg > 0) {
                     $this->Push(['type' => 'cartDone', 'count' => $erfolg]);
                 }
@@ -212,17 +198,8 @@ class SymDoMealPlan extends IPSModuleStrict
             case 'SetServings':
                 // Portionszahl eines Rezepts dauerhaft aendern: {listId, servings, amounts}
                 $daten = is_array($Value) ? $Value : json_decode((string)$Value, true);
-                $sl = $this->QuellListe();
-                if (is_array($daten) && $sl > 0) {
-                    try {
-                        IPS_RequestAction($sl, 'SetFavoriteServings', json_encode([
-                            'listId'   => trim((string)($daten['listId'] ?? '')),
-                            'servings' => (int)($daten['servings'] ?? 0),
-                            'amounts'  => is_array($daten['amounts'] ?? null) ? $daten['amounts'] : [],
-                        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-                    } catch (\Throwable $e) {
-                        $this->SendDebug('MealPlan', 'Portionen speichern fehlgeschlagen: ' . $e->getMessage(), 0);
-                    }
+                if (is_array($daten)) {
+                    $this->PortionenSetzen($daten);
                 }
                 return;
 
@@ -317,6 +294,20 @@ class SymDoMealPlan extends IPSModuleStrict
     {
         return (string)json_encode($this->GerichtAuskunft(trim($Date)),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Der Essensplan für die Web-App, über das Gateway: {action, …} → {ok, …}.
+     * Aktionen und Antworten stehen in libs/MealApp.php.
+     */
+    public function AppAction(string $Json): string
+    {
+        $anfrage = json_decode($Json, true);
+        $antwort = is_array($anfrage)
+            ? $this->AppAntwort($anfrage, time())
+            : $this->AppFehler('invalid_payload', 'Invalid payload');
+        return (string)json_encode($antwort,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     public function GetVisualizationTile(): string

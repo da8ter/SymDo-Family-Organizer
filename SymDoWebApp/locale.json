@@ -602,7 +602,22 @@
             "Here you will find what the AI has recognised in mails and documents.": "Hier erscheint, was die KI in Mails und Dokumenten erkannt hat.",
             "Address copied": "Adresse kopiert",
             "Note on the lesson": "Hinweis zur Stunde",
-            "Room": "Raum"
+            "Room": "Raum",
+            "Meal plan": "Essensplan",
+            "Shop for this week": "Für die Woche einkaufen",
+            "Select a shopping list in the meal plan first.": "Zuerst im Essensplan eine Einkaufsliste wählen.",
+            "Nothing planned yet.": "Noch nichts geplant.",
+            "Nothing planned yet — tap a day.": "Noch nichts geplant — Tag antippen.",
+            "Ingredients to the cart": "Zutaten in den Einkaufswagen",
+            "Change meal": "Gericht ändern",
+            "Plan a meal": "Gericht planen",
+            "Choose a recipe …": "Rezept wählen …",
+            "From the favorite lists": "Aus den Favoritenlisten",
+            "Free text": "Freier Text",
+            "e.g. leftovers, order pizza": "z. B. Reste, Pizza bestellen",
+            "Remove meal": "Gericht entfernen",
+            "No ingredients found in that.": "Darin waren keine Zutaten zu finden.",
+            "Ingredients added": "Zutaten übernommen"
         }
     }
 }

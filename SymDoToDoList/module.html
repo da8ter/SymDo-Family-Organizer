@@ -1265,6 +1265,67 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 .plan-terminblase.an { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .plan-terminblase { transition: none; } }
+
+/* ── Essensplan ───────────────────────────────────────────────────────────
+   Zeilen wie in der Essensplan-Kachel: Kalenderblock, Gerichtsbild, Titel,
+   Korb. Das Bild steht frei (contain) — eine Flaeche bekommt nur der
+   Platzhalter, sonst rahmte sie das freigestellte Gericht als Kasten ein. */
+.mp-wochenkorb {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  padding: 8px 13px; border-radius: 999px; background: var(--surface);
+  font-size: 13px; font-weight: 700;
+}
+.mp-karte { padding: 6px; }
+.mp-tag {
+  display: flex; align-items: center; gap: 10px; padding: 8px;
+  border-radius: 12px; cursor: pointer; min-height: 48px;
+  user-select: none; -webkit-user-select: none;
+}
+.mp-tag + .mp-tag { margin-top: 2px; }
+.mp-kal { width: 44px; flex: none; text-align: center; border-radius: 10px; padding: 3px 0; }
+.mp-tag.heute .mp-kal { background: var(--accent); color: #fff; }
+.mp-wt { display: block; font-size: 11px; font-weight: 700; opacity: .8; }
+.mp-nr { display: block; font-size: 17px; font-weight: 800; line-height: 1.1; }
+.mp-bild {
+  width: 38px; height: 38px; border-radius: 10px; flex: none; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; font-size: 17px; color: var(--muted);
+}
+.mp-bild.mp-leer { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.mp-bild img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.mp-titel {
+  flex: 1; min-width: 0; font-size: 15px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mp-titel.leer { color: var(--muted); font-weight: 500; }
+.mp-korb {
+  width: 36px; height: 36px; border-radius: 50%; flex: none;
+  border: 1px solid var(--border); background: var(--surface); font-size: 15px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mp-hinweis { color: var(--muted); font-size: 13px; text-align: center; padding: 6px; }
+.mp-detailbild {
+  width: 200px; height: 200px; margin: 0 auto; display: flex;
+  align-items: center; justify-content: center; font-size: 64px; color: var(--muted);
+}
+.mp-detailbild img { width: 100%; height: 100%; object-fit: contain; border-radius: 18px; }
+.mp-portionen { text-align: center; color: var(--muted); font-size: 13px; }
+.mp-zutat {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border-radius: 12px; background: var(--surface);
+}
+.mp-zutat + .mp-zutat { margin-top: 6px; }
+.mp-kreis {
+  width: 30px; height: 30px; border-radius: 50%; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  font-size: 13px; font-weight: 800; overflow: hidden;
+}
+.mp-kreis.mitbild { background: transparent; }
+.mp-kreis img { width: 100%; height: 100%; object-fit: contain; }
+.mp-zname { flex: 1; min-width: 0; font-size: 14px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-feld select, .mp-feld input { width: 100%; }
+.mp-korbkopf { display: flex; justify-content: center; }
 /* Der Termin als Balken: so lang wie er dauert. Ohne Endzeit laeuft er nach
    rechts aus (data-open). Zwilling der Stundenplan-Kachel. */
 .plan-termin-bar {
@@ -5000,6 +5061,15 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       </div>
     </section>
 
+    <!-- Essensplan: diese und naechste Woche aus dem Essensplan-Modul. Geplant
+         und gespeichert wird dort, die App fragt ueber das Gateway (mealplan). -->
+    <section id="screen-mealplan" class="screen">
+      <div class="content">
+        <div class="screen-head"><h2 id="mealplanTitle"></h2><span id="mealplanAktion"></span></div>
+        <div id="mealplanArea"></div>
+      </div>
+    </section>
+
   </main>
 
   <nav class="tabbar">
@@ -5017,6 +5087,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     <button id="tab-notes"><i class="fa-light fa-note-sticky"></i><span></span></button>
     <button id="tab-edumaps"><i class="fa-light fa-school"></i><span></span><span id="tabEdumapsBadge" class="tab-badge" style="display:none;"></span></button>
     <button id="tab-homework"><i class="fa-light fa-book-open-cover"></i><span></span></button>
+    <button id="tab-mealplan"><i class="fa-light fa-plate-utensils"></i><span></span></button>
     <!-- Stufe 3 der Platzanpassung: nimmt die Knöpfe auf, die nicht mehr in die
          Leiste passen (tabLeisteAnpassen). Sonst verborgen. -->
     <button id="tab-mehr" style="display:none;"><i class="fa-light fa-ellipsis"></i><span></span></button>
@@ -5288,6 +5359,54 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     <div class="overlay-footer">
       <button data-close="aiTextOverlay" id="btnAiTextCancel"></button>
       <button class="primary" id="btnAiTextRun" disabled></button>
+    </div>
+  </div>
+</div>
+
+<!-- Essensplan: ein geplanter Tag (Bild, Portionen, Zutaten) -->
+<div class="overlay" id="mpDetailOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="mpDetailTitle"></span>
+      <button class="btn-close-overlay" data-close="mpDetailOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body" id="mpDetailBody"></div>
+    <div class="overlay-footer">
+      <button id="btnMpQuelle"></button>
+      <button class="icon-only" id="btnMpAendern"><i class="fa-light fa-pencil"></i></button>
+      <button class="primary" id="btnMpKorb"><i class="fa-light fa-cart-plus"></i> <span></span></button>
+    </div>
+  </div>
+</div>
+
+<!-- Essensplan: einen Tag planen (Rezept aus den Favoritenlisten oder Text) -->
+<div class="overlay" id="mpPlanOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="mpPlanTitle"></span>
+      <button class="btn-close-overlay" data-close="mpPlanOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <div class="form-row mp-feld" id="mpFavZeile"><label id="lblMpFav"></label><select id="mpFavWahl"></select></div>
+      <div class="form-row mp-feld"><label id="lblMpText"></label><input id="mpText" type="text" maxlength="120" /></div>
+    </div>
+    <div class="overlay-footer">
+      <button class="destructive" id="btnMpEntfernen"></button>
+      <button class="primary" id="btnMpSpeichern"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Essensplan: Zutaten auswaehlen, bevor sie in den Einkauf gehen -->
+<div class="overlay" id="mpKorbOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="mpKorbTitle"></span>
+      <button class="btn-close-overlay" id="btnMpKorbZu"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body" id="mpKorbBody"></div>
+    <div class="overlay-footer">
+      <button class="primary" id="btnMpKorbOk"><i class="fa-light fa-cart-plus"></i> <span></span></button>
     </div>
   </div>
 </div>
@@ -6349,7 +6468,11 @@ function normalizeTabs(raw) {
        Angabe soll sich nichts aendern. „school" ist der gebuendelte Knopf. */
     school:    t.school     !== false,
     plan:      t.plan       !== false,
-    transit:   t.transit    !== false
+    transit:   t.transit    !== false,
+    /* Essensplan (seit 19.10.2026): Vorgabe sichtbar wie der Nahverkehr. Er
+       haengt ausserdem an t.dashboard und daran, dass es eine Instanz gibt —
+       die Kacheln nennen den Schluessel nicht und bekommen ihn so nie. */
+    mealplan:  t.mealplan   !== false
   };
 }
 /* Die Reihenfolge der Knoepfe — aus dem Formular der Kachel (Ziehen in der
@@ -6357,7 +6480,7 @@ function normalizeTabs(raw) {
    der State. Immer vollstaendig: Unbekanntes faellt weg, Fehlendes kommt in
    der Vorgabereihenfolge hinten dran (Spiegel von Bereiche::Zeilen in PHP) —
    eine aeltere oder verstuemmelte Liste verliert so keinen Knopf. */
-const TAB_REIHENFOLGE = ['dashboard', 'school', 'plan', 'transit', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps', 'homework'];
+const TAB_REIHENFOLGE = ['dashboard', 'school', 'plan', 'transit', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps', 'homework', 'mealplan'];
 function tabReihenfolge() {
   const roh = window.__SYMDO__ ? window.__SYMDO__.tabOrder : store.tabOrder;
   const liste = Array.isArray(roh) ? roh.filter(k => TAB_REIHENFOLGE.includes(k)) : [];
@@ -6403,6 +6526,10 @@ function visibleTabs() {
     const nv = transitEintraege();
     if (nv.stops.length > 0 || nv.routes.length > 0) { out.push('transit'); }
   }
+  /* Essensplan: erscheint, sobald das Gateway eine Instanz meldet — derselbe
+     Grund wie beim Nahverkehr. Auch beim Kind: es sieht den Plan, aendert aber
+     nichts (mpNurLesen). */
+  if (t.dashboard && t.mealplan && essensplan !== null) out.push('mealplan');
   /* Kindsachen: Stundenplan, Hausaufgaben und Klassenseiten gehoeren EINEM Kind.
      In der vollen Oberflaeche erscheinen sie deshalb nur, solange eines gewaehlt
      ist — sonst waere „die Hausaufgaben" die Frage, wessen, und der Bereich
@@ -7483,6 +7610,8 @@ function handleMessage(data) {
        Karte beim Oeffnen leer und erschien erst eine Minute spaeter — im
        Prueflauf als „fehlt" sichtbar. */
     ladeschirmWartenAuf([loadCalendars(), loadBriefing(), loadTimetable(), loadTransit()]);
+    // Der Essensplan steht nicht auf der Uebersicht — der Ladeschirm wartet nicht auf ihn.
+    loadEssensplan();
     /* Notizen VORAB holen, nicht erst beim Betreten des Bereichs.
        Bisher stiess renderNotizen() den Abruf beim ersten Zeichnen an — der
        Bereich stand also einen Moment leer da, jedes Mal beim ersten Oeffnen.
@@ -7577,7 +7706,7 @@ window.addEventListener('message', (event) => {
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 // 'plan' ist der Wochenplan eines Kindes — nur im Kindmodus sichtbar.
-const TABS = ['dashboard', 'plan', 'transit', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps', 'homework'];
+const TABS = ['dashboard', 'plan', 'transit', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps', 'homework', 'mealplan'];
 function setTab(tab) {
   // Gegen die sichtbaren Tabs prüfen, nicht gegen TABS: der gespeicherte symdo.tab
   // kann auf einen inzwischen abgeschalteten Bereich zeigen.
@@ -8653,6 +8782,7 @@ function renderAll() {
   if (activeTab === 'homework') renderHausaufgabenBereich();
   if (activeTab === 'plan') { renderWochenplan(); renderHausaufgaben(); }
   if (activeTab === 'transit') renderTransit();
+  if (activeTab === 'mealplan') renderEssensplan();
   if (activeTab === 'ki') renderMailAlle();
   const active = document.querySelector('.screen.active');
   if (active) applyMemberCollapse(active);
@@ -8916,6 +9046,7 @@ function gatewayNachladen() {
   loadMailProposals();
   loadTimetable();
   loadTransit();
+  loadEssensplan();
   /* Notizen und Termine ziehen jetzt auch nach. Sie standen bisher in KEINEM
      Takt: wer sie auf einem anderen Geraet aenderte, sah es hier erst nach dem
      Neuladen der App. Der Notiz-Abruf ist billig (gemessen 3,7 KB, 1,5 ms) und
@@ -8932,6 +9063,478 @@ function gatewayNachladen() {
   if (homeworkMoeglich()) { ladeHausaufgaben(); }
   if (activeTab === 'calendar') { loadCalendarEvents(true); }
 }
+
+/* ── Essensplan (seit 19.10.2026) ─────────────────────────────────────────
+   Diese und die naechste Woche aus dem Essensplan-Modul. Geplant und
+   gespeichert wird dort; die App fragt ueber das Gateway (Route `mealplan`,
+   in der Kachel ueber denselben Relay-Weg wie der Nahverkehr) und bekommt
+   nach jeder Aenderung den frischen Stand zurueck.
+
+   Der Bereich gehoert zur vollen Oberflaeche (t.dashboard) und erscheint nur,
+   wenn das Gateway eine Essensplan-Instanz meldet. Ein gewaehltes Kind sieht
+   den Plan, plant aber nichts und legt nichts in den Einkauf (Nutzerentscheid
+   19.10.2026). Den Rezept-Scan der Kachel gibt es hier nicht. */
+let essensplan = null;
+let essensplanLaeuft = false;
+let essensplanSignatur = '';
+let mpWoche = 0;          // 0 = diese, 1 = naechste Woche
+let mpTag = null;         // der Tag im Detail- oder Planungsblatt
+let mpDetail = null;      // Antwort auf 'detail' fuer mpTag
+let mpKorb = null;        // {titel, listId, zutaten, start, portionen}
+
+/** Nur die volle Oberflaeche mit Gateway fragt — die Kacheln tragen den Bereich nie. */
+function essensplanGewollt() {
+  const t = normalizeTabs(window.__SYMDO__ ? window.__SYMDO__.tabs : store.tabs);
+  return t.dashboard === true && t.mealplan === true && briefingAvailable();
+}
+function mpNurLesen() { return kindGewaehlt() !== ''; }
+
+function mpPost(nutzlast) {
+  return aiPost('/mealplan', nutzlast).then(r => (r && r.json) || null).catch(() => null);
+}
+
+function loadEssensplan() {
+  if (essensplanLaeuft || !essensplanGewollt()) { return Promise.resolve(); }
+  essensplanLaeuft = true;
+  return mpPost({ action: 'state' }).then(j => {
+    essensplanLaeuft = false;
+    // Eine Stoerung behaelt den alten Stand — nur eine Antwort zaehlt.
+    if (j && j.ok === true) { essensplanUebernehmen(j.mealplan || null); }
+  });
+}
+
+function essensplanUebernehmen(stand) {
+  const signatur = stand === null ? '' : JSON.stringify(stand);
+  if (signatur === essensplanSignatur) { return; }
+  essensplanSignatur = signatur;
+  essensplan = stand;
+  // Erst die Bereiche, dann zeichnen: ob es den Bereich gibt, haengt an den Daten.
+  applyTabVisibility();
+  renderAll();
+}
+
+function mpTagName(datum) {
+  const d = new Date(String(datum) + 'T12:00:00');
+  return translate(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()] || '');
+}
+function mpTagNummer(datum) { return parseInt(String(datum).slice(8, 10), 10) || ''; }
+
+/* Das Bild eines Gerichts. Ein erzeugtes Gerichtsbild kommt ueber dieselbe
+   Adresse wie im Favoriten-Blatt (dishImageUrl, dort fest s=96) — hier nur
+   mit der gewuenschten Kante. Ein Rezeptfoto ohne Gerichtsbild liefert der
+   Server als Miniatur mit (`image`). */
+function mpBildUrl(eintrag, kante) {
+  if (eintrag && eintrag.dishId > 0) {
+    const url = dishImageUrl({ isRecipe: true, imageId: eintrag.dishId });
+    return url ? url.replace(/([?&])s=96(?=&|$)/, '$1s=' + kante) : '';
+  }
+  return (eintrag && eintrag.image) || '';
+}
+/** Faellt ein Bild aus, steht der Teller da — kein leerer Kasten. */
+function mpBildFallback(wurzel) {
+  wurzel.querySelectorAll('img[data-mp-bild]').forEach(img => img.addEventListener('error', () => {
+    const halter = img.parentNode;
+    if (halter) { halter.innerHTML = '<i class="fa-light fa-plate-utensils"></i>'; }
+  }, { once: true }));
+}
+
+function renderEssensplan() {
+  const bereich = document.getElementById('mealplanArea');
+  if (!bereich) { return; }
+  const titel = document.getElementById('mealplanTitle');
+  if (titel) { titel.textContent = translate('Meal plan'); }
+  if (!essensplan) {
+    bereich.innerHTML = '';
+    const aktion = document.getElementById('mealplanAktion');
+    if (aktion) { aktion.innerHTML = ''; }
+    return;
+  }
+  const wochen = Array.isArray(essensplan.weeks) ? essensplan.weeks : [];
+  if (mpWoche >= wochen.length) { mpWoche = 0; }
+  const w = wochen[mpWoche] || { monday: '', days: [] };
+  const tage = Array.isArray(w.days) ? w.days : [];
+  const lesen = mpNurLesen();
+
+  /* Der Wochen-Einkauf steht im Kopf neben dem Titel — neben der Wochenwahl
+     brach „Nächste Woche" auf schmalen Schirmen um. */
+  const aktion = document.getElementById('mealplanAktion');
+  if (aktion) {
+    aktion.innerHTML = !lesen && tage.some(d => d.cart)
+      ? `<button class="mp-wochenkorb" data-mp-wochenkorb><i class="fa-light fa-cart-plus"></i>`
+        + `<span>${escapeHtml(translate('Shop for this week'))}</span></button>`
+      : '';
+    const wochenKorb = aktion.querySelector('[data-mp-wochenkorb]');
+    if (wochenKorb) { wochenKorb.addEventListener('click', () => mpKorbWoche(w.monday)); }
+  }
+  let html = '<div class="segmented">'
+    + wochen.map((_, i) => `<button data-mp-woche="${i}" class="${i === mpWoche ? 'active' : ''}">`
+      + `${escapeHtml(translate(i === 0 ? 'This week' : 'Next week'))}</button>`).join('')
+    + '</div>';
+  html += '<div class="card mp-karte">' + tage.map(d => mpZeile(d, lesen)).join('') + '</div>';
+  if (!essensplan.hasSource && !lesen) {
+    html += `<div class="mp-hinweis">${escapeHtml(translate('Select a shopping list in the meal plan first.'))}</div>`;
+  } else if (!tage.some(d => d.title)) {
+    html += `<div class="mp-hinweis">${escapeHtml(translate(lesen ? 'Nothing planned yet.' : 'Nothing planned yet — tap a day.'))}</div>`;
+  }
+  bereich.innerHTML = html;
+
+  bereich.querySelectorAll('[data-mp-woche]').forEach(b => b.addEventListener('click', () => {
+    mpWoche = parseInt(b.dataset.mpWoche, 10) || 0;
+    renderEssensplan();
+  }));
+  bereich.querySelectorAll('[data-mp-datum]').forEach(zeile => {
+    const tag = tage.find(d => d.date === zeile.dataset.mpDatum);
+    zeile.addEventListener('click', () => mpTagOeffnen(tag));
+    const korb = zeile.querySelector('[data-mp-korb]');
+    if (korb) { korb.addEventListener('click', ev => { ev.stopPropagation(); mpKorbTag(tag); }); }
+  });
+  mpBildFallback(bereich);
+}
+
+function mpZeile(d, lesen) {
+  const url = d.title ? mpBildUrl(d, 96) : '';
+  const bild = url
+    ? `<span class="mp-bild"><img data-mp-bild alt="" src="${escapeHtml(url)}"></span>`
+    : (d.title ? '<span class="mp-bild mp-leer"><i class="fa-light fa-plate-utensils"></i></span>' : '<span class="mp-bild"></span>');
+  return `<div class="mp-tag${d.today ? ' heute' : ''}" data-mp-datum="${escapeHtml(d.date)}">`
+    + `<span class="mp-kal"><span class="mp-wt">${escapeHtml(mpTagName(d.date))}</span>`
+    + `<span class="mp-nr">${mpTagNummer(d.date)}</span></span>`
+    + bild
+    + `<span class="mp-titel${d.title ? '' : ' leer'}">${escapeHtml(d.title || '—')}</span>`
+    + (d.cart && !lesen
+      ? `<button class="mp-korb" data-mp-korb aria-label="${escapeHtml(translate('Ingredients to the cart'))}">`
+        + '<i class="fa-light fa-cart-plus"></i></button>'
+      : '')
+    + '</div>';
+}
+
+/** Geplanter Tag → Detail; leerer Tag → planen (nur Erwachsene). */
+function mpTagOeffnen(tag) {
+  if (!tag) { return; }
+  if (tag.title) { mpDetailOeffnen(tag); return; }
+  if (!mpNurLesen()) { mpPlanOeffnen(tag); }
+}
+
+function mpDetailOeffnen(tag) {
+  mpTag = tag;
+  mpDetail = null;
+  document.getElementById('mpDetailTitle').textContent = tag.title || '';
+  mpDetailZeichnen();
+  openOverlay('mpDetailOverlay');
+  if (!tag.listId) { return; }   // Freitext hat weder Zutaten noch Quelle
+  mpPost({ action: 'detail', date: tag.date }).then(j => {
+    if (!j || j.ok !== true || !j.detail || mpTag !== tag) { return; }
+    mpDetail = j.detail;
+    // Der Typ einer Foto-/PDF-Quelle muss beim Klick schon feststehen
+    // (window.open nach einem await blockt Safari).
+    if (mpDetail.srcKind === 'pdf' || mpDetail.srcKind === 'photo') { prefetchMediaType(mpDetail.srcMediaId); }
+    mpDetailZeichnen();
+  });
+}
+
+function mpDetailZeichnen() {
+  const tag = mpTag;
+  if (!tag) { return; }
+  const d = mpDetail;
+  const lesen = mpNurLesen();
+  const bild = d ? mpBildUrl(d, 480) : mpBildUrl(tag, 96);
+  let html = '<div class="mp-detailbild">'
+    + (bild ? `<img data-mp-bild alt="" src="${escapeHtml(bild)}">` : '<i class="fa-light fa-plate-utensils"></i>')
+    + '</div>';
+  if (d && d.servings > 0) {
+    html += `<div class="mp-portionen">${escapeHtml(translate('%1 servings').replace('%1', String(d.servings)))}</div>`;
+  }
+  const zutaten = d && Array.isArray(d.ingredients) ? d.ingredients : [];
+  if (zutaten.length) {
+    html += '<div>' + zutaten.map(mpZutatZeile).join('') + '</div>';
+  } else if (tag.listId && !d) {
+    html += `<div class="mp-hinweis">${escapeHtml(translate('Loading …'))}</div>`;
+  }
+  const body = document.getElementById('mpDetailBody');
+  body.innerHTML = html;
+  mpBildFallback(body);
+
+  const quelle = document.getElementById('btnMpQuelle');
+  quelle.textContent = translate('Open recipe');
+  quelle.style.display = mpQuelleDa(d) ? '' : 'none';
+  const aendern = document.getElementById('btnMpAendern');
+  aendern.style.display = lesen ? 'none' : '';
+  aendern.setAttribute('aria-label', translate('Change meal'));
+  const korb = document.getElementById('btnMpKorb');
+  korb.querySelector('span').textContent = translate('Ingredients to the cart');
+  korb.style.display = (!lesen && tag.cart) ? '' : 'none';
+}
+
+function mpZutatZeile(z) {
+  const name = String((z && z.name) || '');
+  // Dieselben Produktbilder wie in der Einkaufsliste — die Web-App kennt die Zuordnung.
+  const bild = resolveItemImage({ name: name }) || '';
+  const kreis = bild
+    ? `<span class="mp-kreis mitbild"><img alt="" src="${escapeHtml(bild)}"></span>`
+    : `<span class="mp-kreis">${escapeHtml(name.charAt(0).toUpperCase() || '?')}</span>`;
+  return `<div class="mp-zutat">${kreis}<span class="mp-zname">${escapeHtml(name)}</span>`
+    + (z.amount ? `<span class="badge">${escapeHtml(String(z.amount))}</span>` : '')
+    + '</div>';
+}
+
+function mpQuelleDa(d) {
+  if (!d) { return false; }
+  if (d.srcKind === 'url') { return /^https?:\/\//i.test(String(d.srcUrl || '')); }
+  return (d.srcKind === 'pdf' || d.srcKind === 'photo') && (parseInt(d.srcMediaId, 10) || 0) > 0;
+}
+
+/** Wie „Rezept öffnen" im Favoriten-Blatt: Link, PDF im System-Viewer, Foto im Blatt. */
+function mpQuelleOeffnen() {
+  const d = mpDetail;
+  if (!mpQuelleDa(d)) { return; }
+  if (d.srcKind === 'url') {
+    try { window.open(String(d.srcUrl), '_blank', 'noopener'); } catch (e) {}
+    return;
+  }
+  const id = parseInt(d.srcMediaId, 10) || 0;
+  const meta = mediaTypeCache[String(id)];
+  const istPdf = d.srcKind === 'pdf' || !!(meta && meta.state === 'ok' && meta.isPdf);
+  if (istPdf && openMediaExternally(id)) { return; }
+  openRecipePhoto(id, istPdf);
+}
+
+function mpPlanOeffnen(tag) {
+  if (!tag || mpNurLesen() || !essensplan) { return; }
+  if (!essensplan.hasSource) { showToast(translate('Select a shopping list in the meal plan first.')); return; }
+  mpTag = tag;
+  document.getElementById('mpPlanTitle').textContent =
+    translate('Plan a meal') + ' — ' + mpTagName(tag.date) + ' ' + mpTagNummer(tag.date) + '.';
+  const favoriten = Array.isArray(essensplan.favorites) ? essensplan.favorites : [];
+  const wahl = document.getElementById('mpFavWahl');
+  wahl.innerHTML = `<option value="">${escapeHtml(translate('Choose a recipe …'))}</option>`
+    + favoriten.map(f => `<option value="${escapeHtml(f.id)}">${escapeHtml(f.name)}</option>`).join('');
+  wahl.value = tag.listId && favoriten.some(f => f.id === tag.listId) ? tag.listId : '';
+  document.getElementById('mpFavZeile').style.display = favoriten.length ? '' : 'none';
+  document.getElementById('lblMpFav').textContent = translate('From the favorite lists');
+  document.getElementById('lblMpText').textContent = translate('Free text');
+  const text = document.getElementById('mpText');
+  text.value = tag.listId ? '' : (tag.title || '');
+  text.placeholder = translate('e.g. leftovers, order pizza');
+  const entfernen = document.getElementById('btnMpEntfernen');
+  entfernen.textContent = translate('Remove meal');
+  entfernen.style.display = tag.title ? '' : 'none';
+  document.getElementById('btnMpSpeichern').textContent = translate('Save');
+  closeOverlay('mpDetailOverlay');
+  openOverlay('mpPlanOverlay');
+}
+
+function mpGerichtSetzen(listId, text) {
+  const tag = mpTag;
+  if (!tag || mpNurLesen()) { return; }
+  closeOverlay('mpPlanOverlay');
+  mpPost({ action: 'setMeal', date: tag.date, listId: listId, text: text }).then(j => {
+    if (!j || j.ok !== true) { showToast(translate('Action failed')); return; }
+    essensplanUebernehmen(j.mealplan || null);
+  });
+}
+
+/* ── Zutaten in den Einkauf: erst die Auswahl, wie in der Kachel ─────────── */
+
+/* Mengenangabe um den Faktor skalieren („500 g", „1,5 EL", „½ TL", „2-3") —
+   wortgleich mit scaleAmount im KI-Teil (dort in einer Closure, hier nicht
+   erreichbar) und mit der Essensplan-Kachel. */
+function mpZahl(n) {
+  const r = Math.round(n * 100) / 100;
+  const s = Number.isInteger(r) ? String(r) : r.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  return s.replace('.', ',');
+}
+function mpMenge(str, factor) {
+  const s = String(str == null ? '' : str).trim();
+  if (!s || factor === 1) return s;
+  const FR = { '½': 0.5, '⅓': 1 / 3, '⅔': 2 / 3, '¼': 0.25, '¾': 0.75, '⅕': 0.2, '⅛': 0.125 };
+  let m = s.match(/^([½⅓⅔¼¾⅕⅛])\s*(.*)$/);
+  if (m) return mpZahl(FR[m[1]] * factor) + (m[2] ? ' ' + m[2] : '');
+  m = s.match(/^(\d+)\s*\/\s*(\d+)\s*(.*)$/);
+  if (m) return mpZahl((parseInt(m[1], 10) / parseInt(m[2], 10)) * factor) + (m[3] ? ' ' + m[3] : '');
+  m = s.match(/^(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*(.*)$/);
+  if (m) {
+    const toN = (x) => parseFloat(x.replace(',', '.'));
+    let out = mpZahl(toN(m[1]) * factor);
+    if (m[2] != null) out += '–' + mpZahl(toN(m[2]) * factor);
+    return out + (m[3] ? ' ' + m[3] : '');
+  }
+  return s;
+}
+
+/** Auswahl fuer EINEN Tag — die Zutaten kommen aus der Detail-Antwort. */
+function mpKorbTag(tag) {
+  if (!tag || !tag.listId || mpNurLesen()) { return; }
+  mpTag = tag;
+  const weiter = d => {
+    const zutaten = d && Array.isArray(d.ingredients) ? d.ingredients : [];
+    if (!zutaten.length) { showToast(translate('No ingredients found in that.')); return; }
+    mpKorbOeffnen({ titel: tag.title, listId: tag.listId, zutaten: zutaten, servings: parseInt(d.servings, 10) || 0 });
+  };
+  if (mpDetail && mpDetail.date === tag.date) { weiter(mpDetail); return; }
+  mpPost({ action: 'detail', date: tag.date }).then(j => {
+    if (!j || j.ok !== true || !j.detail) { showToast(translate('Action failed')); return; }
+    if (mpTag === tag) { mpDetail = j.detail; }
+    weiter(j.detail);
+  });
+}
+
+/** Dasselbe fuer die ganze Woche: alle Zutaten aller geplanten Rezepte. */
+function mpKorbWoche(montag) {
+  if (mpNurLesen() || !montag) { return; }
+  mpPost({ action: 'weekDetail', monday: montag }).then(j => {
+    if (!j || j.ok !== true) { showToast(translate('Action failed')); return; }
+    const zutaten = Array.isArray(j.ingredients) ? j.ingredients : [];
+    if (!zutaten.length) { showToast(translate('No ingredients found in that.')); return; }
+    mpKorbOeffnen({ titel: translate('Shop for this week'), listId: '', zutaten: zutaten, servings: 0 });
+  });
+}
+
+/* Der Steller zaehlt beim einzelnen Gericht IMMER Portionen: kennt das Rezept
+   seine Zahl, ist sie der Ausgangspunkt, sonst gelten die Mengen als eine
+   Portion. Beim Wochen-Einkauf gibt es keinen Steller — jede Zeile steht
+   schon auf der Portionszahl ihres Rezepts. */
+function mpKorbOeffnen(k) {
+  mpKorb = { titel: k.titel, listId: k.listId, zutaten: k.zutaten,
+             start: k.servings, portionen: k.listId ? (k.servings > 0 ? k.servings : 1) : 0 };
+  document.getElementById('mpKorbTitle').textContent = k.titel || '';
+  const listen = Array.isArray(essensplan && essensplan.lists) ? essensplan.lists : [];
+  let html = '';
+  if (listen.length > 1) {
+    html += `<div class="form-row mp-feld"><label>${escapeHtml(translate('Shopping list'))}</label>`
+      + '<select id="mpKorbZiel">'
+      + listen.map(l => `<option value="${parseInt(l.id, 10) || 0}">${escapeHtml(l.name)}</option>`).join('')
+      + '</select></div>';
+  }
+  if (mpKorb.portionen > 0) {
+    html += '<div class="ai-recipe-head mp-korbkopf"><div class="ai-portions">'
+      + '<button type="button" class="ai-step" id="mpKorbMinus" aria-label="minus">–</button>'
+      + '<span class="ai-portions-label" id="mpKorbPortionen"></span>'
+      + '<button type="button" class="ai-step" id="mpKorbPlus" aria-label="plus">+</button></div></div>';
+  }
+  html += '<div id="mpKorbListe"></div>';
+  const body = document.getElementById('mpKorbBody');
+  body.innerHTML = html;
+  const ziel = document.getElementById('mpKorbZiel');
+  if (ziel && listen.some(l => l.id === essensplan.sourceList)) { ziel.value = String(essensplan.sourceList); }
+
+  const liste = document.getElementById('mpKorbListe');
+  k.zutaten.forEach((z, i) => {
+    const zeile = document.createElement('div');
+    zeile.className = 'ai-row selected';
+    zeile.dataset.mpIndex = String(i);
+    // Beim Wochen-Einkauf steht das Rezept daneben — sonst weiss niemand, warum
+    // dieselben Nudeln zweimal dastehen.
+    const herkunft = z.recipe
+      ? (z.servings > 0 ? z.recipe + ' (' + translate('%1 servings').replace('%1', String(z.servings)) + ')' : z.recipe)
+      : (z.category || '');
+    zeile.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>'
+      + `<div class="ai-main"><div class="ai-title">${escapeHtml(z.name)}</div><div class="ai-meta">`
+      + (z.amount ? '<span class="badge" data-mp-menge></span>' : '')
+      + (herkunft ? `<span class="badge">${escapeHtml(herkunft)}</span>` : '')
+      + '</div></div>';
+    zeile.addEventListener('click', () => { zeile.classList.toggle('selected'); mpKorbZaehlen(); });
+    liste.appendChild(zeile);
+  });
+  const minus = document.getElementById('mpKorbMinus');
+  const plus = document.getElementById('mpKorbPlus');
+  if (minus) { minus.addEventListener('click', () => { mpKorb.portionen = Math.max(1, mpKorb.portionen - 1); mpKorbSkalieren(); }); }
+  if (plus) { plus.addEventListener('click', () => { mpKorb.portionen = Math.min(99, mpKorb.portionen + 1); mpKorbSkalieren(); }); }
+  mpKorbSkalieren();
+  openOverlay('mpKorbOverlay');
+}
+
+function mpKorbFaktor() {
+  if (!mpKorb || mpKorb.portionen <= 0) { return 1; }
+  return mpKorb.portionen / (mpKorb.start > 0 ? mpKorb.start : 1);
+}
+
+function mpKorbSkalieren() {
+  if (!mpKorb) { return; }
+  const f = mpKorbFaktor();
+  const label = document.getElementById('mpKorbPortionen');
+  if (label) { label.textContent = translate('%1 servings').replace('%1', String(mpKorb.portionen)); }
+  const minus = document.getElementById('mpKorbMinus');
+  if (minus) { minus.disabled = mpKorb.portionen <= 1; }
+  document.querySelectorAll('#mpKorbListe .ai-row').forEach(zeile => {
+    const z = mpKorb.zutaten[parseInt(zeile.dataset.mpIndex, 10)] || {};
+    const chip = zeile.querySelector('[data-mp-menge]');
+    if (chip) { chip.textContent = mpMenge(z.amount, f); }
+  });
+  mpKorbZaehlen();
+}
+
+function mpKorbGewaehlt() {
+  if (!mpKorb) { return []; }
+  const f = mpKorbFaktor();
+  return Array.from(document.querySelectorAll('#mpKorbListe .ai-row.selected')).map(zeile => {
+    const z = mpKorb.zutaten[parseInt(zeile.dataset.mpIndex, 10)] || {};
+    const eintrag = { name: String(z.name || ''), amount: mpMenge(z.amount, f) };
+    if (z.listId) { eintrag.listId = z.listId; }   // Wochen-Einkauf: Herkunft je Zeile
+    return eintrag;
+  });
+}
+
+function mpKorbZaehlen() {
+  const n = mpKorbGewaehlt().length;
+  const knopf = document.getElementById('btnMpKorbOk');
+  knopf.querySelector('span').textContent = translate('Ingredients to the cart') + ' (' + n + ')';
+  knopf.disabled = n === 0;
+}
+
+/**
+ * Eine geaenderte Portionszahl dauerhaft ans Rezept — mit den Mengen, die
+ * gerade dastehen. Wie in der Kachel auch beim Schliessen ohne Einkauf.
+ */
+function mpPortionenSichern() {
+  const k = mpKorb;
+  if (!k || !k.listId || k.portionen <= 0 || k.portionen === k.start || mpNurLesen()) { return; }
+  const f = mpKorbFaktor();
+  const mengen = {};
+  k.zutaten.forEach(z => { mengen[z.name] = mpMenge(z.amount, f); });
+  mpPost({ action: 'setServings', listId: k.listId, servings: k.portionen, amounts: mengen });
+  // Ab jetzt IST das die Portionszahl — die Detailansicht zeigt die neuen Mengen.
+  k.zutaten = k.zutaten.map(z => Object.assign({}, z, { amount: mengen[z.name] }));
+  k.start = k.portionen;
+  if (mpDetail && mpTag && mpTag.listId === k.listId) {
+    mpDetail = Object.assign({}, mpDetail, { servings: k.portionen, ingredients: k.zutaten });
+    mpDetailZeichnen();
+  }
+}
+
+function mpKorbBestaetigen() {
+  const k = mpKorb;
+  const items = mpKorbGewaehlt();
+  if (!k || !items.length || mpNurLesen()) { return; }
+  if (!k.listId && !items.every(i => i.listId)) { return; }
+  const ziel = document.getElementById('mpKorbZiel');
+  const nutzlast = { action: 'addItemsToCart', targetId: ziel ? (parseInt(ziel.value, 10) || 0) : 0, items: items };
+  if (k.listId) { nutzlast.listId = k.listId; }
+  document.getElementById('btnMpKorbOk').disabled = true;   // Doppel-Tipp-Schutz
+  mpPortionenSichern();
+  closeOverlay('mpKorbOverlay');
+  closeOverlay('mpDetailOverlay');
+  mpPost(nutzlast).then(j => {
+    showToast(translate(j && j.ok === true ? 'Ingredients added' : 'Action failed'));
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('btnMpQuelle').addEventListener('click', mpQuelleOeffnen);
+  document.getElementById('btnMpAendern').addEventListener('click', () => mpPlanOeffnen(mpTag));
+  document.getElementById('btnMpKorb').addEventListener('click', () => mpKorbTag(mpTag));
+  document.getElementById('btnMpEntfernen').addEventListener('click', () => mpGerichtSetzen('', ''));
+  document.getElementById('btnMpSpeichern').addEventListener('click', () => {
+    const listId = document.getElementById('mpFavWahl').value;
+    const text = document.getElementById('mpText').value.trim();
+    // Ein gewaehltes Rezept schlaegt den Text — der Server haelt es genauso.
+    if (listId) { mpGerichtSetzen(listId, ''); } else if (text) { mpGerichtSetzen('', text); }
+  });
+  document.getElementById('btnMpKorbZu').addEventListener('click', () => {
+    mpPortionenSichern();
+    closeOverlay('mpKorbOverlay');
+  });
+  document.getElementById('btnMpKorbOk').addEventListener('click', mpKorbBestaetigen);
+});
 
 /* Stundenplan der Kinder. Wie beim Briefing: still nichts, wenn es kein
    Gateway, keine Instanz oder keinen eingeschalteten Plan gibt — eine leere
@@ -20214,6 +20817,7 @@ function initCaptions() {
   document.querySelector('#tab-school span').textContent = translate('School');
   document.querySelector('#tab-plan span').textContent = translate('Timetable');
   document.querySelector('#tab-transit span').textContent = translate('Transit');
+  document.querySelector('#tab-mealplan span').textContent = translate('Meal plan');
   document.querySelector('#tab-ki span').textContent = translate('AI');
   document.querySelector('#tab-mehr span').textContent = translate('More');
   document.getElementById('kiTitle').textContent = translate('Detected by AI');

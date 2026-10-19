@@ -231,7 +231,7 @@ trait MealStore
     {
         $g = $tage[$datum] ?? null;
         if ($g === null) {
-            return ['title' => '', 'listId' => '', 'hasIngredients' => false, 'mediaId' => 0];
+            return ['title' => '', 'listId' => '', 'hasIngredients' => false, 'mediaId' => 0, 'dishId' => 0];
         }
         if ($g['listId'] !== '' && isset($favoriten[$g['listId']])) {
             $fav = $favoriten[$g['listId']];
@@ -239,19 +239,30 @@ trait MealStore
             // Stil); das Original bleibt an der Favoritenliste unangetastet.
             return ['title' => $fav['name'], 'listId' => $g['listId'],
                 'hasIngredients' => $fav['items'] > 0,
-                'mediaId' => $fav['imageId'] > 0 ? $fav['imageId'] : $fav['mediaId']];
+                'mediaId' => $fav['imageId'] > 0 ? $fav['imageId'] : $fav['mediaId'],
+                // Das erzeugte Gerichtsbild für sich: die Web-App lädt es über
+                // eine Adresse, statt es im Stand mitzuschleppen.
+                'dishId'  => $fav['imageId']];
         }
         if ($g['listId'] !== '') {
             // Die Favoritenliste wurde inzwischen gelöscht: ehrlich zeigen,
             // statt still einen leeren Tag zu behaupten.
             return ['title' => $this->Translate('(recipe deleted)'), 'listId' => '',
-                'hasIngredients' => false, 'mediaId' => 0];
+                'hasIngredients' => false, 'mediaId' => 0, 'dishId' => 0];
         }
-        return ['title' => $g['text'], 'listId' => '', 'hasIngredients' => false, 'mediaId' => 0];
+        return ['title' => $g['text'], 'listId' => '', 'hasIngredients' => false, 'mediaId' => 0, 'dishId' => 0];
     }
 
-    /** Der komplette Kachel-Zustand: diese und nächste Woche. */
-    private function PayloadBauen(int $jetzt): array
+    /**
+     * Der komplette Kachel-Zustand: diese und nächste Woche.
+     *
+     * $fuerApp: der Stand für die Web-App (über das Gateway). Ein erzeugtes
+     * Gerichtsbild reist dann NICHT als Miniatur mit, sondern nur als
+     * Kennung (`dishId`) — die Web-App lädt es über eine Adresse, und der
+     * Browser cacht es. Nur ein Rezeptfoto ohne Gerichtsbild kommt weiter als
+     * Miniatur, weil es dafür keinen Bildweg ohne Token gibt.
+     */
+    private function PayloadBauen(int $jetzt, bool $fuerApp = false): array
     {
         $heute = date('Y-m-d', $jetzt);
         $tage = $this->PlanLesen();
@@ -272,7 +283,9 @@ trait MealStore
                     'title'   => $gericht['title'],
                     'listId'  => $gericht['listId'],
                     'cart'    => $gericht['hasIngredients'],
-                    'image'   => $gericht['mediaId'] > 0 ? $this->MiniBild($gericht['mediaId']) : '',
+                    'image'   => $gericht['mediaId'] > 0 && !($fuerApp && $gericht['dishId'] > 0)
+                        ? $this->MiniBild($gericht['mediaId']) : '',
+                    'dishId'  => $gericht['dishId'],
                 ];
             }
             $wochen[] = ['monday' => $montag, 'days' => $zeilen];
@@ -341,8 +354,10 @@ trait MealStore
      * die Rezept-Quelle (URL, PDF oder Foto der Favoritenliste). Kommt auf
      * Zuruf (RequestAction MealDetail), nicht im Wochen-Payload — 480er-Bilder
      * für 14 Tage würden ihn sprengen.
+     *
+     * $fuerApp: wie beim Wochenstand — ein Gerichtsbild nur als Kennung.
      */
-    private function GerichtDetail(string $datum): array
+    private function GerichtDetail(string $datum, bool $fuerApp = false): array
     {
         $favoriten = $this->Favoriten();
         $g = $this->GerichtFuer($datum, $this->PlanLesen(), $favoriten);
@@ -363,7 +378,9 @@ trait MealStore
             'title'      => $g['title'],
             'listId'     => $g['listId'],
             'cart'       => $g['hasIngredients'],
-            'image'      => $g['mediaId'] > 0 ? $this->MiniBild($g['mediaId'], 480) : '',
+            'image'      => $g['mediaId'] > 0 && !($fuerApp && $g['dishId'] > 0)
+                ? $this->MiniBild($g['mediaId'], 480) : '',
+            'dishId'     => $g['dishId'],
             'srcKind'    => $srcKind,
             'srcUrl'     => $srcUrl,
             'srcMediaId' => $srcMediaId,

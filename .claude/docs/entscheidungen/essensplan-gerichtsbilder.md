@@ -11,6 +11,11 @@ Der Essensplan (`SymDoMealPlan`) plant je Tag ein Gericht für diese und die nä
   - Die iOS-App holt es über die Gateway-Route `GET /v1/dishimage/{id}?s=96` (`d54c36a`).
 - **Ausnahme: die Essensplan-Kachel bettet ihre Miniaturen als data-URL ein** (`MealStore::MiniBild`). Sie hat kein Token für den Hook, und sieben Miniaturen je Woche bleiben weit unter der Ausgabegrenze. Die Kantenlänge ist deshalb hart begrenzt (120 px, in der Detailansicht 480 px), weil Symcon zu große Antworten ersetzt statt sie abzuschneiden.
 - Symbole im Essensplan kommen aus Font Awesome, nicht als Emoji (`3ab7ee9`). Ein Tag ohne Bild zeigt `fa-plate-utensils`.
+- **Der Plan als Bereich der Web-App** (seit 19.10.2026, Nutzerentscheid): Zeile `mealplan` in der Bereichsliste der Web-App-Instanz, Vorgabe an, hinten angehängt. Sichtbar nur in der vollen Oberfläche (`t.dashboard`) und nur, wenn das Gateway eine Essensplan-Instanz meldet (`mealplan` ≠ null), wie der Nahverkehr.
+  - Weg: Web-App → Gateway `POST /v1/mealplan` bzw. Kachel-Relay (`…mealplan` vor dem KI-Riegel) → `MPL_AppAction` (`libs/MealApp.php`). Öffentliche Funktion statt RequestAction, weil die Web-App eine Antwort braucht. Das Gateway lässt nur die sieben Aktionen und die bekannten Felder durch; das Modul prüft Datum, Rezept und Zutaten selbst.
+  - Umfang wie die Kachel, aber ohne Rezept-Scan. Ein gewähltes Kind sieht den Plan nur an (`mpNurLesen()`); das ist eine Regel der Oberfläche, der Server unterscheidet keine Mitglieder.
+  - Gerichtsbilder reisen im App-Stand nur als Kennung (`dishId`) und kommen über `dishImageUrl` (Bridge mit Token bzw. Asset-Hook). Nur ein Rezeptfoto ohne Gerichtsbild kommt als Miniatur mit. Gemessen im Docker: 2,5 kB Stand ohne geplante Fotos.
+  - iOS hat den Bereich nicht; `tabs` liest die App als offenes Wörterbuch, der neue Schlüssel stört sie nicht.
 
 ## Fallen
 
@@ -18,4 +23,4 @@ Der Essensplan (`SymDoMealPlan`) plant je Tag ein Gericht für diese und die nä
 - **Rezept-„Fotos“ können PDFs sein** (Medientyp Dokument). Dafür gibt es keine Miniatur, der Tag zeigt das Symbol. Das ist ein gewollter Rückfall, kein Fehler.
 - **Kachel-Prüfstand:** Die Pfeil- und Knopf-Handler hängen an `DOMContentLoaded`. Ein geskripteter `.click()` am Dateiende läuft davor ins Leere, deshalb gehört der Klick in einen eigenen `DOMContentLoaded`-Listener (siehe `../testen/kachel-fixtures.md`).
 
-Stand: geprüft gegen den Code am 08.10.2026 (Messwerte nicht am Code prüfbar)
+Stand: geprüft gegen den Code am 19.10.2026 (Messwerte nicht am Code prüfbar)

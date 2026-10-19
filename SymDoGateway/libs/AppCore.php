@@ -1825,6 +1825,10 @@ trait AppCore
         if ($all['tabs']['edumaps'] && !$this->EdumapsVorhanden()) {
             $all['tabs']['edumaps'] = false;
         }
+        // Der Essensplan ebenso: ohne Instanz kein Bereich.
+        if (($all['tabs']['mealplan'] ?? false) && $this->MealPlanInstanz() === 0) {
+            $all['tabs']['mealplan'] = false;
+        }
         /* Die Hausaufgaben brauchen kein Gegenstueck in der Konfiguration: sie
            haengen an einem Mitglied mit der Rolle „Kind", und die Oberflaeche
            zeigt den Bereich ohnehin nur, solange eines gewaehlt ist. Gibt es

@@ -72,7 +72,7 @@ erscheinen Kalender, Notizen, KI-Eingang und Briefing von selbst.
 |---|---|---|
 | Standard-Mitglied | `DefaultUserID` | Vorbelegung für schnell angelegte Aufgaben, KI-Übernahmen und E-Mail-Vorschläge ohne eigenen Empfänger |
 | Listen | `Lists` | Je gefundener Liste eine Zeile mit Schalter „ausblenden" |
-| Bereiche | `Sections` | Eine Zeile je Bereich der Tab-Leiste — Übersicht, Schule, Stundenplan, Nahverkehr, KI-Eingang, Einkaufen, ToDos, Kalender, Notizen, Klassenseiten, Hausaufgaben — mit Haken „anzeigen“; die **Reihenfolge der Zeilen ist die Reihenfolge der Leiste** (Ziehen). „Schule“ ist der gebündelte Knopf für die drei Kindsachen und gilt nur mit eingeschalteter Übersicht. Die alten Schalter `ShowDashboard` … `ShowKi` bleiben als Übernahmequelle lesbar: was die Liste noch nicht kennt, nimmt deren Wert |
+| Bereiche | `Sections` | Eine Zeile je Bereich der Tab-Leiste — Übersicht, Schule, Stundenplan, Nahverkehr, KI-Eingang, Einkaufen, ToDos, Kalender, Notizen, Klassenseiten, Hausaufgaben, Essensplan — mit Haken „anzeigen“; die **Reihenfolge der Zeilen ist die Reihenfolge der Leiste** (Ziehen). „Schule“ ist der gebündelte Knopf für die drei Kindsachen und gilt nur mit eingeschalteter Übersicht. Die alten Schalter `ShowDashboard` … `ShowKi` bleiben als Übernahmequelle lesbar: was die Liste noch nicht kennt, nimmt deren Wert |
 | Stundenplan | `TimetableChoice` | Welche Stundenplan-Instanzen die Übersicht zeigt — je Instanz eine Zeile. Ohne Stundenplan-Modul fällt die Liste weg |
 | Aufgaben-Übersicht | `ShowOverview` | Die Sammelansicht aller Aufgabenlisten („Alle Listen" im Umschalter, sortierbar) |
 | Wischgesten | `EnableSwipeGestures` | Wischen zum Erledigen und Löschen an oder aus |
@@ -93,6 +93,13 @@ Drei Dinge, die man dabei wissen sollte:
 
 Sind alle Bereiche abgeschaltet, bleibt die Übersicht stehen; bei nur einem
 Bereich verschwindet die Tab-Leiste.
+
+Der **Essensplan** erscheint nur, wenn es eine Instanz *SymDo - Essensplan*
+gibt (und die Übersicht an ist): diese und nächste Woche, Gericht planen
+(Rezept aus den Favoritenlisten oder freier Text), Rezept ansehen und die
+Zutaten — vorher abwählbar, mit Portionen — in den Einkaufswagen. Ist ein Kind
+gewählt, sieht es den Plan nur an. Neue Rezepte per Foto oder Link scannt die
+Essensplan-Kachel.
 
 Die Reihenfolge der Knöpfe ist die Reihenfolge der Zeilen in der Liste
 *Bereiche* — per Ziehen im Formular. Die Tab-Leiste ist so breit, wie ihre

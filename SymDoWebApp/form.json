@@ -129,7 +129,7 @@
                     "type": "List",
                     "name": "Sections",
                     "caption": "Sections: order and visibility",
-                    "rowCount": 11,
+                    "rowCount": 12,
                     "add": false,
                     "delete": false,
                     "changeOrder": true,

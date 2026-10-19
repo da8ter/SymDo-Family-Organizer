@@ -329,6 +329,11 @@ trait AiExtract
         if (str_ends_with($path, 'transit')) {
             return json_encode($this->TransitPublic(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
+        /* Der Essensplan: derselbe Grund wie beim Nahverkehr. Der Pfad endet auf
+           „mealplan" und kollidiert mit keinem Zweig oben. */
+        if (str_ends_with($path, 'mealplan')) {
+            return json_encode($this->MealPlanHandleAction($body), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
         // Notizen: lesen und bearbeiten hat mit der KI nichts zu tun, muss also auch
         // bei abgeschalteter Analyse gehen. Der Riegel steckt in der Aktion selbst —
         // 'analyse' prueft NotesAiAllowed(), alles andere nicht.

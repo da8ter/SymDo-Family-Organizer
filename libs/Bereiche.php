@@ -20,11 +20,16 @@ declare(strict_types=1);
  */
 final class Bereiche
 {
-    /** Die elf Bereiche in der Vorgabereihenfolge — sie ist die heutige Leiste. */
+    /**
+     * Die zwölf Bereiche in der Vorgabereihenfolge — sie ist die heutige Leiste.
+     * Neue Bereiche kommen hinten dazu: Eine gespeicherte Liste haengt sie
+     * ohnehin dort an, so steht der Bereich bei neuen und bestehenden Anlagen
+     * an derselben Stelle.
+     */
     public const SCHLUESSEL = ['dashboard', 'school', 'plan', 'transit', 'ki', 'shopping',
-                               'todos', 'calendar', 'notes', 'edumaps', 'homework'];
+                               'todos', 'calendar', 'notes', 'edumaps', 'homework', 'mealplan'];
 
-    /** Bereich => Uebersetzungsschluessel; alle stehen schon in der locale.json. */
+    /** Bereich => Uebersetzungsschluessel; alle stehen in der locale.json der Web-App. */
     public const NAMEN = [
         'dashboard' => 'Overview',
         'school'    => 'School',
@@ -37,6 +42,7 @@ final class Bereiche
         'notes'     => 'Notes',
         'edumaps'   => 'Class pages',
         'homework'  => 'Homework',
+        'mealplan'  => 'Meal plan',
     ];
 
     /** Altbestand: Bereich => alter Schalter. school/plan/transit hatten keinen. */
