@@ -29,6 +29,7 @@
 - Integer-Variablen nehmen `MIN`/`MAX` nur als `int` („falscher Typ“ bei Float).
 - Optionen der Wertanzeige kennen nur `Value`, `Caption`, `IconActive`, `IconValue`, `ColorActive`, `ColorValue`, `ContentColorActive`, `ContentColorValue`; andere Schlüssel (`Color`, `ColorDisplay`) werden abgelehnt.
 - Der Schieberegler nimmt kein `COLOR`.
+- Optionen der **Aufzählung** (`VARIABLE_PRESENTATION_ENUMERATION`) kennen nur `Value`, `Caption`, `IconActive`, `IconValue`, `Color` (Farbe als Zahl, -1 = keine). `ColorActive`/`ColorValue` der Wertanzeige und `Icon` werden abgelehnt („Der Eintrag im Parameter OPTIONS enthält unbekannte Unterparameter“), gemessen 20.10.2026, Symcon 9.1.
 
 ## Konstanten nicht raten
 
@@ -48,4 +49,4 @@ Hilfreich beim Lesen von Logs: „Objekt/Instanz/Variable #X existiert nicht“,
 
 ---
 
-Stand: geprüft am 08.10.2026 (Doku und Repo-Code); Messwerte mit Datum
+Stand: geprüft am 08.10.2026 (Doku und Repo-Code), ergänzt 20.10.2026; Messwerte mit Datum
