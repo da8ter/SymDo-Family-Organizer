@@ -30,6 +30,7 @@
 - Optionen der Wertanzeige kennen nur `Value`, `Caption`, `IconActive`, `IconValue`, `ColorActive`, `ColorValue`, `ContentColorActive`, `ContentColorValue`; andere Schlüssel (`Color`, `ColorDisplay`) werden abgelehnt.
 - Der Schieberegler nimmt kein `COLOR`.
 - Optionen der **Aufzählung** (`VARIABLE_PRESENTATION_ENUMERATION`) kennen nur `Value`, `Caption`, `IconActive`, `IconValue`, `Color` (Farbe als Zahl, -1 = keine). `ColorActive`/`ColorValue` der Wertanzeige und `Icon` werden abgelehnt („Der Eintrag im Parameter OPTIONS enthält unbekannte Unterparameter“), gemessen 20.10.2026, Symcon 9.1.
+- **Aufzählung nur für schaltbare Variablen:** Eine Integer-Variable ohne Aktion mit Aufzählungs-Darstellung zeigt die Kachel-Visu als nackte Zahl (0, -1), obwohl `GetValueFormatted` die Beschriftung liefert (gesehen 20.10.2026, Symcon 9.1, iPhone-App). Für reine Anzeigewerte: Wertanzeige mit einem Intervall je Zustand (`ConstantActive`/`ConstantValue`, Farbe über `ColorActive`/`ColorValue`).
 
 ## Konstanten nicht raten
 
