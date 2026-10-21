@@ -56,6 +56,7 @@ Dieses Modul stellt eine Einkaufsliste für die Tile-Visualisierung bereit.
 - Einen Artikel **nach links wischen**, um ihn direkt aus der Liste zu löschen — beim Wischen erscheint eine rote Lösch-Fläche mit Mülleimer-Symbol
 - Über **„Alles erledigt"** werden alle offenen Artikel auf einmal in „Zuletzt benutzt" verschoben
 - Im Bereich „Zuletzt benutzt" erneut tippen, um ihn wieder auf die aktive Liste zu setzen
+- „Zuletzt benutzt" ist alphabetisch sortiert; im Menü (⋯) lässt sich „Zuletzt gekauft zuerst" wählen. Je Artikel steht dort nur eine Zeile mit der Menge des letzten Kaufs, und Löschen entfernt nur diesen Eintrag
 - Über **„Benutzte Artikel löschen"** werden alle abgehakten Artikel entfernt
 
 ### Favoritenlisten

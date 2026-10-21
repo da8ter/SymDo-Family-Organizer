@@ -624,6 +624,8 @@
       "Dish name": "Name des Gerichts",
       "%1 ingredients": "%1 Zutaten",
       "Save recipe and plan": "Rezept speichern und planen",
+      "A–Z": "A–Z",
+      "Recently bought first": "Zuletzt gekauft zuerst",
       "SymDo AIInbox": "SymDo - KI-Eingang",
       "Shows the AI inbox of the SymDo app as a tile — the same suggestions, the same view. Mail intake and AI are set up in the SymDo Gateway.": "Zeigt den KI-Eingang der SymDo-App als Kachel — dieselben Vorschläge, dieselbe Ansicht. Mail-Eingang und KI richtest du im SymDo Gateway ein.",
       "Gateway: %1$s (#%2$d)": "Gateway: %1$s (#%2$d)",

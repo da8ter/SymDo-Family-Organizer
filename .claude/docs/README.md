@@ -27,6 +27,7 @@ Jede Datei endet mit „Stand: geprüft gegen den Code am …“. Ändert ein Co
 - [listen-gesten](entscheidungen/listen-gesten.md) – Wischen und Umsortieren
 - [listen-sync-dedup](entscheidungen/listen-sync-dedup.md) – ToDo-Abgleich ohne Verdopplung
 - [listen-produktbilder](entscheidungen/listen-produktbilder.md) – Produktbilder der Einkaufsliste
+- [listen-zuletzt-benutzt](entscheidungen/listen-zuletzt-benutzt.md) – „Zuletzt benutzt“: Sortierung, eine Zeile je Name, einzeln löschen
 - [faelligkeit-leiter](entscheidungen/faelligkeit-leiter.md) – eine Fälligkeitsanzeige für alle Oberflächen
 - [notizen-gateway-bestand](entscheidungen/notizen-gateway-bestand.md) – Notizen als Gateway-Bestand
 - [essensplan-gerichtsbilder](entscheidungen/essensplan-gerichtsbilder.md) – Essensplan, Rezepte, Bilder

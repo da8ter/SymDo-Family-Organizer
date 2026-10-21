@@ -624,7 +624,9 @@
             "Paste recipe URL": "Rezept-URL einfügen",
             "Dish name": "Name des Gerichts",
             "%1 ingredients": "%1 Zutaten",
-            "Save recipe and plan": "Rezept speichern und planen"
+            "Save recipe and plan": "Rezept speichern und planen",
+            "A–Z": "A–Z",
+            "Recently bought first": "Zuletzt gekauft zuerst"
         }
     }
 }

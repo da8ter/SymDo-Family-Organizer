@@ -12460,7 +12460,7 @@ function renderShopping() {
     return;
   }
   const sections = openSections(st);
-  const cart = (Array.isArray(st.items) ? st.items : []).filter(i => i.inCart);
+  const cart = wagenSortiert((Array.isArray(st.items) ? st.items : []).filter(i => i.inCart));
   const favLists = Array.isArray(st.favoriteLists) ? st.favoriteLists : [];
   const favNames = new Set();
   for (const fl of favLists) {
@@ -12625,6 +12625,25 @@ function favBadgeHtml(list) {
   }
   // Keine Rezeptliste: dasselbe Ordner-Herz wie der Oeffner in der Kopfzeile.
   return '<span class="fav-badge fav-badge-ordner"><i class="fa-light fa-folder-heart"></i></span>';
+}
+
+/* „Zuletzt benutzt" sortieren (seit 21.10.2026, Nutzer-Rückmeldung: die Liste
+   wurde lang, ein Artikel war schwer zu finden). Vorher stand der Wagen in der
+   Reihenfolge, in der die Zeilen einmal angelegt wurden. Die Wahl gilt je
+   Gerät (wie die Sortierung der Sammelansicht), Vorgabe A–Z. „Zuletzt gekauft"
+   nimmt boughtAt; Zeilen aus der Zeit davor fallen auf addedAt zurück. */
+function wagenSortierung() {
+  return ls.get('symdo.cartSort') === 'zuletzt' ? 'zuletzt' : 'az';
+}
+function wagenSortiert(zeilen) {
+  const liste = zeilen.slice();
+  if (wagenSortierung() === 'zuletzt') {
+    const zeit = (i) => Number(i.boughtAt || i.addedAt || 0);
+    liste.sort((a, b) => zeit(b) - zeit(a));
+  } else {
+    liste.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base', numeric: true }));
+  }
+  return liste;
 }
 
 function shoppingRowHtml(it, favNames, st, inCart, spanne) {
@@ -20343,6 +20362,14 @@ function openShoppingMenu(anchor) {
         showConfirm(translate('Delete all used items?'), translate('Delete'), () => sdCall(id, 'ClearCart', ''));
       } },
     { label: translate('Print') + '…', icon: 'fa-print', onClick: () => openPrintOverlay() }
+  );
+  const sortierung = wagenSortierung();
+  const wagenSortSetzen = (wert) => { ls.set('symdo.cartSort', wert); renderShopping(); };
+  entries.push(
+    { sep: true },
+    { header: true, label: translate('Recently used') },
+    { label: translate('A–Z'), checked: sortierung === 'az', onClick: () => wagenSortSetzen('az') },
+    { label: translate('Recently bought first'), checked: sortierung === 'zuletzt', onClick: () => wagenSortSetzen('zuletzt') }
   );
   const lists = (Array.isArray(st.favoriteLists) ? st.favoriteLists.slice() : []).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base', numeric: true }));
   if (lists.length > 0) {

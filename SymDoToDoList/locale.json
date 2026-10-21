@@ -775,7 +775,9 @@
             "Here you will find what the AI has recognised in mails and documents.": "Hier erscheint, was die KI in Mails und Dokumenten erkannt hat.",
             "Address copied": "Adresse kopiert",
             "Note on the lesson": "Hinweis zur Stunde",
-            "Room": "Raum"
+            "Room": "Raum",
+            "A–Z": "A–Z",
+            "Recently bought first": "Zuletzt gekauft zuerst"
         },
         "en": {
             "SymDo ToDo List": "SymDo - ToDo List",

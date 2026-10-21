@@ -304,11 +304,22 @@ trait ItemStore
             if ($nameLower === null) {
                 return false;
             }
-            // Remove the article from the active list AND from the recently used
-            // (cart) list: drop every record sharing the same name.
+            $imWagen = false;
+            foreach ($items as $item) {
+                if ((string)($item['id'] ?? '') === $id) {
+                    $imWagen = ($item['inCart'] ?? false) === true;
+                    break;
+                }
+            }
+            /* Eine Zeile aus „Zuletzt benutzt" geht ALLEIN: ein offener Artikel
+               gleichen Namens bleibt auf der Liste (Nutzer-Rückmeldung
+               21.10.2026 — vorher verschwand er mit). Ein offener Artikel nimmt
+               dagegen weiter alle gleichnamigen Zeilen mit, auch die im Wagen. */
             $filtered = array_values(array_filter(
                 $items,
-                fn($item) => mb_strtolower(trim((string)($item['name'] ?? ''))) !== $nameLower
+                $imWagen
+                    ? fn($item) => (string)($item['id'] ?? '') !== $id
+                    : fn($item) => mb_strtolower(trim((string)($item['name'] ?? ''))) !== $nameLower
             ));
             if (count($filtered) === count($items)) {
                 return false;
@@ -337,23 +348,31 @@ trait ItemStore
         }
     }
 
-    private function HasCartDuplicate(array $items, array $candidate): bool
+    /**
+     * Die Zeilen im Wagen, die einer neu abgehakten weichen: gleicher Name
+     * (ohne Groß/Klein und Rand), gleich welche Menge oder Notiz.
+     *
+     * Vorher wich nur ein Eintrag mit gleicher Menge UND Notiz — „Milch 1",
+     * „Milch 2" … standen alle in „Zuletzt benutzt" (Nutzer-Rückmeldung
+     * 21.10.2026). Jetzt gewinnt der neueste Kauf mit seiner Menge. Aufgeräumt
+     * wird nur dort, wo gerade etwas abgehakt wird; ein Bestand, der schon
+     * doppelt steht, bleibt sonst stehen (Nutzerentscheid: nur künftig).
+     *
+     * @return list<int> Indizes in $items, aufsteigend
+     */
+    private function CartGleichnamige(array $items, string $name, string $ausserId): array
     {
-        $name   = mb_strtolower(trim($candidate['name'] ?? ''));
-        $amount = trim($candidate['amount'] ?? '');
-        $notes  = trim($candidate['notes'] ?? '');
-        foreach ($items as $item) {
-            if (($item['inCart'] ?? false) !== true) {
-                continue;
-            }
-            if (mb_strtolower(trim($item['name'] ?? '')) === $name
-                && trim($item['amount'] ?? '') === $amount
-                && trim($item['notes'] ?? '') === $notes
+        $schluessel = mb_strtolower(trim($name));
+        $raus = [];
+        foreach ($items as $i => $item) {
+            if (($item['inCart'] ?? false) === true
+                && (string)($item['id'] ?? '') !== $ausserId
+                && mb_strtolower(trim((string)($item['name'] ?? ''))) === $schluessel
             ) {
-                return true;
+                $raus[] = $i;
             }
         }
-        return false;
+        return $raus;
     }
 
     private function MarkAllDoneInternal(): void
@@ -367,29 +386,33 @@ trait ItemStore
         try {
             $items = $this->LoadItems();
             $changed = false;
-            $remove = [];
             // Käufe sammeln und EINMAL nach der Schleife wegschreiben — je Artikel
             // zu schreiben träfe das Attribut hier dutzendfach.
             $purchased = [];
-            foreach ($items as $i => &$item) {
+            $jetzt = time();
+            /** @var array<string,string> $neu Name => id der zuletzt abgehakten Zeile */
+            $neu = [];
+            foreach ($items as $i => $item) {
                 if (($item['inCart'] ?? false) === true) {
                     continue;
                 }
                 if (!isset($item['boughtAt'])) {
                     $purchased[] = $item;
                 }
-                if ($this->HasCartDuplicate($items, $item)) {
-                    $remove[] = $i;
-                } else {
-                    $item['inCart'] = true;
-                    $item['boughtAt'] = time();
-                }
+                $items[$i]['inCart'] = true;
+                $items[$i]['boughtAt'] = $jetzt;
+                $neu[mb_strtolower(trim((string)($item['name'] ?? '')))] = (string)($item['id'] ?? '');
                 $changed = true;
             }
-            unset($item);
             $this->TrackPurchases($purchased);
+            // Je Name bleibt die zuletzt abgehakte Zeile (siehe CartGleichnamige).
+            $remove = [];
+            foreach ($neu as $name => $behalten) {
+                $remove = array_merge($remove, $this->CartGleichnamige($items, $name, $behalten));
+            }
             if ($remove) {
-                foreach (array_reverse($remove) as $i) {
+                rsort($remove);
+                foreach (array_unique($remove) as $i) {
                     array_splice($items, $i, 1);
                 }
             }
@@ -425,7 +448,7 @@ trait ItemStore
             $new = $Target ?? !$current;
             if ($new === $current) {
                 // Idempotent no-op: a replayed request with explicit target must
-                // not flip the state back (or delete via the duplicate branch).
+                // not flip the state back.
                 return true;
             }
             // Kauf verbuchen, bevor die Zeile ggf. verschwindet. Die Markierung
@@ -437,12 +460,13 @@ trait ItemStore
             if ($new && !isset($items[$idx]['boughtAt'])) {
                 $purchased[] = $items[$idx];
             }
-            if ($new && $this->HasCartDuplicate($items, $items[$idx])) {
-                array_splice($items, $idx, 1);
-            } else {
-                $items[$idx]['inCart'] = $new;
-                if ($new) {
-                    $items[$idx]['boughtAt'] = time();
+            $items[$idx]['inCart'] = $new;
+            if ($new) {
+                $items[$idx]['boughtAt'] = time();
+                // Gleichnamige ältere Zeilen im Wagen weichen dieser.
+                $alt = $this->CartGleichnamige($items, (string)($items[$idx]['name'] ?? ''), $Id);
+                foreach (array_reverse($alt) as $i) {
+                    array_splice($items, $i, 1);
                 }
             }
             $this->TrackPurchases($purchased);
