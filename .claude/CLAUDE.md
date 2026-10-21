@@ -30,7 +30,7 @@ Nach jeder Änderung die Prüfstände des Bereichs laufen lassen; bei Web-App-Ä
 - **Push und Release nur auf Zuruf.** Release: `build` und `date` in `library.json` hochsetzen, Commit „Build N“.
 - **Doku nachziehen:** Ändert ein Commit eine Entscheidung aus `docs/`, wird die Datei im selben Commit angepasst und ihr „Stand“-Datum erneuert. Neues gemessenes Symcon-Verhalten gehört nach `.claude/docs/plattform/`.
 - **Öffentliches Repo:** keine IP-Adressen, Ports, Instanz-IDs, Token, Schlüssel, Pfade unter `/Users/`, echten Namen von Kindern, Schulen oder Klassen – weder im Code noch in Kommentaren, Tests oder Doku. Fixtures mit Platzhaltern.
-- **Modulordner** heißen `SymDo<Klasse>`; `name` in `module.json` ohne Bindestrich (Klassenname = `name` ohne Leerzeichen), Anzeigename `SymDo - …` über `locale.json`, `aliases` leer, `vendor` „Stephan Sprick“.
+- **Modulordner** heißen `SymDo<Klasse>`; `name` in `module.json` ohne Bindestrich (Klassenname = `name` ohne Leerzeichen), Anzeigename `SymDo - …` über `locale.json`, `aliases` leer, `vendor` leer (Symcon-Vorgabe 21.10.2026: Feld nur für Gerätehersteller, nicht für den Entwickler; Bestand bei der nächsten Einreichung bereinigen).
 - **Nutzertexte** sagen „Symcon“, nicht „IP-Symcon“. Übersetzungen über `locale.json` in beiden Sprachblöcken.
 - **Web-App und iOS-App** im Verhalten gleich halten – Änderungen an gemeinsamem UI-Verhalten erst nach Rücksprache auf beide übertragen.
 - **Kachel-Stil:** Referenz ist die Web-App (Knöpfe, Scrollleisten, Ränder aus den URL-Parametern), siehe `.claude/docs/entscheidungen/kacheln-stilregeln.md`.
