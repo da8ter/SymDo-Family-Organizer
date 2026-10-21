@@ -2,7 +2,7 @@
     "id": "{62F42E2D-BE0A-4490-80C2-CF54355E94C2}",
     "name": "SymDo AIInbox",
     "type": 3,
-    "vendor": "Stephan Sprick",
+    "vendor": "",
     "aliases": [],
     "parentRequirements": ["{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"],
     "childRequirements": [],

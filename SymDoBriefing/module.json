@@ -2,7 +2,7 @@
     "id": "{568937AB-7F27-40DE-9B30-CE24C04107C5}",
     "name": "SymDo Briefing",
     "type": 3,
-    "vendor": "Stephan Sprick",
+    "vendor": "",
     "aliases": [],
     "parentRequirements": ["{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"],
     "childRequirements": [],
