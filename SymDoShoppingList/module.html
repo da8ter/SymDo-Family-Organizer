@@ -3535,6 +3535,13 @@ details.ki-mehr[open] > summary { margin-bottom: 8px; }
    SCHMALE Kachel in einem breiten Fenster bleibt damit korrekt einspaltig. */
 @media (min-width: 820px)  { :root { --content-max: 1000px; } }
 @media (min-width: 1250px) { :root { --content-max: 1400px; } }
+/* In der Visu-Kachel kein Deckel (Nutzerentscheid 22.10.2026): dort bestimmt
+   die Kachelgroesse die Breite, und seit die maximierte Kachel die volle
+   Web-App zeigt (HTML_FULLSCREEN), standen bei ~1200 px Kachelbreite links und
+   rechts je ~95 px leer. Der Deckel bleibt der Web-App im Browser und als
+   Startbildschirm-App (html.web-app), wo ein breites Fenster sonst unlesbar
+   lange Zeilen ergaebe. Spezifischer als :root, gilt also in jeder Stufe. */
+html:not(.web-app) { --content-max: 100000px; }
 
 /* Das Favoriten-Blatt liegt UNTER den Dialogen, die aus ihm heraus aufgehen:
    promptOverlay (Liste anlegen/umbenennen), confirmOverlay (Liste loeschen),
