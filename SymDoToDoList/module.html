@@ -769,6 +769,13 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 .card-head h3 { font-size: 16px; font-weight: 700; }
 .card-head .link { color: var(--accent); font-size: 14px; font-weight: 600; }
+/* Die Ueberschrift der Einkaufskarte als Listenauswahl (nur bei mehreren Listen). */
+.card-head .shop-wahl {
+  display: inline-flex; align-items: baseline; gap: 6px; min-width: 0;
+  background: none; border: none; padding: 0; color: inherit; cursor: pointer; text-align: left;
+}
+.card-head .shop-wahl h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-head .shop-wahl i, .card-head .shop-wahl svg { font-size: 13px; color: var(--muted); }
 
 /* ── Dashboard ─────────────────────────────────────────────────────────────── */
 /* Tagesbriefing: Ueberschrift mit Vorlese-Knopf, darunter der Fliesstext. Auf
@@ -12333,7 +12340,16 @@ function renderDashboard() {
   const shopId = selectedShoppingID();
   const shopState = shopId ? instState(shopId) : null;
   if (withShop && shopState) {
-    html += `<div class="card shop-card"><div class="card-head"><h3>${translate('Shopping list')}</h3>` +
+    /* Bei mehreren Einkaufslisten ist die Ueberschrift die Auswahl (Wunsch
+       22.10.2026): sie nennt die gezeigte Liste, ein Tipp oeffnet ein Menue mit
+       allen. Gemerkt wird dieselbe Wahl wie im Einkaufsbereich. */
+    const shopListen = visibleInstances('shopping');
+    const shopName = (shopListen.find(i => i.id === shopId) || {}).name || translate('Shopping list');
+    const shopTitel = shopListen.length > 1
+      ? `<button class="shop-wahl" data-shop-wahl="1"><h3>${escapeHtml(shopName)}</h3>` +
+        `<i class="fa-light fa-chevron-down"></i></button>`
+      : `<h3>${translate('Shopping list')}</h3>`;
+    html += `<div class="card shop-card"><div class="card-head">${shopTitel}` +
       `<button class="link" data-goto="shopping">${translate('Open')}</button></div>`;
     const openItems = openSections(shopState).flatMap(s => s.items);
     if (openItems.length === 0) {
@@ -12387,6 +12403,18 @@ function renderDashboard() {
 
   // Interaktionen
   el.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.goto)));
+  el.querySelectorAll('[data-shop-wahl]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const aktuell = selectedShoppingID();
+    openMenu(b, visibleInstances('shopping').map(i => ({
+      label: i.name, checked: i.id === aktuell,
+      onClick: () => {
+        ls.set('symdo.selectedShoppingID', String(i.id));
+        syncCompat();
+        renderAll();
+      }
+    })));
+  }));
   // „Alle anzeigen" der Hausaufgaben ohne gewaehltes Kind: erst das Kind, dann der Bereich.
   el.querySelectorAll('[data-hw-alle]').forEach(b => b.addEventListener('click', () => {
     mitgliedWaehlen(b.dataset.hwAlle);
