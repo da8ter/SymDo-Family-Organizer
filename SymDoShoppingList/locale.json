@@ -74,7 +74,8 @@
             "No pickup markets": "No pickup markets",
             "Donation / Gift": "Donation / Gift",
             "Say thanks and support the developer of this module:": "Say thanks and support the developer of this module:",
-            "No timetable": "No timetable"
+            "No timetable": "No timetable",
+            "List switcher hint": "With several shopping lists, the tile shows a picker at the top and can show and operate every list that also has this switch on. Off: no picker here, and other tiles cannot reach this list."
         },
         "de": {
             "Tap once so I may listen for %s": "Tippe einmal auf die Seite, damit ich auf %s hören darf.",
@@ -713,7 +714,10 @@
             "Note on the lesson": "Hinweis zur Stunde",
             "Room": "Raum",
             "A–Z": "A–Z",
-            "Recently bought first": "Zuletzt gekauft zuerst"
+            "Recently bought first": "Zuletzt gekauft zuerst",
+            "Switch to other shopping lists in the tile": "Andere Einkaufslisten in der Kachel umschaltbar",
+            "List switcher hint": "Gibt es mehrere Einkaufslisten, zeigt die Kachel oben eine Auswahl und kann jede Liste anzeigen und bedienen, bei der dieser Schalter ebenfalls an ist. Aus: kein Umschalter hier, und andere Kacheln erreichen diese Liste nicht.",
+            "This shopping list is not available here": "Diese Einkaufsliste ist hier nicht verfügbar"
         }
     }
 }

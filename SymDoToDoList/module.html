@@ -5854,6 +5854,68 @@ const KACHEL = (() => {
 })();
 const SELF_ID = 'self';
 
+/* ── Listen-Umschalter der Einkaufs-Kachel (22.10.2026) ─────────────────────────
+   Gibt es mehrere Einkaufslisten, schickt das Modul im Stand `lists` (alle, die der
+   Umschalter zeigen darf), `homeId` (die Instanz der Kachel) und `listId` (wessen
+   Stand das ist). Die Kachel zeigt dann oben eine Auswahl statt des Titels. Eine
+   fremde Liste laeuft weiter ueber die EIGENE Instanz: GetState und ListCall mit
+   `list`, das Modul reicht an die gewaehlte Liste weiter (libs/ListSwitcher.php).
+   Jeder Push geht an alle offenen Clients der Kachel; jeder zeigt nur den Stand
+   der Liste, die er gewaehlt hat. Die Wahl merkt sich der Browser je Kachel. */
+let kachelListen = [];   // [{id, name}]; leer = kein Umschalter
+let kachelHeim = 0;      // Instanz der Kachel
+let kachelAktiv = 0;     // gewaehlte Liste; 0 = kein Umschalter
+let kachelGezeigt = 0;   // Liste, deren Stand gerade angezeigt wird
+let kachelLaedt = false; // gewechselt, Stand der neuen Liste noch unterwegs
+function kachelFremd() { return kachelAktiv !== 0 && kachelAktiv !== kachelHeim; }
+/* Stand der gewaehlten Liste anfordern. Kommt keiner (Liste inzwischen geloescht oder
+   gesperrt — das Modul lehnt dann ab und sendet nichts), nach 8 s zurueck zur eigenen. */
+let kachelLadeUhr = null;
+function kachelLaden() {
+  kachelLaedt = true;
+  clearTimeout(kachelLadeUhr);
+  kachelLadeUhr = setTimeout(() => {
+    if (!kachelLaedt || !kachelFremd()) return;
+    kachelAktiv = kachelHeim;
+    kachelStateHash = '';
+    requestState();
+  }, 8000);
+  requestState();
+}
+/** Umschalter-Angaben aus einem Stand uebernehmen; true = diesen Stand anzeigen. */
+function kachelListenUebernehmen(d) {
+  if (!Array.isArray(d.lists) || d.lists.length < 2 || !(Number(d.homeId) > 0)) {
+    // Kein Umschalter (mehr): nur noch die eigene Liste.
+    kachelListen = []; kachelAktiv = 0; kachelLaedt = false;
+    return d.listId === undefined || Number(d.listId) === Number(d.homeId);
+  }
+  kachelListen = d.lists.map(l => ({ id: Number(l.id), name: String(l.name || '') }));
+  kachelHeim = Number(d.homeId);
+  if (!kachelAktiv) kachelAktiv = parseInt(ls.get('symdo.kachelListe.' + kachelHeim)) || kachelHeim;
+  if (!kachelListen.some(l => l.id === kachelAktiv)) { kachelAktiv = kachelHeim; kachelLaedt = false; }
+  return (Number(d.listId) || kachelHeim) === kachelAktiv;
+}
+/** Auswahl in der Kopfzeile (statt des Titels), nur bei mehreren Listen. */
+function kachelUmschalter() {
+  if (!KACHEL || KACHEL.art !== 'shopping' || kachelListen.length < 2) return;
+  const select = document.getElementById('shoppingSwitcher');
+  const title = document.getElementById('shoppingTitle');
+  select.style.display = '';
+  title.style.display = 'none';
+  select.innerHTML = kachelListen.map(l =>
+    `<option value="${l.id}"${l.id === kachelAktiv ? ' selected' : ''}>${escapeHtml(l.name)}</option>`).join('');
+  select.onchange = () => kachelListeWaehlen(Number(select.value));
+}
+function kachelListeWaehlen(id) {
+  if (!kachelListen.some(l => l.id === id) || id === kachelAktiv) return;
+  kachelAktiv = id;
+  ls.set('symdo.kachelListe.' + kachelHeim, String(id));
+  kachelStateHash = '';
+  kachelLaedt = true;
+  renderAll();
+  kachelLaden();
+}
+
 /* ── Bildkarte der Einkaufs-Kachel als eigene Datei ─────────────────────────────
    Die Produktbild-Karte (rund 3 300 Namen, ~105 kB) aendert sich nur mit den
    Bildern des Moduls. Die Listen-Kachel bekommt sie deshalb nicht mehr in jedem
@@ -7419,13 +7481,22 @@ function sdCall(instanceID, action, payload) {
     // instanceID ist in der Kachel bedeutungslos — es gibt genau diese eine Liste.
     // Skalare Nutzlasten gehen unveraendert durch: DeleteItem erwartet im Modul
     // einen String, kein Objekt.
-    requestAction(action, typeof payload === 'string' ? payload : JSON.stringify(payload || {}));
+    const nutzlast = typeof payload === 'string' ? payload : JSON.stringify(payload || {});
+    if (kachelFremd()) {
+      // Andere Einkaufsliste (Umschalter): die eigene Instanz reicht weiter.
+      requestAction('ListCall', JSON.stringify({ list: kachelAktiv, action, payload: nutzlast }));
+      return;
+    }
+    requestAction(action, nutzlast);
     return;
   }
   const txn = 'tx' + (++txnCounter);
   requestAction('Call', JSON.stringify({ instanceID, action, payload, txn }));
 }
-function requestState() { requestAction('GetState', 0); }
+function requestState() {
+  if (KACHEL && kachelFremd()) { requestAction('GetState', JSON.stringify({ list: kachelAktiv })); return; }
+  requestAction('GetState', 0);
+}
 /* Pruefwert des zuletzt empfangenen Stands (26.09.2026). Die Kachel-Module
    (ToDoList, Einkauf, Notizen, Hausaufgaben, Klassenseiten) schicken ihn mit
    jedem Stand; beim Abgleich geht er zurueck, und bei Gleichheit sendet das
@@ -7435,7 +7506,9 @@ function checkRevisions() {
   if (KACHEL) {
     // Kein Revisionsabgleich ueber mehrere Instanzen: die Kachel fragt den Stand
     // ihrer eigenen Liste ab — mit dem Pruefwert, das Modul sendet nur Neues.
-    requestAction('GetState', JSON.stringify({ hash: kachelStateHash }));
+    // Mit Umschalter: den der gewaehlten Liste.
+    requestAction('GetState', JSON.stringify(kachelFremd()
+      ? { hash: kachelStateHash, list: kachelAktiv } : { hash: kachelStateHash }));
     return;
   }
   const revisions = {};
@@ -7548,6 +7621,23 @@ function invalidateRenderCache() {
 function handleMessage(data) {
   if (typeof data === 'string') {
     try { data = JSON.parse(data); } catch (e) { return; }
+  }
+  if (KACHEL && KACHEL.art === 'shopping' && data && typeof data === 'object') {
+    // Eine andere Liste hat sich geaendert: nur wer sie anzeigt, holt den Stand.
+    if (data.type === 'listChanged') {
+      if (kachelFremd() && Number(data.listId) === kachelAktiv) checkRevisions();
+      return;
+    }
+    // Stand einer anderen als der gewaehlten Liste (Push fuer einen anderen Client).
+    if (data.type === 'state' && Array.isArray(data.items) && !kachelListenUebernehmen(data)) {
+      if (kachelGezeigt !== kachelAktiv && !kachelLaedt) kachelLaden();
+      return;
+    }
+    if (data.type === 'state' && Array.isArray(data.items)) {
+      kachelGezeigt = Number(data.listId) || kachelHeim;
+      kachelLaedt = false;
+      clearTimeout(kachelLadeUhr);
+    }
   }
   // Vor jeder Umformung merken: die Kachel-Adapter bauen den Stand danach um.
   if (data && typeof data === 'object' && typeof data.stateHash === 'string') kachelStateHash = data.stateHash;
@@ -12450,8 +12540,13 @@ function renderShopping() {
   const id = selectedShoppingID();
   const st = id ? instState(id) : null;
   updateSwitcher('shoppingSwitcher', 'shoppingTitle', vis, id, 'symdo.selectedShoppingID');
+  if (KACHEL) kachelUmschalter();
 
   const area = document.getElementById('shoppingListArea');
+  if (KACHEL && kachelLaedt) {
+    renderInto(area, `<div class="empty-state"><i class="fa-light fa-basket-shopping"></i>${escapeHtml(translate('Loading …'))}</div>`);
+    return;
+  }
   const scannerBtn = document.getElementById('btnOpenScanner');
   scannerBtn.style.display = (st && st.scannerEnabled !== false) ? '' : 'none';
 

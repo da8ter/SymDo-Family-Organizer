@@ -14,6 +14,7 @@ require_once __DIR__ . '/../libs/KachelApp.php';
 require_once __DIR__ . '/../libs/EinkaufsUebersicht.php';
 require_once __DIR__ . '/../libs/AiRecipePage.php';
 require_once __DIR__ . '/libs/ExtListHooksShopping.php';
+require_once __DIR__ . '/libs/ListSwitcher.php';
 
 class SymDoShoppingList extends IPSModuleStrict
 {
@@ -25,6 +26,7 @@ class SymDoShoppingList extends IPSModuleStrict
     use StoreOrder;
     use ExternalListSync;
     use ExtListHooksShopping;
+    use ListSwitcher;
 
     /**
      * Das eingebaute Aussehen der Standardkategorien: Symbol und Farbe.
@@ -167,6 +169,10 @@ class SymDoShoppingList extends IPSModuleStrict
         $this->RegisterPropertyString('FavoriteListsConfig', '[]');
         $this->RegisterPropertyString('SuggestionItemsConfig', '[]');
         $this->RegisterPropertyBoolean('ShowProductImages', true);
+        // Umschalter auf andere Einkaufslisten in der Kachel (libs/ListSwitcher.php).
+        // Aus = diese Liste zeigt keinen Umschalter und ist von anderen Kacheln aus nicht erreichbar.
+        $this->RegisterPropertyBoolean('ListSwitcher', true);
+        $this->RegisterAttributeString('ListPeerVars', '[]');
         // Zeilenknoepfe. Bewusst neue Namen: das alte ShowEditButton steuerte nichts
         // und steht bei Bestandsinstanzen ueberwiegend auf true — es zu honorieren
         // haette allen ungefragt einen Knopf in die Zeile gesetzt.
@@ -240,6 +246,7 @@ class SymDoShoppingList extends IPSModuleStrict
 
         $this->SyncExternalScannerVariable();
         $this->ExtListBindTrigger();
+        $this->SwitcherWatch();
 
         // Sync counts and push updated state to tile
         $this->UpdateCounts($this->LoadItems());
@@ -260,6 +267,10 @@ class SymDoShoppingList extends IPSModuleStrict
 
         if ($Message === VM_UPDATE && $SenderID === $this->ReadPropertyInteger('ExternalScannerVariableID')) {
             $this->HandleExternalScannerUpdate($SenderID);
+            return;
+        }
+
+        if ($this->SwitcherMessage($SenderID, $Message)) {
             return;
         }
 
@@ -289,7 +300,17 @@ class SymDoShoppingList extends IPSModuleStrict
                 // Read-only push to the tile — must not bump AppRevision, otherwise
                 // every tile open would invalidate the app clients' state caches.
                 // Mit dem Pruefwert der Kachel: nur senden, was sie nicht kennt.
+                // Mit `list` meint die Kachel eine andere Einkaufsliste (Umschalter).
+                $ziel = $this->SwitcherTarget($Value);
+                if ($ziel !== 0) {
+                    $this->PushListState($ziel, $Value);
+                    return;
+                }
                 $this->PushCurrentState($Value);
+                return;
+            case 'ListCall':
+                // Aktion in einer anderen Einkaufsliste (Umschalter der Kachel).
+                $this->ListCall($Value);
                 return;
             case 'StoreOrderReset':
                 // Der Formular-Knopf: falsch Gelerntes verwerfen (z. B. nach
@@ -725,7 +746,7 @@ class SymDoShoppingList extends IPSModuleStrict
            <script>-Block, und mit JSON_UNESCAPED_SLASHES bleibt ein „</script>" in
            einem Namen oder Titel woertlich stehen — der Block endet dort, handleMessage
            laeuft nie, und der Rest landet als HTML in der Visu. */
-        $zustand = (string)json_encode(KachelStand::MitPruefwert($this->BuildStatePayload(true)),
+        $zustand = (string)json_encode(KachelStand::MitPruefwert($this->WithSwitcher($this->BuildStatePayload(true), $this->InstanceID)),
             JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_INVALID_UTF8_SUBSTITUTE);
         return $html . '<script>window.__imageHookUrl=' . json_encode($hookUrl)
             . ';window.__extApiHookUrl=' . json_encode($extApiHookUrl) . ';'
@@ -764,6 +785,16 @@ class SymDoShoppingList extends IPSModuleStrict
     public function GetItems(): string
     {
         return json_encode($this->LoadItems(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Stand dieser Liste in Kachelform (Bildkarte als Adresse) — für den
+     * Listen-Umschalter einer anderen Einkaufs-Kachel (libs/ListSwitcher.php).
+     */
+    public function GetTileState(): string
+    {
+        return (string)json_encode($this->BuildStatePayload(true),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     public function GetAppRevision(): int
@@ -3855,6 +3886,15 @@ class SymDoShoppingList extends IPSModuleStrict
                         [
                             'type'    => 'Label',
                             'caption' => $this->Translate('Row buttons hint'),
+                        ],
+                        [
+                            'type'    => 'CheckBox',
+                            'name'    => 'ListSwitcher',
+                            'caption' => $this->Translate('Switch to other shopping lists in the tile'),
+                        ],
+                        [
+                            'type'    => 'Label',
+                            'caption' => $this->Translate('List switcher hint'),
                         ],
                     ],
                 ],

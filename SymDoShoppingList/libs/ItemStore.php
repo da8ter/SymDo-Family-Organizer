@@ -100,7 +100,7 @@ trait ItemStore
      */
     private function PushCurrentState(mixed $kachel = null): void
     {
-        $daten = KachelStand::MitPruefwert($this->BuildStatePayload(true));
+        $daten = KachelStand::MitPruefwert($this->WithSwitcher($this->BuildStatePayload(true), $this->InstanceID));
         if (KachelStand::Kennt($daten['stateHash'], $kachel)) {
             return;
         }
