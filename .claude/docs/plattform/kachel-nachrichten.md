@@ -20,6 +20,6 @@ Wie Nachrichten aus `UpdateVisualizationValue` eine HTML-Kachel erreichen und wa
 ## Fallen
 
 - Symcon arbeitet je Instanz nacheinander: ein langsamer, synchroner Aufruf derselben Instanz hält auch ihre Pushes auf. Wer gleichmäßige Datenströme durch eine Kachel schickt, braucht im Browser einen Puffer.
-- Kachel-iframes sind für die Hauptseite cross-origin. Wer eine Kachel im Browser fernsteuert, liest ihren Zustand über die verschachtelten Shadow-Roots und umhüllt Funktionen über das Objekt der Kachel, nicht über `window.handleMessage` (nicht am Code prüfbar).
+- Kachel-iframes haben in der Browser-Visu **denselben Ursprung** wie die Hauptseite: `src="/visu/<InstanzID>"`, kein `sandbox`, direkt unter dem Hauptfenster (gemessen 22.10.2026, Symcon 9.1, Headless-Chrome). Eine Kachel erreicht `window.top.document` und kann dort z. B. ein Overlay über alle Kacheln legen (Probe: Modul `OverlayPOC`); die Hauptseite erreicht umgekehrt `contentDocument` jeder Kachel. Die iframes stecken in verschachtelten Shadow-Roots. Keine zugesicherte Schnittstelle; in der Symcon-App, PWA und beim direkten Aufruf gibt es kein erreichbares Hauptfenster, dort braucht es einen Rückfall.
 
-Stand: geprüft gegen den Code am 08.10.2026
+Stand: geprüft gegen den Code am 08.10.2026, Ursprung der Kachel-iframes gemessen am 22.10.2026
